@@ -1,0 +1,44 @@
+{
+  "name": "temp-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "video": "remotion preview src/engine/index.ts",
+    "render": "remotion render src/engine/index.ts"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
+    "@remotion/cli": "^4.0.424",
+    "@remotion/lambda": "^4.0.424",
+    "@remotion/player": "^4.0.424",
+    "@remotion/renderer": "^4.0.424",
+    "@remotion/three": "^4.0.424",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.97.0",
+    "@types/three": "^0.182.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.574.0",
+    "next": "16.1.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "^4.0.424",
+    "tailwind-merge": "^3.4.1",
+    "three": "^0.183.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
