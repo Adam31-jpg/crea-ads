@@ -15,7 +15,7 @@ export default async function DashboardPage() {
         .select(
             `
       id, project_name, status, created_at, is_archived, input_data,
-      jobs (id, status, type, result_url, error_message, template_id)
+      jobs (id, status, type, result_url, error_message, template_id, created_at)
     `
         )
         .eq("is_archived", false)
@@ -37,11 +37,12 @@ export default async function DashboardPage() {
             result_url: j.result_url as string | null,
             error_message: j.error_message as string | null,
             template_id: j.template_id as string,
+            created_at: j.created_at as string,
         })),
     }));
 
     return (
-        <div>
+        <div className="max-w-7xl mx-auto">
             <div className="flex items-center justify-between mb-8">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Your Batches</h1>

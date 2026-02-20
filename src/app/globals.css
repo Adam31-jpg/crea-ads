@@ -119,3 +119,19 @@ body {
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
+
+/* ============================================================
+   GLOW PULSE — Subtle breathing border glow for rendering cards
+   ============================================================ */
+
+@keyframes glow-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 16px -4px hsl(var(--brand) / 0.25);
+  }
+
+  50% {
+    box-shadow: 0 0 24px -2px hsl(var(--brand) / 0.45);
+  }
+}

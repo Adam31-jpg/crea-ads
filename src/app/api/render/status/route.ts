@@ -5,6 +5,40 @@ import { getRenderProgress } from "@remotion/lambda-client";
 const REGION = (process.env.REMOTION_AWS_REGION || "us-east-1") as "us-east-1";
 const FUNCTION_NAME = process.env.REMOTION_FUNCTION_NAME!;
 
+/**
+ * After marking a single job as done or failed, check if ALL jobs for the
+ * same batch are now terminal.  If so, update the batch status once.
+ */
+async function reconcileBatchStatus(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    batchId: string
+) {
+    const { data: allJobs } = await supabase
+        .from("jobs")
+        .select("status")
+        .eq("batch_id", batchId);
+
+    if (!allJobs || allJobs.length === 0) return;
+
+    const doneCount = allJobs.filter((j) => j.status === "done").length;
+    const failedCount = allJobs.filter((j) => j.status === "failed").length;
+    const totalCount = allJobs.length;
+    const allTerminal = doneCount + failedCount === totalCount;
+
+    console.log(
+        `[Status] Batch ${batchId} tally: done=${doneCount}, failed=${failedCount}, other=${totalCount - doneCount - failedCount}`
+    );
+
+    if (allTerminal) {
+        const finalStatus = doneCount > 0 ? "done" : "failed";
+        await supabase
+            .from("batches")
+            .update({ status: finalStatus })
+            .eq("id", batchId);
+        console.log(`[Status] Batch ${batchId} → ${finalStatus}`);
+    }
+}
+
 export async function GET(req: NextRequest) {
     // 1. Auth
     const supabase = await createClient();
@@ -49,12 +83,15 @@ export async function GET(req: NextRequest) {
     const bucketName = meta?.bucketName as string | undefined;
 
     if (!renderId || !bucketName) {
+        console.log(`[Status] Job ${jobId} — no renderId/bucketName in metadata yet (status: ${job.status})`);
         return NextResponse.json({
             status: job.status,
             progress: 0,
             done: false,
         });
     }
+
+    console.log(`[Status] Checking AWS for renderId: ${renderId} (bucket: ${bucketName}, region: ${REGION}, fn: ${FUNCTION_NAME})`);
 
     try {
         const progress = await getRenderProgress({
@@ -64,11 +101,16 @@ export async function GET(req: NextRequest) {
             region: REGION,
         });
 
+        console.log(`[Status] AWS response for Job ${jobId}: done=${progress.done}, fatal=${progress.fatalErrorEncountered}, progress=${progress.overallProgress}`);
+
         // Render complete
         if (progress.done) {
             const resultUrl = progress.outputFile ?? "";
 
-            await supabase
+            console.log(`[Status] Job ${jobId} render complete — resultUrl: ${resultUrl}`);
+
+            console.log(`[Status] DB update attempt — marking Job ${jobId} as done with resultUrl`);
+            const { error: updateErr } = await supabase
                 .from("jobs")
                 .update({
                     status: "done",
@@ -77,10 +119,14 @@ export async function GET(req: NextRequest) {
                 })
                 .eq("id", job.id);
 
-            await supabase
-                .from("batches")
-                .update({ status: "done" })
-                .eq("id", job.batch_id);
+            if (updateErr) {
+                console.error(`[Status][DB ERROR] Failed to mark Job ${jobId} as done:`, JSON.stringify(updateErr));
+            } else {
+                console.log(`[Status] Job ${jobId} → done ✓`);
+            }
+
+            // Check if this was the LAST job → update batch
+            await reconcileBatchStatus(supabase, job.batch_id);
 
             return NextResponse.json({
                 status: "done",
@@ -96,7 +142,10 @@ export async function GET(req: NextRequest) {
                 progress.errors?.[0]?.message || "Unknown render error"
             );
 
-            await supabase
+            console.log(`[Status] Job ${jobId} render FAILED — ${errorMsg}`);
+
+            console.log(`[Status] DB update attempt — marking Job ${jobId} as failed`);
+            const { error: updateErr } = await supabase
                 .from("jobs")
                 .update({
                     status: "failed",
@@ -105,10 +154,14 @@ export async function GET(req: NextRequest) {
                 })
                 .eq("id", job.id);
 
-            await supabase
-                .from("batches")
-                .update({ status: "failed" })
-                .eq("id", job.batch_id);
+            if (updateErr) {
+                console.error(`[Status][DB ERROR] Failed to mark Job ${jobId} as failed:`, JSON.stringify(updateErr));
+            } else {
+                console.log(`[Status] Job ${jobId} → failed ✓`);
+            }
+
+            // Check if this was the LAST job → update batch
+            await reconcileBatchStatus(supabase, job.batch_id);
 
             return NextResponse.json({
                 status: "failed",
@@ -125,6 +178,7 @@ export async function GET(req: NextRequest) {
         });
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Progress check failed";
+        console.error(`[Status][ERROR] Job ${jobId} progress check failed:`, err);
         return NextResponse.json({ error: message, done: false }, { status: 500 });
     }
 }
