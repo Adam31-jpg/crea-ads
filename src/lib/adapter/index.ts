@@ -67,6 +67,8 @@ export function resolveDesign(
 
         camera: baseStyle.camera || { zoomStart: 1, zoomEnd: 1, orbitSpeed: 0.1, panX: 0 },
 
+        enableMotionBlur: false,
+
         layout: {
             aspectRatio: '1:1', // Default, can be overridden
             safePadding: 100,

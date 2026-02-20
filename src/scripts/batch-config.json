@@ -1,0 +1,81 @@
+[
+    {
+        "outputName": "luxury_watch_gold",
+        "props": {
+            "productImageUrl": "https://images.unsplash.com/photo-1522312346375-d1a52e2b99b3?q=80&w=1000&auto=format&fit=crop",
+            "headlineText": "Gold Standard",
+            "subheadlineText": "Timeless Elegance",
+            "colors": {
+                "primary": "#FFD700",
+                "secondary": "#000000",
+                "accent": "#FFFFFF",
+                "background": "#1A1A1A",
+                "textPrimary": "#FFFFFF"
+            },
+            "fontFamily": "Bodoni",
+            "layout": {
+                "aspectRatio": "1:1",
+                "safePadding": 100,
+                "contentScale": 1
+            },
+            "camera": {
+                "zoomStart": 1,
+                "zoomEnd": 1.2,
+                "orbitSpeed": 0.05,
+                "panX": 0
+            },
+            "glassmorphism": {
+                "enabled": true,
+                "intensity": 0.2,
+                "blur": 10
+            },
+            "transition": {
+                "style": "wipe",
+                "duration": 1
+            },
+            "enableMotionBlur": true
+        }
+    },
+    {
+        "outputName": "perfume_midnight_orbit",
+        "props": {
+            "productImageUrl": "https://images.unsplash.com/photo-1594035910387-fea4779426e9?q=80&w=1000&auto=format&fit=crop",
+            "headlineText": "Midnight Essence",
+            "subheadlineText": "Dare to Dream",
+            "colors": {
+                "primary": "#1A1A2E",
+                "secondary": "#16213E",
+                "accent": "#E94560",
+                "background": "#0F0F0F",
+                "textPrimary": "#E94560"
+            },
+            "fontFamily": "Outfit",
+            "layout": {
+                "aspectRatio": "9:16",
+                "safePadding": 140,
+                "contentScale": 0.85
+            },
+            "camera": {
+                "zoomStart": 0.8,
+                "zoomEnd": 1.0,
+                "orbitSpeed": -0.05,
+                "panX": 0
+            },
+            "glassmorphism": {
+                "enabled": false,
+                "intensity": 0,
+                "blur": 0
+            },
+            "transition": {
+                "style": "blur",
+                "duration": 0.5
+            },
+            "audio": {
+                "audioUrl": "https://files.freemusicarchive.org/storage-freemusicarchive-org/music/no_curator/Tours/Enthusiast/Tours_-_01_-_Enthusiast.mp3",
+                "volume": 0.6,
+                "bpm": 110,
+                "startFrom": 10
+            }
+        }
+    }
+]

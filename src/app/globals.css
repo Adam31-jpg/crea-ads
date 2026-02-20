@@ -1,26 +1,121 @@
 @import "tailwindcss";
 
+/* ============================================================
+   LUMINA DESIGN SYSTEM — Single Source of Truth
+   Change any HSL value here → entire UI updates instantly.
+   ============================================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* --- Brand --- */
+  --brand: 45 100% 52%;
+  --brand-foreground: 0 0% 5%;
+
+  /* --- Surfaces --- */
+  --background: 240 6% 6%;
+  --foreground: 0 0% 95%;
+  --card: 240 5% 9%;
+  --card-foreground: 0 0% 95%;
+  --popover: 240 5% 11%;
+  --popover-foreground: 0 0% 95%;
+
+  /* --- Muted / Secondary --- */
+  --muted: 240 4% 16%;
+  --muted-foreground: 240 5% 55%;
+  --secondary: 240 4% 16%;
+  --secondary-foreground: 0 0% 95%;
+  --accent: 240 4% 16%;
+  --accent-foreground: 0 0% 95%;
+
+  /* --- Borders & Rings --- */
+  --border: 240 4% 16%;
+  --input: 240 4% 16%;
+  --ring: 45 100% 52%;
+
+  /* --- Semantic --- */
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 76% 40%;
+  --warning: 38 92% 50%;
+
+  /* --- Radius --- */
+  --radius: 0.625rem;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  /* Brand */
+  --color-brand: hsl(var(--brand));
+  --color-brand-foreground: hsl(var(--brand-foreground));
+
+  /* Surfaces */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  /* Muted / Secondary */
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  /* Borders & Rings */
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  /* Semantic */
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-success: hsl(var(--success));
+  --color-warning: hsl(var(--warning));
+
+  /* Radius */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius));
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+
+  /* Fonts */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-bodoni);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================
+   SKELETON SHIMMER ANIMATION
+   ============================================================ */
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.animate-shimmer {
+  background: linear-gradient(90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted) / 0.5) 50%,
+      hsl(var(--muted)) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }

@@ -21,7 +21,7 @@ export type CreativeIntent = z.infer<typeof CreativeIntentSchema>;
  */
 export const RemotionPropsSchema = z.object({
     // --- Content Props ---
-    headlineText: z.string().max(40, "Headline too long"),
+    headlineText: z.string().max(100, "Headline too long (max 100)"),
     subheadlineText: z.string().optional(),
     productImageUrl: z.string().url(),
     backgroundImageUrl: z.string().url().optional(),
@@ -50,6 +50,23 @@ export const RemotionPropsSchema = z.object({
         orbitSpeed: z.number(), // rad/s
         panX: z.number(),
     }),
+
+    // --- Audio Props ---
+    audio: z.object({
+        audioUrl: z.string().url(),
+        volume: z.number().min(0).max(1).default(0.5),
+        bpm: z.number().min(40).max(200).default(120),
+        startFrom: z.number().min(0).default(0), // Start from X seconds
+    }).optional(),
+
+    // --- Transition Props ---
+    transition: z.object({
+        style: z.enum(['none', 'wipe', 'blur', 'fade']).default('none'),
+        duration: z.number().min(0).max(2).default(0.5), // Seconds
+    }).optional(),
+
+    // --- Performance / Quality ---
+    enableMotionBlur: z.boolean().default(false),
 
     // --- Social Safe Areas (Responsive Layout) ---
     layout: z.object({

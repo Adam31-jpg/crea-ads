@@ -1,11 +1,14 @@
 import React from 'react';
 import { AbsoluteFill, useVideoConfig } from 'remotion';
 import { z } from 'zod';
+import { CameraMotionBlur } from '@remotion/motion-blur';
 import { HeroObject } from './HeroObject';
 import { SafeZone } from './SafeZone';
 import { RemotionPropsSchema } from '../schema/project';
+import { useBeat } from '../hooks/useBeat';
+import { AudioLayer } from '../components/AudioLayer';
+import { TransitionLayer } from '../components/TransitionLayer';
 
-// We use the schema inferred type for props
 type Props = z.infer<typeof RemotionPropsSchema>;
 
 export const MasterComposition: React.FC<Props> = (props) => {
@@ -15,66 +18,122 @@ export const MasterComposition: React.FC<Props> = (props) => {
         fontFamily,
         headlineText,
         layout,
-        camera
+        camera,
+        audio,
+        transition,
+        enableMotionBlur // New prop
     } = props;
 
-    const { width, height } = useVideoConfig();
+    // Motion Blur Logic
+    // Only enable if requested AND we are not in simple dev mode (unless forced)
+    // User requested: "disable if process.env.NODE_ENV === 'development'"
+    // However, we want to be able to test it.
+    // Let's settle on: Enabled if prop is true.
+    // The conditional logic (NODE_ENV) should be handled by the Caller (Root.tsx or API),
+    // OR we strict disable it here.
+    // Let's respect the prop strictly. The Caller ensures the prop is false in dev if desired.
+    // User specifically asked "implement a logic that automatically disables...".
+    // We'll wrap the logic here for safety.
+    const isDev = process.env.NODE_ENV === 'development';
+    const shouldBlur = enableMotionBlur && !isDev;
 
-    // Background Style
+    // Beat Sync Logic
+    // Default to 120bpm if not provided
+    const { kick } = useBeat(audio?.bpm || 120);
+    // Apply kick to HeroObject zoom (subtle pulse)
+    const beatScale = 1 + (kick * 0.05); // 5% pulse on beat
+
+    // Dynamic Text Sizing Logic
+    // If headline is long (> 20 chars), reduce font size to prevent overflow
+    const baseFontSize = 60 * layout.contentScale;
+    const isLongHeadline = headlineText.length > 20;
+    // Reduce by 40% if long
+    const dynamicFontSize = isLongHeadline ? baseFontSize * 0.6 : baseFontSize;
+
+    // If subheadline is long via some heuristic, we could also scale it, but usually headline is the risk
+    const subheadSize = 30 * layout.contentScale;
+
     const backgroundStyle: React.CSSProperties = {
         backgroundColor: colors.background,
-        // Add a subtle gradient if needed, or use backgroundImageUrl if provided
         background: props.backgroundImageUrl ? `url(${props.backgroundImageUrl})` : `linear-gradient(to bottom, ${colors.background}, ${colors.secondary})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
     };
 
+    // Helper to wrap content in MotionBlur or Fragment
+    const ContentWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+        if (shouldBlur) {
+            return (
+                <CameraMotionBlur samples={4} shutterAngle={180}>
+                    {children}
+                </CameraMotionBlur>
+            );
+        }
+        return <>{children}</>;
+    };
+
     return (
-        <AbsoluteFill style={backgroundStyle}>
+        <AudioLayer
+            audioUrl={audio?.audioUrl}
+            volume={audio?.volume}
+            startFrom={audio?.startFrom}
+        >
+            <ContentWrapper>
+                <TransitionLayer transition={transition}>
 
-            {/* Layer 1: 3D Hero Object */}
-            {/* We pass zoom/camera info here */}
-            <AbsoluteFill>
-                <HeroObject imageUrl={productImageUrl} zoom={camera.zoomStart} />
-            </AbsoluteFill>
+                    <AbsoluteFill style={backgroundStyle}>
 
-            {/* Layer 2: Safe Zone & UI Content */}
-            <SafeZone aspectRatio={layout.aspectRatio} debug={true}>
-                {/* Text Content Container */}
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    textAlign: 'center',
-                    gap: 20,
-                    zIndex: 10,
-                }}>
-                    <h1 style={{
-                        fontFamily,
-                        color: colors.textPrimary,
-                        fontSize: 60 * layout.contentScale,
-                        margin: 0,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        maxWidth: '80%', // Ensure it doesn't touch edges even inside safe zone
-                    }}>
-                        {headlineText}
-                    </h1>
-
-                    {props.subheadlineText && (
-                        <h2 style={{
-                            fontFamily,
-                            color: colors.accent,
-                            fontSize: 30 * layout.contentScale,
-                            margin: 0,
-                            fontWeight: 300,
+                        {/* Layer 1: 3D Hero Object */}
+                        <AbsoluteFill style={{
+                            transform: `scale(${beatScale})`,
                         }}>
-                            {props.subheadlineText}
-                        </h2>
-                    )}
-                </div>
-            </SafeZone>
+                            <HeroObject imageUrl={productImageUrl} zoom={camera.zoomStart} />
+                        </AbsoluteFill>
 
-        </AbsoluteFill>
+                        {/* Layer 2: Safe Zone & UI Content */}
+                        <SafeZone aspectRatio={layout.aspectRatio} debug={true}>
+                            <div style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                textAlign: 'center',
+                                gap: 20,
+                                zIndex: 10,
+                                width: '100%', // ensure full width for centering
+                            }}>
+                                <h1 style={{
+                                    fontFamily,
+                                    color: colors.textPrimary,
+                                    fontSize: dynamicFontSize,
+                                    margin: 0,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.05em',
+                                    maxWidth: '90%', // Keep it away from edges
+                                    lineHeight: 1.1,
+                                    // Allow wrapping
+                                    whiteSpace: 'pre-wrap',
+                                }}>
+                                    {headlineText}
+                                </h1>
+
+                                {props.subheadlineText && (
+                                    <h2 style={{
+                                        fontFamily,
+                                        color: colors.accent,
+                                        fontSize: subheadSize,
+                                        margin: 0,
+                                        fontWeight: 300,
+                                        maxWidth: '80%',
+                                    }}>
+                                        {props.subheadlineText}
+                                    </h2>
+                                )}
+                            </div>
+                        </SafeZone>
+
+                    </AbsoluteFill>
+                </TransitionLayer>
+            </ContentWrapper>
+        </AudioLayer>
     );
 };

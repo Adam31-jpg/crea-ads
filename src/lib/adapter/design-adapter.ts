@@ -110,6 +110,9 @@ export function resolveDesign(
         glassmorphism: theme.glassmorphism!,
         camera: theme.camera!,
 
+        // Defaults for optional features
+        enableMotionBlur: false,
+
         // Spread Computed Layout
         layout: layout,
     };
