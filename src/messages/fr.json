@@ -140,13 +140,17 @@
             "generateMore": "Générer (+ de Sparks)",
             "logout": "Déconnexion",
             "refill": {
-                "title": "Recharger vos Sparks",
-                "desc": "Vous êtes à court de Sparks. Achetez un pack pour continuer à générer des médias avec une précision chirurgicale.",
-                "starter": "Pack Starter",
-                "pro": "Pack Pro",
-                "popular": "Populaire",
-                "business": "Pack Business",
-                "credits": "{count} Sparks"
+                "title": "Propulsez votre créativité",
+                "desc": "Pas d'abonnement. 1 Spark = 1 Média. Vos Sparks n'expirent jamais.",
+                "starter": "Starter",
+                "pro": "Pro",
+                "popular": "RECOMMANDÉ",
+                "business": "Expert",
+                "credits": "{count} Sparks",
+                "btn": "Acheter {count} Sparks",
+                "footer": "Sécurisé par Lemon Squeezy — Facturation TVA incluse",
+                "unit": "{price} / spark",
+                "success": "✨ Félicitations ! Vos Sparks ont été ajoutés à votre portefeuille."
             }
         },
         "settings": {
@@ -161,12 +165,12 @@
                 "loading": "Chargement..."
             },
             "billing": {
-                "title": "Facturation & Abonnement",
-                "desc": "Téléchargez vos factures ou modifiez vos informations de paiement via Stripe.",
+                "title": "Historique d'achat",
+                "desc": "Accédez à votre espace sécurisé pour télécharger vos factures et gérer vos transactions.",
                 "email": "Adresse email associée",
                 "loading": "Chargement...",
-                "manage": "Gérer l'abonnement / la facturation",
-                "redirecting": "Redirection..."
+                "manage": "Mes Factures & Paiements",
+                "redirecting": "Redirection vers Lemon Squeezy..."
             },
             "danger": {
                 "title": "Zone de Danger",
@@ -356,7 +360,8 @@
                     "unauthorized": "Non autorisé",
                     "noApiKey": "Clé API non configurée",
                     "missingFields": "Champs requis manquants",
-                    "invalidFormat": "Format renvoyé par l'IA invalide. 10 concepts attendus."
+                    "invalidFormat": "Format renvoyé par l'IA invalide. 10 concepts attendus.",
+                    "insufficient_funds": "Vous n'avez pas assez de Sparks pour cette génération (10 requis)."
                 }
             },
             "formats": {

@@ -19,6 +19,7 @@ import { Wallet, Settings, CreditCard, Trash2, Loader2, Zap } from "lucide-react
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { useRechargeModal } from "@/hooks/use-recharge-modal";
 
 export default function SettingsPage() {
     const [credits, setCredits] = useState<number | null>(null);
@@ -32,9 +33,12 @@ export default function SettingsPage() {
 
     const supabase = createClient();
     const router = useRouter();
+    const { onOpen } = useRechargeModal();
     const t = useTranslations("Dashboard.settings");
 
     useEffect(() => {
+        let channel: ReturnType<typeof supabase.channel> | null = null;
+
         async function loadProfile() {
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
@@ -45,21 +49,37 @@ export default function SettingsPage() {
                     .eq("id", user.id)
                     .single();
                 if (profile) setCredits(profile.credits);
+
+                channel = supabase
+                    .channel('settings:profiles')
+                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` }, (payload) => {
+                        if (payload.new && typeof payload.new.credits === 'number') {
+                            setCredits(payload.new.credits);
+                        }
+                    })
+                    .subscribe();
             }
         }
         loadProfile();
+
+        return () => {
+            if (channel) {
+                supabase.removeChannel(channel);
+            }
+        };
     }, [supabase]);
 
-    const handleStripePortal = async () => {
+    const handleLemonSqueezyPortal = async () => {
         try {
             setLoadingPortal(true);
-            const res = await fetch("/api/billing/portal", { method: "POST" });
-            const data = await res.json();
-
-            if (res.ok && data.url) {
-                window.location.href = data.url;
+            if (typeof window !== "undefined" && window.LemonSqueezy) {
+                // To open the customer portal securely, Lemon Squeezy requires either
+                // an API-generated URL or routing them to their default portal.
+                // We route them to the store's default portal where they can enter their email.
+                // You can find your store's generic customer portal URL in LS settings.
+                window.LemonSqueezy.Url.Open("https://lumina-test.lemonsqueezy.com/billing"); // Using generic billing link
             } else {
-                toast.error(data.error || t("toasts.portalError"));
+                toast.error(t("toasts.connError"));
             }
         } catch (error) {
             toast.error(t("toasts.connError"));
@@ -133,7 +153,7 @@ export default function SettingsPage() {
 
                             {/* Refill Button right next to Gold Bar */}
                             <Button
-                                onClick={() => router.push('/dashboard')}
+                                onClick={onOpen}
                                 size="sm"
                                 className="bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border border-amber-500/20 gap-2"
                                 variant="outline"
@@ -189,7 +209,7 @@ export default function SettingsPage() {
                     </CardContent>
                     <CardFooter>
                         <Button
-                            onClick={handleStripePortal}
+                            onClick={handleLemonSqueezyPortal}
                             disabled={loadingPortal}
                             className="w-full bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-200"
                         >

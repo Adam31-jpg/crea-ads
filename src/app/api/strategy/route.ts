@@ -61,6 +61,18 @@ export async function POST(req: NextRequest) {
         );
     }
 
+    // DEBIT-BEFORE-GEN LOGIC: Consume 10 Sparks
+    const cost = 10;
+    const { error: debitError } = await supabase.rpc('decrement_credits', { p_user_id: user.id, p_amount: cost });
+
+    if (debitError) {
+        console.error("[Strategy API] Debit failed:", debitError);
+        return NextResponse.json(
+            { error: "insufficient_funds" },
+            { status: 402 } // Payment Required
+        );
+    }
+
     const userPrompt = `
 **Product Description:** ${productDescription}
 

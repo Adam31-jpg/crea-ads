@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import Script from "next/script";
+import { RechargeModal } from "@/components/modals/recharge-modal";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -52,6 +53,7 @@ export default async function RootLayout({
           <NextIntlClientProvider messages={messages}>
             {children}
             <Toaster />
+            <RechargeModal />
           </NextIntlClientProvider>
         </ThemeProvider>
         <Script src="https://app.lemonsqueezy.com/js/lemon.js" strategy="afterInteractive" />
