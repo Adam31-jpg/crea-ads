@@ -31,7 +31,7 @@ export async function POST(req: Request) {
         const userId = session.client_reference_id;
         if (!userId) {
             console.error("No client_reference_id found. Cannot credit user.");
-            return NextResponse.json({ error: "Missing client_reference_id" }, { status: 400 });
+            return NextResponse.json({ error: "missingClientRef" }, { status: 400 });
         }
 
         // Determine how many credits were purchased
@@ -53,14 +53,19 @@ export async function POST(req: Request) {
             const currentCredits = profile?.credits || 0;
             const newCredits = currentCredits + purchasedCredits;
 
+            const stripeCustomerId = session.customer as string | undefined;
+
             const { error } = await supabase
                 .from('profiles')
-                .update({ credits: newCredits })
+                .update({
+                    credits: newCredits,
+                    ...(stripeCustomerId ? { stripe_customer_id: stripeCustomerId } : {})
+                })
                 .eq('id', userId);
 
             if (error) {
                 console.error("Error updating credits in Supabase:", error);
-                return NextResponse.json({ error: "DB Update Failed" }, { status: 500 });
+                return NextResponse.json({ error: "dbUpdateFailed" }, { status: 500 });
             }
             console.log("Successfully funded user.");
         }

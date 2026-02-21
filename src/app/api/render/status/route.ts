@@ -46,13 +46,13 @@ export async function GET(req: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
     // 2. Get jobId from query
     const jobId = req.nextUrl.searchParams.get("jobId");
     if (!jobId) {
-        return NextResponse.json({ error: "Missing jobId" }, { status: 400 });
+        return NextResponse.json({ error: "missingJobId" }, { status: 400 });
     }
 
     // 3. Fetch job
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
         .single();
 
     if (error || !job) {
-        return NextResponse.json({ error: "Job not found" }, { status: 404 });
+        return NextResponse.json({ error: "jobNotFound" }, { status: 404 });
     }
 
     // 4. If already terminal, return immediately (stop polling)

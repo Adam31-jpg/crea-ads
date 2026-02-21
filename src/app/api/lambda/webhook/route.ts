@@ -44,11 +44,11 @@ export async function POST(req: NextRequest) {
         // 1. Secret validation
         if (!secret) {
             console.error("[Webhook] WEBHOOK_SECRET is not defined.");
-            return NextResponse.json({ error: "Configuration Error" }, { status: 500 });
+            return NextResponse.json({ error: "configError" }, { status: 500 });
         }
 
         if (!signatureHeader) {
-            return NextResponse.json({ error: "Missing signature header" }, { status: 400 });
+            return NextResponse.json({ error: "missingSignature" }, { status: 400 });
         }
 
         // 2. Signature Validation
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
         } catch (e) {
             const errName = e instanceof Error ? e.name : String(e);
             console.error("[Webhook] Invalid signature:", errName);
-            return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+            return NextResponse.json({ error: "invalidSignature" }, { status: 401 });
         }
 
         // 3. Parse JSON safely now that it is validated
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
 
         if (jobErr || !job) {
             console.error(`[Webhook] Could not find job with renderId ${renderId} in DB. Error:`, jobErr);
-            return NextResponse.json({ error: "Job not found" }, { status: 404 });
+            return NextResponse.json({ error: "jobNotFound" }, { status: 404 });
         }
 
         // 5. Apply Status Update
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
 
             if (updateErr) {
                 console.error(`[Webhook] Failed to mark Job ${job.id} as done:`, updateErr);
-                return NextResponse.json({ error: "DB Update Failed" }, { status: 500 });
+                return NextResponse.json({ error: "dbUpdateFailed" }, { status: 500 });
             }
             console.log(`[Webhook] Job ${job.id} marked as done.`);
         } else if (type === "error" || type === "timeout") {
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
 
             if (updateErr) {
                 console.error(`[Webhook] Failed to mark Job ${job.id} as failed:`, updateErr);
-                return NextResponse.json({ error: "DB Update Failed" }, { status: 500 });
+                return NextResponse.json({ error: "dbUpdateFailed" }, { status: 500 });
             }
             console.log(`[Webhook] Job ${job.id} marked as failed. Reason: ${errorMsg}`);
         } else {
@@ -147,6 +147,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, processed: renderId });
     } catch (err) {
         console.error("[Webhook] Unhandled error:", err);
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+        return NextResponse.json({ error: "internalError" }, { status: 500 });
     }
 }

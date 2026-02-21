@@ -4,32 +4,36 @@ import { GoogleGenAI } from "@google/genai";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
 
-const SYSTEM_PROMPT = `You are Lumina's AI Creative Director — an expert performance marketer and art director.
+const SYSTEM_PROMPT = `### ROLE
+You are Lumina's Elite AI Creative Director — a hybrid of a world-class performance marketer and a technical art director. Your goal is to generate 10 high-converting ad concepts for Meta, TikTok, and Google Ads.
 
-Given a product's description, top 3 USPs, and target audience, you MUST generate exactly 10 ad concepts following the AIDA & PAS marketing frameworks:
+### CORE MISSION: "VALUE INFERENCE"
+If user input is poor or vague, DO NOT be generic. Use your internal knowledge to infer professional USPs, emotional triggers, and luxury positioning based on the product's niche. You must "fix" the user's bad input by providing expert-level marketing angles.
 
-**Output Structure (JSON array of 10 objects):**
-
-Concepts 1-4: AIDA Framework (Attention → Interest → Desire → Action)
-Concepts 5-8: PAS Framework (Problem → Agitation → Solution)
-Concepts 9-10: VIDEO concepts (motion ads, 6 seconds, high-energy)
-
-Each concept MUST have:
+### STRUCTURE TECHNIQUE (JSON Array of 10 objects)
+Each object MUST strictly follow this schema:
 - "index": number (0-9)
 - "type": "image" (0-7) or "video" (8-9)
-- "framework": "AIDA" or "PAS" or "VIDEO"
-- "headline": string (max 60 chars, punchy, conversion-focused)
-- "subheadline": string (max 80 chars)
-- "cta": string (max 30 chars, e.g. "Shop Now", "Try Free")
-- "visualDirection": string (describe the composition, colors, mood in 1-2 sentences)
-- "colorMood": one of "sunset", "midnight", "studio_white", "electric_neon"
-- "emphasis": one of "product_detail", "typography_heavy", "balanced"
+- "framework": string (The specific angle used)
+- "headline": string (MAX 50 chars - punchy, hook-driven, NO boring text)
+- "subheadline": string (MAX 80 chars - emotional bridge to CTA)
+- "cta": string (MAX 25 chars - e.g., "Get Yours Now", "Shop the Collection")
+- "visualDirection": string (2 sentences: specific lighting, camera angle, and composition)
+- "colorMood": "sunset" | "midnight" | "studio_white" | "electric_neon"
+- "emphasis": "product_detail" | "typography_heavy" | "balanced"
 
-Rules:
-- Headlines MUST be punchy, emotional, conversion-driven
-- Each concept MUST feel unique — vary angles, tones, and hooks
-- Video concepts (index 8-9) should have dynamic, motion-oriented visual directions
-- Return ONLY a JSON array, no markdown fences, no explanation`;
+### FRAMEWORKS & STRATEGY
+- 0-2: "THE HOOK-POINT" (Stop the scroll). Focus on a massive problem or shocking benefit.
+- 3-5: "EMOTIONAL DESIRE" (Identity & Status). Connect the product to the user's ego.
+- 6-7: "THE AUTHORITY" (Social Proof/Logic). Technical superiority or scarcity.
+- 8-9: "REELS/TIKTOK VIBE" (High-energy). Rapid motion, UGC-style visual directions.
+
+### STRICT RULES
+1. UNIQUE HOOKS: Each of the 10 concepts must have a radically different marketing angle.
+2. NO MARKDOWN: Return ONLY the raw JSON array. No fences, no intro, no outro.
+3. CONVERSION FIRST: Headlines must use power words (Secret, Ultimate, Hack, Transform).
+4. VISUAL PRECISION: Specify lighting (e.g., "High-key studio lighting") and movement for videos.
+5. QUALITY OVERRIDE: If the user input is "bad", your output must be "excellent".`;
 
 export async function POST(req: NextRequest) {
     // Auth
@@ -38,12 +42,12 @@ export async function POST(req: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
     if (!GEMINI_API_KEY) {
         return NextResponse.json(
-            { error: "GEMINI_API_KEY not configured" },
+            { error: "noApiKey" },
             { status: 500 }
         );
     }
@@ -52,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     if (!productDescription || !usps || !targetAudience) {
         return NextResponse.json(
-            { error: "Missing required fields" },
+            { error: "missingFields" },
             { status: 400 }
         );
     }
@@ -72,33 +76,69 @@ Generate 10 ad concepts as a JSON array.`;
     try {
         const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-        const response = await ai.models.generateContent({
-            model: "gemini-3-pro-preview",
-            contents: userPrompt,
-            config: {
-                systemInstruction: SYSTEM_PROMPT,
-                temperature: 1.0,
-                maxOutputTokens: 4096,
-            },
-        });
+        let text = "";
 
-        const text = response.text ?? "";
+        // 1. The Brain (Strategic Intelligence)
+        try {
+            const response = await ai.models.generateContent({
+                model: "gemini-3-pro-preview",
+                contents: userPrompt,
+                config: {
+                    systemInstruction: SYSTEM_PROMPT,
+                    temperature: 0.8,
+                    maxOutputTokens: 8192,
+                },
+            });
+            text = response.text ?? "";
+        } catch (proErr) {
+            console.warn("[Strategy API] Pro model failed, falling back to Flash", proErr);
+            // Fallback to Flash if Pro is unavailable
+            const fallbackResponse = await ai.models.generateContent({
+                model: "gemini-3-flash-preview",
+                contents: userPrompt,
+                config: {
+                    systemInstruction: SYSTEM_PROMPT,
+                    temperature: 0.8,
+                    maxOutputTokens: 8192,
+                },
+            });
+            text = fallbackResponse.text ?? "";
+        }
 
-        // Parse JSON — strip markdown fences if present
-        const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-        const concepts = JSON.parse(cleaned);
+        // Clean any potential markdown from the response
+        let cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        let concepts;
+
+        try {
+            concepts = JSON.parse(cleaned);
+        } catch (parseErr) {
+            console.warn("[Strategy API] JSON parsing failed from Brain, kicking in Flash Muscle to format.");
+            // 2. The Muscles (Technical Formatting)
+            const formatterResponse = await ai.models.generateContent({
+                model: "gemini-3-flash-preview",
+                contents: `Extract and format the following text into a perfectly valid JSON array of 10 objects following the strict schema. Do not include markdown fences, just the raw JSON array.\n\nTEXT:\n${text}`,
+                config: {
+                    systemInstruction: "You are a strict JSON formatter. Your only job is to output a raw, perfectly valid JSON array. Fix any structural issues in the provided text.",
+                    temperature: 0.1,
+                    maxOutputTokens: 8192,
+                }
+            });
+
+            text = formatterResponse.text ?? "";
+            cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+            concepts = JSON.parse(cleaned);
+        }
 
         if (!Array.isArray(concepts) || concepts.length !== 10) {
             return NextResponse.json(
-                { error: "AI returned invalid format. Expected 10 concepts." },
+                { error: "invalidFormat" },
                 { status: 500 }
             );
         }
 
         return NextResponse.json({ concepts });
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Gemini API error";
-        console.error("[Strategy API]", message);
-        return NextResponse.json({ error: message }, { status: 500 });
+        console.error("[Strategy API]", err);
+        return NextResponse.json({ error: "connectFailed" }, { status: 500 });
     }
 }

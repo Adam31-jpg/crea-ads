@@ -48,14 +48,14 @@ export async function POST(req: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
     // 2. Parse body
     const { batchId, inputData } = await req.json();
     if (!batchId || !inputData) {
         return NextResponse.json(
-            { error: "Missing batchId or inputData" },
+            { error: "missingBatchData" },
             { status: 400 }
         );
     }
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     if (!SERVE_URL || !FUNCTION_NAME) {
         return NextResponse.json(
             {
-                error: "Lambda not configured. Set REMOTION_SERVE_URL and REMOTION_FUNCTION_NAME.",
+                error: "lambdaNotConfigured",
             },
             { status: 500 }
         );

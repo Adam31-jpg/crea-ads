@@ -37,23 +37,8 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-    Download,
-    Play,
-    AlertTriangle,
-    Loader2,
-    MoreVertical,
-    RotateCcw,
-    Archive,
-    ArchiveRestore,
-    Trash2,
-    Image,
-    Video,
-    Check,
-    X,
-    RefreshCw,
-    Clock,
-} from "lucide-react";
+import { Download, Play, AlertTriangle, Loader2, MoreVertical, RotateCcw, Archive, ArchiveRestore, Trash2, Image, Video, Check, X, RefreshCw, Clock } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 // --- Types ---
 
@@ -81,19 +66,19 @@ export interface Batch {
 
 const STUCK_THRESHOLD_MS = 150_000;
 
-function getSmartLabel(elapsedMs: number): string {
-    if (elapsedMs < 30_000) return "Launching Lambda…";
-    if (elapsedMs < 100_000) return "Processing Frames…";
-    return "Finishing Upload…";
+function getSmartLabel(elapsedMs: number, t: any): string {
+    if (elapsedMs < 30_000) return t("smartLabels.launching");
+    if (elapsedMs < 100_000) return t("smartLabels.frames");
+    return t("smartLabels.uploading");
 }
 
-function getSmartLabelShort(elapsedMs: number): string {
-    if (elapsedMs < 30_000) return "Launching";
-    if (elapsedMs < 100_000) return "Frames";
-    return "Uploading";
+function getSmartLabelShort(elapsedMs: number, t: any): string {
+    if (elapsedMs < 30_000) return t("smartLabels.short.launching");
+    if (elapsedMs < 100_000) return t("smartLabels.short.frames");
+    return t("smartLabels.short.uploading");
 }
 
-function getBatchSmartLabel(jobs: Job[]): string {
+function getBatchSmartLabel(jobs: Job[], t: any): string {
     const renderingJobs = jobs.filter(
         (j) =>
             j.status === "rendering" ||
@@ -113,7 +98,7 @@ function getBatchSmartLabel(jobs: Job[]): string {
     const elapsed =
         Date.now() -
         (oldest.created_at ? new Date(oldest.created_at).getTime() : Date.now());
-    return getSmartLabel(elapsed);
+    return getSmartLabel(elapsed, t);
 }
 
 // --- Helpers ---
@@ -141,6 +126,7 @@ interface BatchCardProps {
 }
 
 export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
+    const t = useTranslations("Dashboard.batch");
     const [previewAsset, setPreviewAsset] = useState<Job | null>(null);
     const [errorDetail, setErrorDetail] = useState<string | null>(null);
     const [deleteOpen, setDeleteOpen] = useState(false);
@@ -235,13 +221,13 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
         try {
             const res = await fetch(`/api/batch/${batch.id}`, { method: "DELETE" });
             const data = await res.json();
-            if (!res.ok) toast.error(data.error || "Delete failed");
+            if (!res.ok) toast.error(data.error || t("toasts.delFailed"));
             else {
-                toast.success("Batch and assets permanently deleted.");
+                toast.success(t("toasts.delSuccess"));
                 router.refresh();
             }
         } catch {
-            toast.error("Failed to delete batch");
+            toast.error(t("toasts.delFailed"));
         }
         setDeleting(false);
         setDeleteOpen(false);
@@ -254,13 +240,13 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                 method: "POST",
             });
             const data = await res.json();
-            if (!res.ok) toast.error(data.error || "Retry failed");
+            if (!res.ok) toast.error(data.error || t("toasts.retryFailed"));
             else {
-                toast.success("Full batch re-submitted!");
+                toast.success(t("toasts.retrySuccess"));
                 router.refresh();
             }
         } catch {
-            toast.error("Failed to retry batch");
+            toast.error(t("toasts.retryFailed"));
         }
         setRetrying(false);
     };
@@ -270,7 +256,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
         try {
             const stuckJobs = jobs.filter(j => j.status === "rendering" || j.status === "processing" || j.status === "generating_assets");
             if (stuckJobs.length === 0) {
-                toast("No actively rendering jobs to sync.");
+                toast(t("toasts.noResync"));
                 setResyncing(false);
                 return;
             }
@@ -279,10 +265,10 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
             for (const job of stuckJobs) {
                 await fetch(`/api/render/status?jobId=${job.id}`);
             }
-            toast.success("Re-sync complete");
+            toast.success(t("toasts.resyncSuccess"));
             router.refresh();
         } catch {
-            toast.error("Failed to re-sync");
+            toast.error(t("toasts.resyncFailed"));
         }
         setResyncing(false);
     };
@@ -292,13 +278,13 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
         try {
             const res = await fetch(`/api/job/${jobId}/retry`, { method: "POST" });
             const data = await res.json();
-            if (!res.ok) toast.error(data.error || "Job retry failed");
+            if (!res.ok) toast.error(data.error || t("toasts.jobRetryFailed"));
             else {
-                toast.success("Asset re-submitted!");
+                toast.success(t("toasts.jobRetrySuccess"));
                 router.refresh();
             }
         } catch {
-            toast.error("Job retry failed");
+            toast.error(t("toasts.jobRetryFailed"));
         }
         setRetryingJobs((prev) => {
             const next = new Set(prev);
@@ -317,13 +303,13 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
             });
             if (!res.ok) {
                 const data = await res.json();
-                toast.error(data.error || "Action failed");
+                toast.error(data.error || t("toasts.actionFailed"));
             } else {
-                toast.success(newArchived ? "Batch archived." : "Batch restored.");
+                toast.success(newArchived ? t("toasts.archived") : t("toasts.restored"));
                 router.refresh();
             }
         } catch {
-            toast.error("Failed to update batch");
+            toast.error(t("toasts.actionFailed"));
         }
     };
 
@@ -355,13 +341,13 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                 }}
                 title={
                     isStuck
-                        ? "Stuck — click to retry this asset"
+                        ? t("cell.stuck")
                         : jobRendering
-                            ? getSmartLabel(elapsedMs)
+                            ? getSmartLabel(elapsedMs, t)
                             : jobFailed
-                                ? "Click to see error"
+                                ? t("cell.error")
                                 : jobDone
-                                    ? "Click to preview"
+                                    ? t("cell.preview")
                                     : ""
                 }
                 className={`relative aspect-square rounded-lg border-2 transition-all overflow-hidden ${jobDone
@@ -393,7 +379,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
                         <RefreshCw className="h-4 w-4 text-amber-500" />
                         <span className="text-[9px] text-amber-500 font-semibold">
-                            Retry
+                            {t("cell.retry")}
                         </span>
                     </div>
                 )}
@@ -402,7 +388,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
                         <Loader2 className="h-4 w-4 animate-[spin_3s_linear_infinite] text-brand" />
                         <span className="text-[8px] text-muted-foreground font-medium leading-none text-center">
-                            {getSmartLabelShort(elapsedMs)}
+                            {getSmartLabelShort(elapsedMs, t)}
                         </span>
                     </div>
                 )}
@@ -467,13 +453,13 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                         title="To maintain optimal system performance, your generated media is kept for 15 days. Please download your assets before this batch is permanently deleted from our servers."
                                     >
                                         <Clock className="h-3 w-3 mr-1" />
-                                        Expires in {remainingDays} day{remainingDays !== 1 ? 's' : ''}
+                                        {t("card.expiresIn", { days: remainingDays })}
                                     </Badge>
                                 )}
                                 {isDone && isExpired && (
                                     <Badge variant="destructive" className="font-normal text-[10px] h-5">
                                         <Clock className="h-3 w-3 mr-1" />
-                                        Expired
+                                        {t("card.expired")}
                                     </Badge>
                                 )}
                             </CardTitle>
@@ -485,7 +471,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                 })}
                                 {totalCount > 1 && (
                                     <span className="ml-2 text-muted-foreground">
-                                        · {totalCount} assets
+                                        · {t("card.assetsCount", { count: totalCount })}
                                     </span>
                                 )}
                             </CardDescription>
@@ -496,10 +482,8 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                     <Loader2 className="h-3 w-3 animate-spin mr-1" />
                                 )}
                                 {isRendering && hasMultipleJobs
-                                    ? getBatchSmartLabel(jobs)
-                                    : batchStatus
-                                        .replace(/_/g, " ")
-                                        .replace(/\b\w/g, (c) => c.toUpperCase())}
+                                    ? getBatchSmartLabel(jobs, t)
+                                    : t(`status.${batchStatus}`)}
                                 {isRendering && totalCount > 1 && (
                                     <span className="ml-1 tabular-nums">
                                         {doneCount}/{totalCount}
@@ -520,7 +504,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                     ) : (
                                         <RotateCcw className="h-3 w-3" />
                                     )}
-                                    {retrying ? "Retrying…" : "Retry All"}
+                                    {retrying ? t("card.retrying") : t("card.retryAll")}
                                 </Button>
                             )}
 
@@ -537,7 +521,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                     ) : (
                                         <RefreshCw className="h-3 w-3" />
                                     )}
-                                    Re-Sync
+                                    {t("card.resync")}
                                 </Button>
                             )}
 
@@ -557,12 +541,12 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                         {showUnarchive ? (
                                             <>
                                                 <ArchiveRestore className="h-4 w-4" />
-                                                Unarchive
+                                                {t("card.unarchive")}
                                             </>
                                         ) : (
                                             <>
                                                 <Archive className="h-4 w-4" />
-                                                Archive
+                                                {t("card.archive")}
                                             </>
                                         )}
                                     </DropdownMenuItem>
@@ -572,7 +556,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                         className="text-destructive focus:text-destructive"
                                     >
                                         <Trash2 className="h-4 w-4" />
-                                        Delete
+                                        {t("card.delete")}
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -595,10 +579,10 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                 <div className="flex items-center gap-2 pt-1">
                                     <Button size="sm" variant="outline" className="gap-1.5">
                                         <Download className="h-3.5 w-3.5" />
-                                        Download All
+                                        {t("card.downloadAll")}
                                     </Button>
                                     <span className="text-xs text-muted-foreground">
-                                        Click any cell to preview
+                                        {t("card.previewHint")}
                                     </span>
                                 </div>
                             )}
@@ -608,7 +592,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                             {isRendering && (
                                 <p className="text-sm text-muted-foreground flex items-center gap-2">
                                     <Loader2 className="h-4 w-4 animate-[spin_3s_linear_infinite] text-brand" />
-                                    Rendering in progress…
+                                    {t("card.renderingProgress")}
                                 </p>
                             )}
                             {/* Download/Preview — only when done */}
@@ -627,7 +611,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                             rel="noopener noreferrer"
                                         >
                                             <Download className="h-3.5 w-3.5" />
-                                            Download
+                                            {t("card.download")}
                                         </a>
                                     </Button>
                                     <Button
@@ -637,7 +621,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                         onClick={() => setPreviewAsset(primaryJob)}
                                     >
                                         <Play className="h-3.5 w-3.5" />
-                                        Preview
+                                        {t("card.preview")}
                                     </Button>
                                 </>
                             )}
@@ -653,12 +637,12 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                     }
                                 >
                                     <AlertTriangle className="h-3.5 w-3.5" />
-                                    Error Log
+                                    {t("card.errorLog")}
                                 </Button>
                             )}
                             {batchStatus === "pending" && (
                                 <p className="text-sm text-muted-foreground truncate">
-                                    Waiting to start…
+                                    {t("card.waiting")}
                                 </p>
                             )}
                         </div>
@@ -681,8 +665,8 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                         <DialogTitle>{batch.project_name}</DialogTitle>
                         <DialogDescription>
                             {previewAsset?.type === "video"
-                                ? "Video preview — starts muted"
-                                : "Image preview"}
+                                ? t("dialogs.previewVideo")
+                                : t("dialogs.previewImage")}
                         </DialogDescription>
                     </DialogHeader>
                     {previewAsset?.result_url && previewAsset.type === "video" && (
@@ -716,7 +700,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                     rel="noopener noreferrer"
                                 >
                                     <Download className="h-3.5 w-3.5" />
-                                    Download
+                                    {t("card.download")}
                                 </a>
                             </Button>
                         </div>
@@ -730,18 +714,17 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-destructive">
                             <AlertTriangle className="h-5 w-5" />
-                            Render Failed
+                            {t("dialogs.errorTitle")}
                         </DialogTitle>
                         <DialogDescription>
-                            Something went wrong during asset generation
+                            {t("dialogs.errorDesc")}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="rounded-lg bg-destructive/5 border border-destructive/20 px-4 py-3">
                         <p className="text-sm text-foreground">{errorDetail}</p>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        If the problem persists, try reducing the duration or changing the
-                        output format, then re-submit from the Studio.
+                        {t("dialogs.errorHint")}
                     </p>
                 </DialogContent>
             </Dialog>
@@ -750,15 +733,17 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
             <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete batch permanently?</AlertDialogTitle>
+                        <AlertDialogTitle>{t("dialogs.deleteTitle")}</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will permanently delete <strong>{batch.project_name}</strong>,
-                            all {totalCount} assets, and uploaded product images from storage.
-                            This action cannot be undone.
+                            {t.rich("dialogs.deleteDesc", {
+                                name: batch.project_name,
+                                count: totalCount,
+                                strong: (chunks) => <strong>{chunks}</strong>
+                            })}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel disabled={deleting}>{t("dialogs.cancel")}</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleDelete}
                             disabled={deleting}
@@ -767,12 +752,12 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                             {deleting ? (
                                 <>
                                     <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                                    Deleting…
+                                    {t("dialogs.deleting")}
                                 </>
                             ) : (
                                 <>
                                     <Trash2 className="h-4 w-4 mr-1" />
-                                    Delete Everything
+                                    {t("dialogs.deleteConfirm")}
                                 </>
                             )}
                         </AlertDialogAction>

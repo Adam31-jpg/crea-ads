@@ -20,7 +20,7 @@ export async function DELETE(
         data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
     // Fetch batch (verify ownership)
@@ -32,7 +32,7 @@ export async function DELETE(
         .single();
 
     if (fetchError || !batch) {
-        return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+        return NextResponse.json({ error: "batchNotFound" }, { status: 404 });
     }
 
     // 1. Parse image URLs from input_data
@@ -120,7 +120,7 @@ export async function DELETE(
 
     if (!deletedBatch || deletedBatch.length === 0) {
         return NextResponse.json(
-            { error: "Delete failed: batch not found or permission denied. Check RLS policies." },
+            { error: "deleteFailed" },
             { status: 403 }
         );
     }
@@ -142,21 +142,26 @@ export async function PATCH(
         data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
     const body = await req.json();
     const { is_archived } = body;
 
-    const { error } = await supabase
+    const { data, error } = await supabase
         .from("batches")
         .update({ is_archived: !!is_archived })
         .eq("id", id)
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .select("id");
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    if (!data || data.length === 0) {
+        return NextResponse.json({ error: "archiveFailed" }, { status: 403 });
+    }
+
+    return NextResponse.json({ success: true, is_archived: !!is_archived });
 }

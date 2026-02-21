@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -125,24 +126,37 @@ export default function LandingPage() {
       title: t("pricing.p1Title"),
       price: t("pricing.p1Price"),
       credits: t("pricing.p1Credits"),
+      label: t("pricing.p1Label"),
       btn: t("pricing.p1Btn"),
-      advs: [t("pricing.p1Adv1"), t("pricing.p1Adv2"), t("pricing.p1Adv3")]
+      link: "/login?next=/dashboard?buy=variant-001",
+      advs: [t("pricing.p1Adv1"), t("pricing.p1Adv2"), t("pricing.p1Adv3"), t("pricing.p1Adv4")]
     },
     {
       title: t("pricing.p2Title"),
       price: t("pricing.p2Price"),
       credits: t("pricing.p2Credits"),
+      label: t("pricing.p2Label"),
       btn: t("pricing.p2Btn"),
+      link: "/login?next=/dashboard?buy=variant-002",
       highlight: true,
-      advs: [t("pricing.p2Adv1"), t("pricing.p2Adv2"), t("pricing.p2Adv3")]
+      stat: t("pricing.p2Stat"),
+      advs: [t("pricing.p2Adv1"), t("pricing.p2Adv2"), t("pricing.p2Adv3"), t("pricing.p2Adv4")]
     },
     {
       title: t("pricing.p3Title"),
       price: t("pricing.p3Price"),
       credits: t("pricing.p3Credits"),
+      label: t("pricing.p3Label"),
       btn: t("pricing.p3Btn"),
-      advs: [t("pricing.p3Adv1"), t("pricing.p3Adv2"), t("pricing.p3Adv3")]
+      link: "/login?next=/dashboard?buy=variant-003",
+      advs: [t("pricing.p3Adv1"), t("pricing.p3Adv2"), t("pricing.p3Adv3"), t("pricing.p3Adv4")]
     },
+  ];
+
+  const globalAdvs = [
+    t("pricing.globalAdv1"),
+    t("pricing.globalAdv2"),
+    t("pricing.globalAdv3"),
   ];
 
   return (
@@ -155,13 +169,22 @@ export default function LandingPage() {
       {/* ---- Glass Navbar ---- */}
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4 backdrop-blur-md bg-white/50 dark:bg-black/20 border-b border-black/5 dark:border-white/10 transition-colors">
         <div className="flex items-center gap-8 max-w-7xl mx-auto w-full">
-          <Link href="/" className="text-xl font-bold tracking-tight flex items-center gap-2">
-            <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-amber-300 to-orange-600 shadow-[0_0_15px_rgba(245,158,11,0.5)]" />
+          <Link href="/" className="text-xl font-bold tracking-tight flex items-center gap-2 group">
+            <Image
+              src="/logo-lumina.png"
+              alt="Lumina Logo"
+              width={32}
+              height={32}
+              className="transition-all duration-300 group-hover:drop-shadow-[0_0_8px_rgba(251,191,36,0.4)]"
+            />
             Lumina
           </Link>
           <div className="flex-1" />
           <div className="flex items-center gap-4">
             <ThemeToggle />
+            <Link href="/help" className="text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">
+              {t("nav.help")}
+            </Link>
             <Link href="/login" className="hidden sm:block text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors">
               {t("nav.signIn")}
             </Link>
@@ -255,7 +278,7 @@ export default function LandingPage() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
-          className="max-w-full mx-auto flex flex-col items-center py-10"
+          className="w-full overflow-hidden flex flex-col items-center py-10"
         >
           <motion.p variants={revealVariant} className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-10 text-center tracking-wide">
             {t("socialProof.title")}
@@ -263,21 +286,36 @@ export default function LandingPage() {
           {/* Framer Motion Infinite Marquee with CSS linear-gradient fade edges */}
           <motion.div variants={revealVariant} className="w-full overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_20%,black_80%,transparent)]">
             <motion.div
-              className="flex gap-16 sm:gap-32 w-max items-center opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-500 cursor-default"
+              className="flex w-max items-center will-change-transform transform-gpu"
               animate={{ x: ["0%", "-50%"] }}
-              transition={{ repeat: Infinity, ease: "linear", duration: 25 }}
+              transition={{ repeat: Infinity, ease: "linear", duration: 30 }}
             >
               {/* Elements duplicated exactly to allow smooth infinite scrolling */}
-              <span className="text-2xl font-bold tracking-tighter text-zinc-900 dark:text-zinc-100">AWS</span>
-              <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">REMOTION</span>
-              <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">SUPABASE</span>
-              <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">NEXT.JS</span>
-              <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">VERCEL</span>
-              <span className="text-2xl font-bold tracking-tighter text-zinc-900 dark:text-zinc-100">AWS</span>
-              <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">REMOTION</span>
-              <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">SUPABASE</span>
-              <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">NEXT.JS</span>
-              <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">VERCEL</span>
+              {[1, 2].map((group) => (
+                <div key={group} className="flex gap-16 sm:gap-32 pr-16 sm:pr-32 items-center">
+                  <div className="group flex items-center justify-center px-6 py-3 rounded-2xl border-2 border-transparent grayscale opacity-60 transition-all duration-300 hover:grayscale-0 hover:opacity-100 hover:border-[#FF9900] hover:shadow-[0_0_25px_rgba(255,153,0,0.6)] cursor-default">
+                    <span className="text-2xl font-bold tracking-tighter text-zinc-900 dark:text-zinc-100 group-hover:text-white transition-colors duration-300">AWS</span>
+                  </div>
+                  <div className="group flex items-center justify-center px-6 py-3 rounded-2xl border-2 border-transparent grayscale opacity-60 transition-all duration-300 hover:grayscale-0 hover:opacity-100 hover:border-[#00D1FF] hover:shadow-[0_0_25px_rgba(0,209,255,0.6)] cursor-default">
+                    <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-white transition-colors duration-300">REMOTION</span>
+                  </div>
+                  <div className="group flex items-center justify-center px-6 py-3 rounded-2xl border-2 border-transparent grayscale opacity-60 transition-all duration-300 hover:grayscale-0 hover:opacity-100 hover:border-[#3ECF8E] hover:shadow-[0_0_25px_rgba(62,207,142,0.6)] cursor-default">
+                    <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-white transition-colors duration-300">SUPABASE</span>
+                  </div>
+                  <div className="group flex items-center justify-center px-6 py-3 rounded-2xl border-2 border-transparent grayscale opacity-60 transition-all duration-300 hover:grayscale-0 hover:opacity-100 hover:border-white hover:shadow-[0_0_25px_rgba(255,255,255,0.4)] cursor-default">
+                    <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-white transition-colors duration-300">NEXT.JS</span>
+                  </div>
+                  <div className="group flex items-center justify-center px-6 py-3 rounded-2xl border-2 border-transparent grayscale opacity-60 transition-all duration-300 hover:grayscale-0 hover:opacity-100 hover:border-white hover:shadow-[0_0_25px_rgba(255,255,255,0.4)] cursor-default">
+                    <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-white transition-colors duration-300">VERCEL</span>
+                  </div>
+                  <div className="group flex items-center justify-center px-6 py-3 rounded-2xl border-2 border-transparent grayscale opacity-60 transition-all duration-300 hover:grayscale-0 hover:opacity-100 hover:border-[#4285F4] hover:shadow-[0_0_25px_rgba(66,133,244,0.6)] cursor-default">
+                    <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-white transition-colors duration-300">GOOGLE AI</span>
+                  </div>
+                  <div className="group flex items-center justify-center px-6 py-3 rounded-2xl border-2 border-transparent grayscale opacity-60 transition-all duration-300 hover:grayscale-0 hover:opacity-100 hover:border-[#635BFF] hover:shadow-[0_0_25px_rgba(99,91,255,0.6)] cursor-default">
+                    <span className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 group-hover:text-white transition-colors duration-300">STRIPE</span>
+                  </div>
+                </div>
+              ))}
             </motion.div>
           </motion.div>
         </motion.section>
@@ -376,6 +414,7 @@ export default function LandingPage() {
           </div>
         </motion.section>
 
+
         {/* =======================================================
             SECTION 6: PRICING (SOPHISTICATED CREDIT PACKS)
             ======================================================= */}
@@ -386,13 +425,29 @@ export default function LandingPage() {
           viewport={{ once: true, margin: "-100px" }}
           className="px-6 py-10 max-w-5xl mx-auto"
         >
-          <motion.div variants={revealVariant} className="text-center mb-20">
+
+          <motion.div variants={revealVariant} className="text-center mb-10">
             <h2 className="text-4xl sm:text-5xl font-bold tracking-tighter bg-gradient-to-br from-amber-600 via-orange-500 to-yellow-600 dark:bg-gradient-to-r dark:from-amber-200 dark:via-yellow-400 dark:to-orange-500 text-transparent bg-clip-text mb-4">
               {t("pricing.title")}
             </h2>
             <p className="text-lg text-zinc-600 dark:text-zinc-400 font-medium">
               {t("pricing.note")}
             </p>
+          </motion.div>
+          {/* Anti-Sub/One Time Payment Glassmorphic Tag */}
+          <motion.div variants={revealVariant} className="flex justify-center mb-8">
+            <span className="inline-flex items-center bg-black/5 dark:bg-white/5 backdrop-blur-xl border border-black/10 dark:border-white/10 px-8 py-4 rounded-full font-bold text-[18px] tracking-wide text-zinc-900 dark:text-white shadow-sm">
+              {t("pricing.badgeAntiSub")}
+            </span>
+          </motion.div>
+
+          <motion.div variants={revealVariant} className="flex flex-col md:flex-row items-center mb-22 justify-center gap-4 mb-4">
+            {globalAdvs.map((adv, idx) => (
+              <div key={idx} className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 font-medium bg-black/5 dark:bg-white/5 px-5 py-2.5 rounded-full border border-black/10 dark:border-white/10 backdrop-blur-sm">
+                <CheckCircle2 className="h-4 w-4 text-amber-500" />
+                {adv}
+              </div>
+            ))}
           </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
@@ -403,22 +458,33 @@ export default function LandingPage() {
                   <div className="absolute -inset-1 rounded-3xl bg-gradient-to-b from-amber-400 to-orange-600 opacity-50 blur-lg transform-gpu" />
                 )}
                 <div className={`relative flex flex-col rounded-3xl transition-transform duration-300 ${pack.highlight
-                  ? "md:scale-110 bg-white dark:bg-[#111111] border-2 border-amber-500/50 shadow-2xl p-8 py-12"
+                  ? "md:scale-110 bg-[#FDFBF7] dark:bg-[#0A0A0A] border-2 border-amber-500/50 shadow-2xl p-8 py-12"
                   : "bg-black/5 dark:bg-white/5 backdrop-blur-xl border border-black/10 dark:border-white/10 p-8 py-10"
                   }`}>
                   {pack.highlight && (
-                    <div className="absolute top-0 right-8 transform -translate-y-1/2">
-                      <span className="bg-gradient-to-r from-amber-400 to-orange-500 text-white text-[10px] font-bold uppercase tracking-wider py-1.5 px-4 rounded-full shadow-lg">
+                    <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[85%] text-center">
+                      <span className="bg-gradient-to-r from-amber-400 to-orange-500 text-white text-[11px] font-bold uppercase tracking-widest py-1.5 px-6 rounded-full shadow-lg border border-amber-300/30">
                         {t("pricing.badgePro")}
                       </span>
                     </div>
                   )}
 
-                  <h3 className={`text-xl font-semibold mb-6 ${pack.highlight ? "text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-500 dark:from-amber-400 dark:to-orange-400" : "text-zinc-600 dark:text-zinc-400"}`}>{pack.title}</h3>
-                  <div className="text-5xl font-bold tracking-tighter mb-4 text-zinc-900 dark:text-white">{pack.price}</div>
+                  <h3 className={`text-xl font-semibold mb-6 ${pack.highlight ? "text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-500 dark:from-amber-400 dark:to-orange-400 mt-2" : "text-zinc-600 dark:text-zinc-400"}`}>{pack.title}</h3>
+                  <div className="text-5xl font-bold tracking-tighter mb-2 text-zinc-900 dark:text-white">{pack.price}</div>
+
+                  {pack.label && (
+                    <div className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-4">{pack.label}</div>
+                  )}
+
                   <div className={`w-fit text-sm font-medium mb-8 py-2 px-4 rounded-lg ${pack.highlight ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : "bg-black/5 dark:bg-white/10"}`}>
                     {pack.credits}
                   </div>
+
+                  {pack.stat && (
+                    <div className="mb-6 py-3 px-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-sm font-bold text-center leading-relaxed">
+                      {pack.stat}
+                    </div>
+                  )}
 
                   {/* Advantages bullet list */}
                   <ul className="space-y-4 mb-10 flex-1">
@@ -430,15 +496,17 @@ export default function LandingPage() {
                     ))}
                   </ul>
 
-                  <Button
-                    className={`w-full rounded-full h-12 text-base transition-all ${pack.highlight
-                      ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:shadow-xl hover:scale-105 border-0"
-                      : "bg-black/10 dark:bg-white/10 text-zinc-900 dark:text-white hover:bg-black/20 dark:hover:bg-white/20"
-                      }`}
-                    variant={pack.highlight ? "default" : "secondary"}
-                  >
-                    {pack.btn}
-                  </Button>
+                  <Link href={pack.link} className="w-full">
+                    <Button
+                      className={`w-full rounded-full h-12 text-base transition-all ${pack.highlight
+                        ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:shadow-xl hover:scale-105 border-0"
+                        : "bg-black/10 dark:bg-white/10 text-zinc-900 dark:text-white hover:bg-black/20 dark:hover:bg-white/20"
+                        }`}
+                      variant={pack.highlight ? "default" : "secondary"}
+                    >
+                      {pack.btn}
+                    </Button>
+                  </Link>
                 </div>
               </motion.div>
             ))}
@@ -509,8 +577,16 @@ export default function LandingPage() {
       </main>
 
       {/* ---- Footer ---- */}
-      <footer className="relative z-10 border-t border-black/5 dark:border-white/10 bg-black/5 dark:bg-white/5 backdrop-blur-md px-6 py-8 text-center text-sm text-zinc-500 dark:text-zinc-400 font-medium">
-        <p>{t("footer.rights")}</p>
+      <footer className="relative z-10 border-t border-black/5 dark:border-white/10 bg-black/5 dark:bg-white/5 backdrop-blur-md px-6 py-8">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          <p>{t("footer.rights")}</p>
+          <div className="flex items-center gap-6">
+            <Link href="/bug" className="hover:text-amber-600 dark:hover:text-amber-500 transition-colors flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              {t("footer.bug")}
+            </Link>
+          </div>
+        </div>
       </footer>
     </div>
   );

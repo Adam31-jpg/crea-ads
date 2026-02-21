@@ -31,17 +31,32 @@ export async function proxy(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     // Protect /dashboard routes — redirect to /login if not authenticated
-    if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/login";
-        return NextResponse.redirect(url);
+    const { pathname, searchParams } = request.nextUrl;
+
+    if (pathname.startsWith("/dashboard")) {
+        if (!user) {
+            const url = request.nextUrl.clone();
+            url.pathname = "/login";
+            url.searchParams.set("next", pathname);
+            return NextResponse.redirect(url);
+        }
     }
 
-    // Redirect authenticated users away from /login and /signup
-    if (user && (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup")) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/dashboard";
-        return NextResponse.redirect(url);
+    // Redirect authenticated users away from auth pages
+    if (pathname.startsWith("/login") || pathname.startsWith("/signup")) {
+        if (user) {
+            const url = request.nextUrl.clone();
+            const nextPath = searchParams.get("next") || "/dashboard";
+            url.pathname = nextPath;
+            return NextResponse.redirect(url);
+        }
+    }
+
+    // Protect API routes (except webhooks)
+    if (pathname.startsWith("/api/") && !pathname.startsWith("/api/webhook")) {
+        if (!user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
     }
 
     return supabaseResponse;

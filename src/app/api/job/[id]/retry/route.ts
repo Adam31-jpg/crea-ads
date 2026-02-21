@@ -21,7 +21,7 @@ export async function POST(
         data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
     // Fetch the job
@@ -33,13 +33,13 @@ export async function POST(
         .single();
 
     if (fetchError || !job) {
-        return NextResponse.json({ error: "Job not found" }, { status: 404 });
+        return NextResponse.json({ error: "jobNotFound" }, { status: 404 });
     }
 
     // Only allow retry on stuck (rendering > 150s) or failed jobs
     if (job.status === "done") {
         return NextResponse.json(
-            { error: "Job already completed" },
+            { error: "jobCompleted" },
             { status: 400 }
         );
     }
@@ -74,7 +74,7 @@ export async function POST(
 
     if (!batchData.data) {
         return NextResponse.json(
-            { error: "Batch not found for this job" },
+            { error: "batchNotFoundForJob" },
             { status: 404 }
         );
     }

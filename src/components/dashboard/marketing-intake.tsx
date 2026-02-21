@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, Loader2, Image, Video, Check } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export interface AdConcept {
     index: number;
@@ -44,6 +45,7 @@ export function MarketingIntake({
     const [targetAudience, setTargetAudience] = useState("");
     const [loading, setLoading] = useState(false);
     const [concepts, setConcepts] = useState<AdConcept[] | null>(null);
+    const t = useTranslations("Dashboard.studio.intake");
 
     const canGenerate =
         productDescription.length > 10 &&
@@ -64,15 +66,20 @@ export function MarketingIntake({
             const data = await res.json();
 
             if (!res.ok) {
-                toast.error(data.error || "Strategy generation failed");
+                const knownErrors = ["unauthorized", "noApiKey", "missingFields", "invalidFormat"];
+                if (data.error && knownErrors.includes(data.error)) {
+                    toast.error(t(`errors.${data.error}` as any));
+                } else {
+                    toast.error(t("toasts.generateFailed"));
+                }
                 setLoading(false);
                 return;
             }
 
             setConcepts(data.concepts);
-            toast.success("🧠 AI Strategy generated! Review your 10 concepts.");
+            toast.success(t("toasts.generateSuccess"));
         } catch {
-            toast.error("Failed to connect to AI");
+            toast.error(t("toasts.connectFailed"));
         }
         setLoading(false);
     };
@@ -90,11 +97,10 @@ export function MarketingIntake({
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Sparkles className="h-5 w-5 text-brand" />
-                        AI Creative Director
+                        {t("title")}
                     </DialogTitle>
                     <DialogDescription>
-                        Tell us about your product and audience. Gemini will craft 10
-                        high-converting ad concepts (8 images + 2 videos).
+                        {t("desc")}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -102,9 +108,9 @@ export function MarketingIntake({
                 {!concepts && (
                     <div className="space-y-4 mt-2">
                         <div className="space-y-2">
-                            <Label>Product Description</Label>
+                            <Label>{t("form.productDesc")}</Label>
                             <Textarea
-                                placeholder="Describe your product in detail — features, benefits, what makes it special…"
+                                placeholder={t("form.productDescPlaceholder")}
                                 value={productDescription}
                                 onChange={(e) => setProductDescription(e.target.value)}
                                 rows={3}
@@ -112,11 +118,11 @@ export function MarketingIntake({
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Top 3 USPs (Arguments de vente)</Label>
+                            <Label>{t("form.usps")}</Label>
                             {usps.map((usp, i) => (
                                 <Input
                                     key={i}
-                                    placeholder={`USP ${i + 1} — e.g. "Free shipping worldwide"`}
+                                    placeholder={t("form.uspPlaceholder", { num: i + 1 })}
                                     value={usp}
                                     onChange={(e) => {
                                         const next = [...usps];
@@ -128,9 +134,9 @@ export function MarketingIntake({
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Target Audience</Label>
+                            <Label>{t("form.audience")}</Label>
                             <Input
-                                placeholder="e.g. Women 25-40, urban, health-conscious, active Instagram users"
+                                placeholder={t("form.audiencePlaceholder")}
                                 value={targetAudience}
                                 onChange={(e) => setTargetAudience(e.target.value)}
                             />
@@ -144,12 +150,12 @@ export function MarketingIntake({
                             {loading ? (
                                 <>
                                     <Loader2 className="h-4 w-4 animate-spin" />
-                                    Generating Strategy…
+                                    {t("buttons.generating")}
                                 </>
                             ) : (
                                 <>
                                     <Sparkles className="h-4 w-4" />
-                                    Generate Strategy
+                                    {t("buttons.generate")}
                                 </>
                             )}
                         </Button>
@@ -207,11 +213,11 @@ export function MarketingIntake({
                                 onClick={() => setConcepts(null)}
                                 className="flex-1"
                             >
-                                Regenerate
+                                {t("buttons.regenerate")}
                             </Button>
                             <Button onClick={handleConfirm} className="flex-1 gap-2">
                                 <Check className="h-4 w-4" />
-                                Confirm & Proceed
+                                {t("buttons.confirm")}
                             </Button>
                         </div>
                     </div>

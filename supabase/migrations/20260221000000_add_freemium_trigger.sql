@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   email text,
+  stripe_customer_id text,
   credits integer NOT NULL DEFAULT 0,
   created_at timestamp with time zone DEFAULT now(),
   PRIMARY KEY (id)

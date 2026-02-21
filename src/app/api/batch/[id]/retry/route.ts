@@ -19,7 +19,7 @@ export async function POST(
         data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
     // Fetch batch
@@ -31,7 +31,7 @@ export async function POST(
         .single();
 
     if (fetchError || !batch) {
-        return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+        return NextResponse.json({ error: "batchNotFound" }, { status: 404 });
     }
 
     // Reset batch status

@@ -28,21 +28,21 @@ export async function POST(req: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
     const { jobId, concept, inputData, retryGeneration } = await req.json();
 
     if (!jobId || !concept || !inputData) {
         return NextResponse.json(
-            { error: "Missing jobId, concept, or inputData" },
+            { error: "missingJobData" },
             { status: 400 }
         );
     }
 
     if (!SERVE_URL || !FUNCTION_NAME) {
         return NextResponse.json(
-            { error: "Lambda not configured." },
+            { error: "lambdaNotConfigured" },
             { status: 500 }
         );
     }

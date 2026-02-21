@@ -28,38 +28,43 @@ import {
     Sparkles,
     Loader2,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 type Step = "product" | "strategy" | "style" | "output";
 
-const steps: { key: Step; label: string; icon: string }[] = [
-    { key: "product", label: "Product Info", icon: "1" },
-    { key: "strategy", label: "AI Strategy", icon: "✨" },
-    { key: "style", label: "Style & Theme", icon: "2" },
-    { key: "output", label: "Output Settings", icon: "3" },
+const getSteps = (t: any): { key: Step; label: string; icon: string }[] => [
+    { key: "product", label: t("steps.product"), icon: "1" },
+    { key: "strategy", label: t("steps.strategy"), icon: "✨" },
+    { key: "style", label: t("steps.style"), icon: "2" },
+    { key: "output", label: t("steps.output"), icon: "3" },
 ];
 
-const FORMAT_OPTIONS = [
+const getFormatOptions = (t: any) => [
     {
         value: "1080x1920",
-        label: "Story (1080×1920)",
-        description: "Best for TikTok / Reels",
+        label: t("formats.story.label"),
+        description: t("formats.story.desc"),
         icon: Smartphone,
     },
     {
         value: "1080x1080",
-        label: "Square (1080×1080)",
-        description: "Best for Instagram / Facebook Feed",
+        label: t("formats.square.label"),
+        description: t("formats.square.desc"),
         icon: Square,
     },
     {
         value: "1920x1080",
-        label: "Landscape (1920×1080)",
-        description: "Best for YouTube / Web",
+        label: t("formats.landscape.label"),
+        description: t("formats.landscape.desc"),
         icon: Monitor,
     },
 ] as const;
 
 export default function StudioPage() {
+    const t = useTranslations("Dashboard.studio");
+    const steps = getSteps(t);
+    const formatOptions = getFormatOptions(t);
+
     const [currentStep, setCurrentStep] = useState<Step>("product");
     const [loading, setLoading] = useState(false);
     const [userId, setUserId] = useState<string>("");
@@ -125,12 +130,12 @@ export default function StudioPage() {
             .single();
 
         if (batchError || !batch) {
-            toast.error(batchError?.message || "Failed to create batch");
+            toast.error(batchError?.message || t("toasts.batchFailed"));
             setLoading(false);
             return;
         }
 
-        toast.success("Batch created! Starting 10 renders…");
+        toast.success(t("toasts.batchSuccess"));
 
         // 2. Trigger multi-render via API route
         try {
@@ -143,13 +148,13 @@ export default function StudioPage() {
             const data = await res.json();
 
             if (!res.ok) {
-                toast.error(data.error || "Failed to start renders");
+                toast.error(data.error || t("toasts.renderFailed"));
                 setLoading(false);
                 return;
             }
 
             toast.success(
-                `🚀 ${data.jobCount} renders launched! Track progress on the Dashboard.`
+                t("toasts.renderSuccess", { count: data.jobCount })
             );
 
             // Navigate to dashboard — realtime will handle progress updates
@@ -173,9 +178,9 @@ export default function StudioPage() {
 
     return (
         <div className="max-w-2xl mx-auto">
-            <h1 className="text-2xl font-bold tracking-tight mb-2">Studio</h1>
+            <h1 className="text-2xl font-bold tracking-tight mb-2">{t("title")}</h1>
             <p className="text-muted-foreground text-sm mb-8">
-                Create a full ad bundle — 8 images + 2 videos powered by AI.
+                {t("subtitle")}
             </p>
 
             {/* Step Indicator */}
@@ -185,14 +190,14 @@ export default function StudioPage() {
                         key={step.key}
                         onClick={() => setCurrentStep(step.key)}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${currentStep === step.key
-                                ? "bg-brand/10 text-brand border border-brand/25"
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            ? "bg-brand/10 text-brand border border-brand/25"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
                             }`}
                     >
                         <span
                             className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${currentStep === step.key
-                                    ? "bg-brand text-brand-foreground"
-                                    : "bg-muted text-muted-foreground"
+                                ? "bg-brand text-brand-foreground"
+                                : "bg-muted text-muted-foreground"
                                 }`}
                         >
                             {step.icon}
@@ -207,27 +212,30 @@ export default function StudioPage() {
                 <CardContent className="pt-6 flex flex-col gap-5">
                     {currentStep === "product" && (
                         <>
-                            <CardTitle className="mb-1">Product Information</CardTitle>
+                            <CardTitle className="mb-1">{t("form.productInfo")}</CardTitle>
                             <div className="flex flex-col gap-2">
-                                <Label htmlFor="productName">Product Name *</Label>
+                                <Label htmlFor="productName">{t("form.productName")}</Label>
                                 <Input
                                     id="productName"
-                                    placeholder="e.g., Midnight Elixir"
+                                    placeholder={t("form.productNamePlaceholder")}
                                     value={form.productName}
                                     onChange={(e) => update("productName", e.target.value)}
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label htmlFor="tagline">Tagline *</Label>
+                                <Label htmlFor="tagline">{t("form.tagline")}</Label>
                                 <Input
                                     id="tagline"
-                                    placeholder="e.g., Luxury Redefined"
+                                    placeholder={t("form.taglinePlaceholder")}
                                     value={form.tagline}
                                     onChange={(e) => update("tagline", e.target.value)}
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label>Product Images</Label>
+                                <Label>{t("form.productImages")}</Label>
+                                <p className="text-xs text-amber-500 font-medium bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded-md">
+                                    {t("tips.proTip")}
+                                </p>
                                 <ImageUploader
                                     images={form.images}
                                     heroIndex={form.heroImageIndex}
@@ -244,10 +252,10 @@ export default function StudioPage() {
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label htmlFor="projectName">Batch Name (optional)</Label>
+                                <Label htmlFor="projectName">{t("form.batchName")}</Label>
                                 <Input
                                     id="projectName"
-                                    placeholder="e.g., Q1 Campaign"
+                                    placeholder={t("form.batchNamePlaceholder")}
                                     value={form.projectName}
                                     onChange={(e) => update("projectName", e.target.value)}
                                 />
@@ -259,20 +267,19 @@ export default function StudioPage() {
                         <>
                             <CardTitle className="mb-1 flex items-center gap-2">
                                 <Sparkles className="h-5 w-5 text-brand" />
-                                AI Creative Strategy
+                                {t("strategy.title")}
                             </CardTitle>
                             {!strategy ? (
                                 <div className="text-center py-8 space-y-4">
                                     <p className="text-sm text-muted-foreground">
-                                        Let Gemini craft 10 high-converting ad concepts for
-                                        your product.
+                                        {t("strategy.emptyState")}
                                     </p>
                                     <Button
                                         onClick={() => setIntakeOpen(true)}
                                         className="gap-2"
                                     >
                                         <Sparkles className="h-4 w-4" />
-                                        Open AI Director
+                                        {t("buttons.openDirector")}
                                     </Button>
                                 </div>
                             ) : (
@@ -289,8 +296,8 @@ export default function StudioPage() {
                                                     </span>
                                                     <span className="text-[10px] text-muted-foreground">
                                                         {c.type === "video"
-                                                            ? "🎬 Video"
-                                                            : "🖼 Image"}
+                                                            ? t("strategy.video")
+                                                            : t("strategy.image")}
                                                     </span>
                                                 </div>
                                                 <p className="text-xs font-semibold leading-tight">
@@ -309,7 +316,7 @@ export default function StudioPage() {
                                         className="gap-1.5"
                                     >
                                         <Sparkles className="h-3 w-3" />
-                                        Regenerate
+                                        {t("buttons.regenerate")}
                                     </Button>
                                 </div>
                             )}
@@ -318,29 +325,29 @@ export default function StudioPage() {
 
                     {currentStep === "style" && (
                         <>
-                            <CardTitle className="mb-1">Style & Theme</CardTitle>
+                            <CardTitle className="mb-1">{t("form.styleTheme")}</CardTitle>
                             <div className="flex flex-col gap-2">
-                                <Label>Theme</Label>
+                                <Label>{t("form.theme")}</Label>
                                 <Select
                                     value={form.theme}
                                     onValueChange={(v) => update("theme", v)}
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select a theme" />
+                                        <SelectValue placeholder={t("form.themePlaceholder")} />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="luxury-dark">Luxury Dark</SelectItem>
+                                        <SelectItem value="luxury-dark">{t("themes.luxury-dark")}</SelectItem>
                                         <SelectItem value="luxury-light">
-                                            Luxury Light
+                                            {t("themes.luxury-light")}
                                         </SelectItem>
-                                        <SelectItem value="minimal">Minimal</SelectItem>
-                                        <SelectItem value="bold">Bold & Vibrant</SelectItem>
-                                        <SelectItem value="editorial">Editorial</SelectItem>
+                                        <SelectItem value="minimal">{t("themes.minimal")}</SelectItem>
+                                        <SelectItem value="bold">{t("themes.bold")}</SelectItem>
+                                        <SelectItem value="editorial">{t("themes.editorial")}</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label htmlFor="accentColor">Accent Color</Label>
+                                <Label htmlFor="accentColor">{t("form.accentColor")}</Label>
                                 <div className="flex items-center gap-3">
                                     <input
                                         id="accentColor"
@@ -359,18 +366,18 @@ export default function StudioPage() {
 
                     {currentStep === "output" && (
                         <>
-                            <CardTitle className="mb-1">Output Settings</CardTitle>
+                            <CardTitle className="mb-1">{t("form.outputSettings")}</CardTitle>
                             <div className="flex flex-col gap-2">
-                                <Label>Format</Label>
+                                <Label>{t("form.format")}</Label>
                                 <Select
                                     value={form.format}
                                     onValueChange={(v) => update("format", v)}
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select a format" />
+                                        <SelectValue placeholder={t("form.formatPlaceholder")} />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {FORMAT_OPTIONS.map((opt) => (
+                                        {formatOptions.map((opt) => (
                                             <SelectItem key={opt.value} value={opt.value}>
                                                 <div className="flex items-center gap-2">
                                                     <opt.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -388,7 +395,7 @@ export default function StudioPage() {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="flex flex-col gap-2">
-                                    <Label htmlFor="fps">FPS</Label>
+                                    <Label htmlFor="fps">{t("form.fps")}</Label>
                                     <Input
                                         id="fps"
                                         type="number"
@@ -401,7 +408,7 @@ export default function StudioPage() {
                                     />
                                 </div>
                                 <div className="flex flex-col gap-2">
-                                    <Label htmlFor="duration">Duration (seconds)</Label>
+                                    <Label htmlFor="duration">{t("form.duration")}</Label>
                                     <Input
                                         id="duration"
                                         type="number"
@@ -432,7 +439,7 @@ export default function StudioPage() {
                     }}
                     disabled={currentStep === "product"}
                 >
-                    ← Back
+                    {t("buttons.back")}
                 </Button>
 
                 {currentStep !== "output" ? (
@@ -446,17 +453,17 @@ export default function StudioPage() {
                         }}
                         disabled={!canProceed[currentStep]}
                     >
-                        Next →
+                        {t("buttons.next")}
                     </Button>
                 ) : (
                     <Button onClick={handleSubmit} disabled={loading || !strategy}>
                         {loading ? (
                             <>
                                 <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                                Launching 10 Renders…
+                                {t("buttons.launching")}
                             </>
                         ) : (
-                            "Generate Bundle (8+2) →"
+                            t("buttons.generate")
                         )}
                     </Button>
                 )}

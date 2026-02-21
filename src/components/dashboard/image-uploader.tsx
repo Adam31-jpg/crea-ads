@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { X, Upload, Star, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 interface ImageUploaderProps {
     images: string[];
@@ -25,6 +26,7 @@ export function ImageUploader({
     const [dragOver, setDragOver] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const supabase = createClient();
+    const t = useTranslations("Dashboard.studio.imageUploader");
 
     const uploadFiles = useCallback(
         async (files: FileList | File[]) => {
@@ -34,7 +36,7 @@ export function ImageUploader({
             );
 
             if (valid.length === 0) {
-                toast.error("Please upload PNG, JPEG, or WebP images.");
+                toast.error(t("errorType"));
                 return;
             }
 
@@ -50,7 +52,7 @@ export function ImageUploader({
                     .upload(path, file, { cacheControl: "3600", upsert: false });
 
                 if (error) {
-                    toast.error(`Upload failed: ${error.message}`);
+                    toast.error(t("errorUpload", { message: error.message }));
                     continue;
                 }
 
@@ -64,12 +66,12 @@ export function ImageUploader({
             if (newUrls.length > 0) {
                 onImagesChange([...images, ...newUrls]);
                 toast.success(
-                    `${newUrls.length} image${newUrls.length > 1 ? "s" : ""} uploaded`
+                    t("success", { count: newUrls.length })
                 );
             }
             setUploading(false);
         },
-        [images, onImagesChange, supabase, userId]
+        [images, onImagesChange, supabase, userId, t]
     );
 
     const handleDrop = useCallback(
@@ -114,18 +116,18 @@ export function ImageUploader({
                 />
                 <p className="text-sm text-muted-foreground">
                     {uploading ? (
-                        "Uploading..."
+                        t("uploading")
                     ) : (
                         <>
                             <span className="font-medium text-foreground">
-                                Click to upload
+                                {t("clickToUpload")}
                             </span>{" "}
-                            or drag and drop
+                            {t("dragDrop")}
                         </>
                     )}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                    PNG, JPEG, or WebP (max 10MB)
+                    {t("files")}
                 </p>
                 <input
                     ref={inputRef}
@@ -141,7 +143,7 @@ export function ImageUploader({
             <div className="flex items-center gap-2 rounded-lg bg-brand/5 border border-brand/15 px-3 py-2">
                 <ImageIcon className="h-4 w-4 text-brand shrink-0" />
                 <p className="text-xs text-brand">
-                    <strong>Pro tip:</strong> Use transparent PNGs for optimal results.
+                    <strong>{t("proTip")}</strong>{t("proTipText")}
                 </p>
             </div>
 
@@ -170,7 +172,7 @@ export function ImageUploader({
                                 <div className="absolute top-1 left-1 flex items-center gap-1 rounded-md bg-brand px-1.5 py-0.5">
                                     <Star className="h-3 w-3 fill-brand-foreground text-brand-foreground" />
                                     <span className="text-[10px] font-bold text-brand-foreground">
-                                        HERO
+                                        {t("hero")}
                                     </span>
                                 </div>
                             )}
@@ -190,7 +192,7 @@ export function ImageUploader({
                             {heroIndex !== i && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <span className="text-[10px] font-medium text-white">
-                                        Set as Hero
+                                        {t("setHero")}
                                     </span>
                                 </div>
                             )}

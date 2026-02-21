@@ -6,9 +6,10 @@ import { BatchCard, type Batch, type Job } from "./batch-card";
 
 interface BatchListProps {
     initialBatches: Batch[];
+    showUnarchive?: boolean;
 }
 
-export function BatchList({ initialBatches }: BatchListProps) {
+export function BatchList({ initialBatches, showUnarchive }: BatchListProps) {
     const [batches, setBatches] = useState<Batch[]>(initialBatches);
     const supabase = createClient();
 
@@ -81,7 +82,7 @@ export function BatchList({ initialBatches }: BatchListProps) {
         };
     }, [supabase]);
 
-    // Sync with initialBatches when they change (e.g., server refetch)
+    // Sync with initialBatches when they change (e.g., server refetch upon archive/unarchive)
     useEffect(() => {
         setBatches(initialBatches);
     }, [initialBatches]);
@@ -89,7 +90,7 @@ export function BatchList({ initialBatches }: BatchListProps) {
     return (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
             {batches.map((batch) => (
-                <BatchCard key={batch.id} batch={batch} />
+                <BatchCard key={batch.id} batch={batch} showUnarchive={showUnarchive} />
             ))}
         </div>
     );
