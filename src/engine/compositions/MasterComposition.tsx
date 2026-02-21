@@ -8,6 +8,7 @@ import { RemotionPropsSchema } from '../schema/project';
 import { useBeat } from '../hooks/useBeat';
 import { AudioLayer } from '../components/AudioLayer';
 import { TransitionLayer } from '../components/TransitionLayer';
+import { BrandLogo } from '../components/BrandLogo';
 
 type Props = z.infer<typeof RemotionPropsSchema>;
 
@@ -21,7 +22,9 @@ export const MasterComposition: React.FC<Props> = (props) => {
         camera,
         audio,
         transition,
-        enableMotionBlur // New prop
+        enableMotionBlur,
+        logoUrl,
+        logoPosition
     } = props;
 
     // Motion Blur Logic
@@ -130,6 +133,11 @@ export const MasterComposition: React.FC<Props> = (props) => {
                                 )}
                             </div>
                         </SafeZone>
+
+                        {/* Layer 3: Brand Logo */}
+                        {logoUrl && logoPosition && (
+                            <BrandLogo src={logoUrl} position={logoPosition} />
+                        )}
 
                     </AbsoluteFill>
                 </TransitionLayer>

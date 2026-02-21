@@ -25,6 +25,8 @@ export const RemotionPropsSchema = z.object({
     subheadlineText: z.string().optional(),
     productImageUrl: z.string().url(),
     backgroundImageUrl: z.string().url().optional(),
+    logoUrl: z.string().url().optional().nullable(),
+    logoPosition: z.enum(['top-left', 'top-right', 'bottom-left', 'bottom-right']).optional().nullable(),
 
     // --- Color Harmony (The Logic Layer output) ---
     colors: z.object({

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+
+import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +16,31 @@ import {
     DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Loader2, Image, Video, Check } from "lucide-react";
+import { Sparkles, Loader2, Image, Video, Check, UploadCloud, Globe } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { motion } from "framer-motion";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+
+const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+        opacity: 1,
+        transition: {
+            staggerChildren: 0.1
+        }
+    }
+};
+
+const itemVariants = {
+    hidden: { opacity: 0, y: 15 },
+    show: { opacity: 1, y: 0 }
+};
 
 export interface AdConcept {
     index: number;
@@ -27,12 +52,13 @@ export interface AdConcept {
     visualDirection: string;
     colorMood: string;
     emphasis: string;
+    logo_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right" | null;
 }
 
 interface MarketingIntakeProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onStrategyReady: (concepts: AdConcept[]) => void;
+    onStrategyReady: (concepts: AdConcept[], logoUrl: string | null, targetLanguage: string) => void;
 }
 
 export function MarketingIntake({
@@ -43,14 +69,48 @@ export function MarketingIntake({
     const [productDescription, setProductDescription] = useState("");
     const [usps, setUsps] = useState(["", "", ""]);
     const [targetAudience, setTargetAudience] = useState("");
+    const [targetLanguage, setTargetLanguage] = useState("Français");
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
+    const [uploadingLogo, setUploadingLogo] = useState(false);
     const [loading, setLoading] = useState(false);
     const [concepts, setConcepts] = useState<AdConcept[] | null>(null);
     const t = useTranslations("Dashboard.studio.intake");
+    const supabase = createClient();
 
     const canGenerate =
         productDescription.length > 10 &&
         usps[0].length > 0 &&
         targetAudience.length > 0;
+
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.type !== "image/png") {
+            toast.error(t("form.logoError"));
+            return;
+        }
+
+        setUploadingLogo(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const path = `${user.id}/logos/${Date.now()}_${file.name}`;
+        const { error } = await supabase.storage
+            .from("product-assets")
+            .upload(path, file);
+
+        if (error) {
+            toast.error(t("form.logoUploadFailed"));
+        } else {
+            const { data: { publicUrl } } = supabase.storage
+                .from("product-assets")
+                .getPublicUrl(path);
+            setLogoUrl(publicUrl);
+            toast.success(t("form.logoSuccess"));
+        }
+        setUploadingLogo(false);
+    };
 
     const handleGenerate = async () => {
         setLoading(true);
@@ -60,7 +120,7 @@ export function MarketingIntake({
             const res = await fetch("/api/strategy", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ productDescription, usps, targetAudience }),
+                body: JSON.stringify({ productDescription, usps, targetAudience, logoUrl, targetLanguage }),
             });
 
             const data = await res.json();
@@ -86,80 +146,172 @@ export function MarketingIntake({
 
     const handleConfirm = () => {
         if (concepts) {
-            onStrategyReady(concepts);
+            onStrategyReady(concepts, logoUrl, targetLanguage);
             onOpenChange(false);
         }
     };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-3xl bg-[#0A0A0A]/90 backdrop-blur-xl border-zinc-800 text-zinc-100 max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <Sparkles className="h-5 w-5 text-brand" />
+                    <DialogTitle className="flex items-center gap-2 text-2xl font-bold">
+                        <Sparkles className="h-6 w-6 text-amber-500 animate-pulse" />
                         {t("title")}
                     </DialogTitle>
-                    <DialogDescription>
-                        {t("desc")}
+                    <DialogDescription className="text-zinc-400 text-base">
+                        {t("subtitle")}
                     </DialogDescription>
                 </DialogHeader>
 
                 {/* Input Fields */}
                 {!concepts && (
-                    <div className="space-y-4 mt-2">
-                        <div className="space-y-2">
-                            <Label>{t("form.productDesc")}</Label>
+                    <motion.div
+                        variants={containerVariants}
+                        initial="hidden"
+                        animate="show"
+                        className="space-y-6 mt-4"
+                    >
+                        {/* Section A: L'Essence du Produit */}
+                        <motion.div variants={itemVariants} className="space-y-3 bg-zinc-900/50 p-4 border border-zinc-800 rounded-xl relative overflow-hidden group">
+                            <Label className="text-amber-500/90 font-medium tracking-wide flex items-center gap-2">
+                                <span className="bg-amber-500/10 text-amber-500 px-2 flex items-center justify-center rounded-md font-bold text-xs h-5">1</span>
+                                {t("sections.a")}
+                            </Label>
                             <Textarea
                                 placeholder={t("form.productDescPlaceholder")}
                                 value={productDescription}
                                 onChange={(e) => setProductDescription(e.target.value)}
-                                rows={3}
+                                rows={4}
+                                className="bg-zinc-950/50 border-zinc-800 focus-visible:ring-1 focus-visible:ring-amber-500/50 focus-visible:shadow-[inset_0_0_15px_rgba(245,158,11,0.1)] transition-all resize-none text-base text-zinc-200 placeholder:text-zinc-600"
                             />
-                        </div>
+                        </motion.div>
 
-                        <div className="space-y-2">
-                            <Label>{t("form.usps")}</Label>
-                            {usps.map((usp, i) => (
-                                <Input
-                                    key={i}
-                                    placeholder={t("form.uspPlaceholder", { num: i + 1 })}
-                                    value={usp}
-                                    onChange={(e) => {
-                                        const next = [...usps];
-                                        next[i] = e.target.value;
-                                        setUsps(next);
-                                    }}
-                                />
-                            ))}
-                        </div>
+                        {/* Section B: Les Piliers de Vente (USPs) */}
+                        <motion.div variants={itemVariants} className="space-y-3 bg-zinc-900/50 p-4 border border-zinc-800 rounded-xl">
+                            <Label className="text-amber-500/90 font-medium tracking-wide flex items-center gap-2">
+                                <span className="bg-amber-500/10 text-amber-500 px-2 flex items-center justify-center rounded-md font-bold text-xs h-5">2</span>
+                                {t("sections.b")}
+                            </Label>
+                            <div className="space-y-2">
+                                {usps.map((usp, i) => (
+                                    <div key={i} className="relative">
+                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 font-medium text-sm">
+                                            {i + 1}.
+                                        </div>
+                                        <Input
+                                            placeholder={t("form.uspPlaceholder", { num: i + 1 })}
+                                            value={usp}
+                                            onChange={(e) => {
+                                                const next = [...usps];
+                                                next[i] = e.target.value;
+                                                setUsps(next);
+                                            }}
+                                            className="pl-8 bg-zinc-950/50 border-zinc-800 focus-visible:ring-1 focus-visible:ring-amber-500/50 text-zinc-200 placeholder:text-zinc-600 transition-all"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </motion.div>
 
-                        <div className="space-y-2">
-                            <Label>{t("form.audience")}</Label>
-                            <Input
-                                placeholder={t("form.audiencePlaceholder")}
-                                value={targetAudience}
-                                onChange={(e) => setTargetAudience(e.target.value)}
-                            />
-                        </div>
+                        {/* Section C: Audience & Identité */}
+                        <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Audience */}
+                            <div className="space-y-4">
+                                <div className="space-y-4 bg-zinc-900/50 p-4 border border-zinc-800 rounded-xl">
+                                    <Label className="text-amber-500/90 font-medium tracking-wide flex items-center gap-2">
+                                        <span className="bg-amber-500/10 text-amber-500 px-2 flex items-center justify-center rounded-md font-bold text-xs h-5">3</span>
+                                        {t("sections.c")}
+                                    </Label>
 
-                        <Button
-                            onClick={handleGenerate}
-                            disabled={!canGenerate || loading}
-                            className="w-full gap-2"
-                        >
-                            {loading ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    {t("buttons.generating")}
-                                </>
-                            ) : (
-                                <>
-                                    <Sparkles className="h-4 w-4" />
-                                    {t("buttons.generate")}
-                                </>
-                            )}
-                        </Button>
-                    </div>
+                                    <div className="space-y-2 pt-1">
+                                        <Input
+                                            placeholder={t("form.audiencePlaceholder")}
+                                            value={targetAudience}
+                                            onChange={(e) => setTargetAudience(e.target.value)}
+                                            className="bg-zinc-950/50 border-zinc-800 focus-visible:ring-1 focus-visible:ring-amber-500/50 text-zinc-200 placeholder:text-zinc-600 transition-all"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-4 bg-zinc-900/50 p-4 border border-zinc-800 rounded-xl">
+                                    <div className="space-y-2">
+                                        <Label className="text-amber-500/90 font-medium tracking-wide flex items-center gap-2">
+                                            <span className="bg-amber-500/10 text-amber-500 px-2 flex items-center justify-center rounded-md font-bold text-xs h-5">4</span>
+                                            {t("form.langue")}
+                                        </Label>
+                                        <Select value={targetLanguage} onValueChange={setTargetLanguage}>
+                                            <SelectTrigger className="bg-zinc-950/50 border-zinc-800 focus:ring-1 focus:ring-amber-500/50 text-zinc-200">
+                                                <SelectValue placeholder={t("form.languePlaceholder")} />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {Object.keys(t.raw("form.languages")).map((lang) => (
+                                                    <SelectItem key={lang} value={lang}>
+                                                        {t(`form.languages.${lang as any}`)}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+
+                            </div>
+                            {/* Brand Logo */}
+                            <div className="space-y-3 bg-zinc-900/50 p-4 border border-zinc-800 rounded-xl flex flex-col justify-between">
+                                <div className="space-y-1">
+                                    <Label className="text-zinc-300 font-medium tracking-wide flex items-center gap-2">
+                                        <UploadCloud className="h-4 w-4 text-zinc-500" />
+                                        {t("sections.brandOption")}
+                                    </Label>
+                                    <p className="text-[11px] text-zinc-500 pt-1">
+                                        {t("form.brandLogoTooltip")}
+                                    </p>
+                                </div>
+
+                                <div className="relative group mt-auto">
+                                    <Input
+                                        type="file"
+                                        accept="image/png"
+                                        onChange={handleLogoUpload}
+                                        disabled={uploadingLogo}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                    />
+                                    <div className="flex items-center justify-between px-3 py-2 bg-zinc-950/50 border-2 border-dashed border-zinc-700 group-hover:border-amber-500/50 rounded-lg transition-colors h-10">
+                                        <div className="flex items-center gap-2 text-sm text-zinc-400 group-hover:text-amber-400/80 transition-colors truncate">
+                                            <span className="truncate pr-8">{logoUrl ? t("form.logoSuccess") : t("form.brandLogo")}</span>
+                                        </div>
+                                        {uploadingLogo && <Loader2 className="h-4 w-4 animate-spin text-amber-500 shrink-0 absolute right-3" />}
+                                        {logoUrl && !uploadingLogo && <Check className="h-4 w-4 text-green-500 shrink-0 absolute right-3" />}
+                                    </div>
+                                    {logoUrl && (
+                                        <div className="absolute top-1 right-12 h-8 w-8 bg-zinc-900 rounded border border-zinc-700 p-1 pointer-events-none z-20">
+                                            <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </motion.div>
+
+
+                        <motion.div variants={itemVariants} className="pt-2">
+                            <Button
+                                onClick={handleGenerate}
+                                disabled={!canGenerate || loading}
+                                className="w-full h-12 gap-2 text-base font-bold text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 border-none shadow-[0_0_20px_rgba(245,158,11,0.5)] hover:shadow-[0_0_30px_rgba(245,158,11,0.6)] transition-all disabled:opacity-50 disabled:shadow-none"
+                            >
+                                {loading ? (
+                                    <>
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                        {t("buttons.generating")}
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles className="h-5 w-5 animate-pulse" />
+                                        {t("buttons.generate")}
+                                    </>
+                                )}
+                            </Button>
+                        </motion.div>
+                    </motion.div>
                 )}
 
                 {/* Strategy Preview Grid */}

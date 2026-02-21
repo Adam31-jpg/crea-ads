@@ -4,7 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
 
-const SYSTEM_PROMPT = `### ROLE
+const getSystemPrompt = (targetLanguage: string) => `### ROLE
 You are Lumina's Elite AI Creative Director — a hybrid of a world-class performance marketer and a technical art director. Your goal is to generate 10 high-converting ad concepts for Meta, TikTok, and Google Ads.
 
 ### CORE MISSION: "VALUE INFERENCE"
@@ -21,6 +21,7 @@ Each object MUST strictly follow this schema:
 - "visualDirection": string (2 sentences: specific lighting, camera angle, and composition)
 - "colorMood": "sunset" | "midnight" | "studio_white" | "electric_neon"
 - "emphasis": "product_detail" | "typography_heavy" | "balanced"
+- "logo_position": string | null (You will receive a has_logo parameter. If true, select one from: 'top-left', 'top-right', 'bottom-left', 'bottom-right'. If false, return null.)
 
 ### FRAMEWORKS & STRATEGY
 - 0-2: "THE HOOK-POINT" (Stop the scroll). Focus on a massive problem or shocking benefit.
@@ -33,7 +34,8 @@ Each object MUST strictly follow this schema:
 2. NO MARKDOWN: Return ONLY the raw JSON array. No fences, no intro, no outro.
 3. CONVERSION FIRST: Headlines must use power words (Secret, Ultimate, Hack, Transform).
 4. VISUAL PRECISION: Specify lighting (e.g., "High-key studio lighting") and movement for videos.
-5. QUALITY OVERRIDE: If the user input is "bad", your output must be "excellent".`;
+5. QUALITY OVERRIDE: If the user input is "bad", your output must be "excellent".
+6. LANGUAGE ENFORCEMENT: Generate all creative copy (Headlines, Subheadlines, CTAs) strictly in the requested target language: ${targetLanguage}. Use high-converting, native-level marketing vocabulary in that language.`;
 
 export async function POST(req: NextRequest) {
     // Auth
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    const { productDescription, usps, targetAudience } = await req.json();
+    const { productDescription, usps, targetAudience, logoUrl, targetLanguage = "Français" } = await req.json();
 
     if (!productDescription || !usps || !targetAudience) {
         return NextResponse.json(
@@ -60,6 +62,8 @@ export async function POST(req: NextRequest) {
             { status: 400 }
         );
     }
+
+    const has_logo = !!logoUrl;
 
     // DEBIT-BEFORE-GEN LOGIC: Consume 10 Sparks
     const cost = 10;
@@ -83,6 +87,8 @@ export async function POST(req: NextRequest) {
 
 **Target Audience:** ${targetAudience}
 
+**has_logo:** ${has_logo}
+
 Generate 10 ad concepts as a JSON array.`;
 
     try {
@@ -96,7 +102,7 @@ Generate 10 ad concepts as a JSON array.`;
                 model: "gemini-3-pro-preview",
                 contents: userPrompt,
                 config: {
-                    systemInstruction: SYSTEM_PROMPT,
+                    systemInstruction: getSystemPrompt(targetLanguage),
                     temperature: 0.8,
                     maxOutputTokens: 8192,
                 },
@@ -109,7 +115,7 @@ Generate 10 ad concepts as a JSON array.`;
                 model: "gemini-3-flash-preview",
                 contents: userPrompt,
                 config: {
-                    systemInstruction: SYSTEM_PROMPT,
+                    systemInstruction: getSystemPrompt(targetLanguage),
                     temperature: 0.8,
                     maxOutputTokens: 8192,
                 },

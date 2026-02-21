@@ -31,7 +31,7 @@
             "step2Title": "Rendu Parallèle AWS",
             "step2Desc": "Lumina déploie une flotte d'instances pour rendre vos médias simultanément.",
             "step3Title": "Récupérez l'excellence",
-            "step3Desc": "Vos vidéos HD & 4K sont prêtes et archivées en toute sécurité."
+            "step3Desc": "Vos images et vidéos HD sont prêtes et archivées en toute sécurité."
         },
         "testimonials": {
             "title": "Aimé par les créateurs exigeants.",
@@ -81,6 +81,28 @@
             "p3Adv2": "Exportation sans filigrane",
             "p3Adv3": "Archivage sécurisé",
             "p3Adv4": "Support prioritaire"
+        },
+        "comparison": {
+            "title": "Le choix de la performance brute.",
+            "colFeature": "Critère",
+            "colCompetitor": "La Concurrence",
+            "colLumina": "Lumina",
+            "f1": "Coût par Média",
+            "c1": "2,00 €+",
+            "l1": "0,18 € à 0,30 €",
+            "f2": "Engagement",
+            "c2": "Abonnement mensuel forcé",
+            "l2": "Paiement unique, pas d'abonnement (Sparks)",
+            "f3": "Modification",
+            "c3": "Contenu verrouillé (.mp4)",
+            "l3": "Édition illimitée (Code-based)",
+            "f4": "Intelligence",
+            "c4": "Modèles génériques",
+            "l4": "Directeur Artistique Pro",
+            "f5": "Propriété",
+            "c5": "Usage limité",
+            "l5": "Pleine Souveraineté",
+            "footer": "Chez les autres, une erreur sur une vidéo vous coûte une nouvelle génération. Chez Lumina, elle vous coûte 3 secondes de modification gratuite."
         },
         "faq": {
             "title": "Questions Fréquentes.",
@@ -294,8 +316,13 @@
                 "outputSettings": "Paramètres de Sortie",
                 "format": "Format",
                 "formatPlaceholder": "Sélectionnez un format",
-                "fps": "IPS (Images par seconde)",
-                "duration": "Durée (secondes)"
+                "duration": "Durée (secondes)",
+                "durationHint": "Durées optimisées pour Reels, TikTok et Shorts (Max 15s).",
+                "durations": {
+                    "6": "6s",
+                    "10": "10s",
+                    "15": "15s"
+                }
             },
             "tips": {
                 "proTip": "Pro tip: Utilisez des PNG transparents pour un résultat optimal"
@@ -315,11 +342,12 @@
                 "image": "🖼 Image"
             },
             "themes": {
-                "luxury-dark": "Luxe Sombre",
-                "luxury-light": "Luxe Clair",
-                "minimal": "Minimaliste",
-                "bold": "Audacieux & Vibrant",
-                "editorial": "Éditorial"
+                "luxe-sombre": "Luxe Sombre",
+                "nature": "Nature",
+                "neon": "Néon",
+                "pop": "Pop",
+                "studio-white": "Studio Blanc",
+                "sunset": "Sunset"
             },
             "imageUploader": {
                 "errorType": "Veuillez uploader des images PNG, JPEG ou WebP.",
@@ -336,14 +364,40 @@
             },
             "intake": {
                 "title": "Directeur Créatif IA",
+                "subtitle": "Concevons ensemble vos 10 prochaines pépites publicitaires.",
                 "desc": "Parlez-nous de votre produit et de votre audience. Gemini concevra 10 concepts publicitaires percutants (8 images + 2 vidéos).",
+                "sections": {
+                    "a": "L'Essence du Produit",
+                    "b": "Les Piliers de Vente (USPs)",
+                    "c": "Audience & Identité",
+                    "brandOption": "Identité Visuelle (Optionnel)"
+                },
                 "form": {
+                    "langue": "Langue des Créatives",
+                    "languePlaceholder": "Sélectionner la langue",
+                    "languages": {
+                        "Français": "Français",
+                        "English": "English",
+                        "Español": "Español",
+                        "Deutsch": "Deutsch",
+                        "Italiano": "Italiano",
+                        "Russe": "Russe",
+                        "Arabe": "Arabe",
+                        "Chinois (Simplifié)": "Chinois (Simplifié)",
+                        "Japonais": "Japonais",
+                        "Coréen": "Coréen"
+                    },
                     "productDesc": "Description du Produit",
                     "productDescPlaceholder": "Décrivez votre produit en détail — fonctionnalités, avantages, ce qui le rend unique…",
-                    "usps": "Top 3 USPs (Arguments de vente)",
+                    "usps": "USPs (Arguments de vente)",
                     "uspPlaceholder": "USP {num} — ex: \"Livraison gratuite dans le monde entier\"",
                     "audience": "Audience Cible",
-                    "audiencePlaceholder": "ex: Femmes 25-40, urbaines, attentives à leur santé, actives sur Instagram"
+                    "audiencePlaceholder": "ex: Femmes 25-40, urbaines, actives sur Instagram",
+                    "brandLogo": "Ajouter votre logo (PNG)",
+                    "brandLogoTooltip": "Laissez vide pour aucune surimpression.",
+                    "logoError": "Format de fichier invalide. Veuillez importer un fichier PNG.",
+                    "logoUploadFailed": "Échec de l'upload du logo.",
+                    "logoSuccess": "Logo importé avec succès !"
                 },
                 "buttons": {
                     "generate": "Générer la Stratégie",

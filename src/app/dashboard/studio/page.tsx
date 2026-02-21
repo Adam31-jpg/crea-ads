@@ -27,6 +27,7 @@ import {
     Monitor,
     Sparkles,
     Loader2,
+    Check,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -60,6 +61,28 @@ const getFormatOptions = (t: any) => [
     },
 ] as const;
 
+const THEMES = [
+    { id: "luxe-sombre", image: "/images/themes/luxe-sombre.jpg", text: "text-zinc-200" },
+    { id: "studio-white", image: "/images/themes/studio-white.jpg", text: "text-zinc-800" },
+    { id: "neon", image: "/images/themes/neon.jpg", text: "text-zinc-100" },
+    { id: "nature", image: "/images/themes/nature.jpg", text: "text-zinc-900" },
+    { id: "pop", image: "/images/themes/pop.jpg", text: "text-zinc-800" },
+    { id: "sunset", image: "/images/themes/sunset.jpg", text: "text-zinc-100" },
+];
+
+const ThemePreviewSVG = () => (
+    <svg viewBox="0 0 100 100" className="w-full h-full opacity-80" preserveAspectRatio="xMidYMid meet">
+        {/* Mock Image Placeholder */}
+        <rect x="10" y="10" width="80" height="40" rx="4" fill="currentColor" fillOpacity="0.1" />
+        {/* Mock Headline */}
+        <rect x="10" y="55" width="60" height="6" rx="3" fill="currentColor" fillOpacity="0.8" />
+        <rect x="10" y="65" width="40" height="4" rx="2" fill="currentColor" fillOpacity="0.4" />
+        {/* Mock CTA Button mapped to CSS variable */}
+        <rect x="10" y="75" width="35" height="12" rx="2" fill="var(--accent-color)" />
+        <rect x="15" y="80" width="25" height="2" rx="1" fill="#ffffff" fillOpacity="0.8" />
+    </svg>
+);
+
 export default function StudioPage() {
     const t = useTranslations("Dashboard.studio");
     const steps = getSteps(t);
@@ -80,11 +103,13 @@ export default function StudioPage() {
         tagline: "",
         images: [] as string[],
         heroImageIndex: 0,
-        theme: "luxury-dark",
-        accentColor: "#D4AF37",
+        logoUrl: null as string | null,
+        theme: "luxe-sombre",
+        accentColor: "#F59E0B",
         format: "1080x1920",
         fps: 30,
         durationSec: 6,
+        targetLanguage: "Français",
     });
 
     useEffect(() => {
@@ -107,14 +132,16 @@ export default function StudioPage() {
                     tagline: form.tagline,
                     images: form.images,
                     heroImageIndex: form.heroImageIndex,
+                    logoUrl: form.logoUrl,
                 },
             ],
             strategy: strategy,
             theme: form.theme,
             accentColor: form.accentColor,
             format: form.format,
-            fps: form.fps,
+            fps: form.fps, // Always 30
             durationSec: form.durationSec,
+            targetLanguage: form.targetLanguage,
         };
 
         // 1. Create batch in Supabase
@@ -233,9 +260,6 @@ export default function StudioPage() {
                             </div>
                             <div className="flex flex-col gap-2">
                                 <Label>{t("form.productImages")}</Label>
-                                <p className="text-xs text-amber-500 font-medium bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded-md">
-                                    {t("tips.proTip")}
-                                </p>
                                 <ImageUploader
                                     images={form.images}
                                     heroIndex={form.heroImageIndex}
@@ -324,44 +348,71 @@ export default function StudioPage() {
                     )}
 
                     {currentStep === "style" && (
-                        <>
-                            <CardTitle className="mb-1">{t("form.styleTheme")}</CardTitle>
-                            <div className="flex flex-col gap-2">
-                                <Label>{t("form.theme")}</Label>
-                                <Select
-                                    value={form.theme}
-                                    onValueChange={(v) => update("theme", v)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder={t("form.themePlaceholder")} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="luxury-dark">{t("themes.luxury-dark")}</SelectItem>
-                                        <SelectItem value="luxury-light">
-                                            {t("themes.luxury-light")}
-                                        </SelectItem>
-                                        <SelectItem value="minimal">{t("themes.minimal")}</SelectItem>
-                                        <SelectItem value="bold">{t("themes.bold")}</SelectItem>
-                                        <SelectItem value="editorial">{t("themes.editorial")}</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="flex flex-col gap-2">
-                                <Label htmlFor="accentColor">{t("form.accentColor")}</Label>
-                                <div className="flex items-center gap-3">
-                                    <input
-                                        id="accentColor"
-                                        type="color"
-                                        value={form.accentColor}
-                                        onChange={(e) => update("accentColor", e.target.value)}
-                                        className="h-9 w-12 rounded-md border border-input bg-transparent cursor-pointer"
-                                    />
-                                    <span className="text-sm text-muted-foreground font-mono">
-                                        {form.accentColor}
-                                    </span>
+                        <div style={{ "--accent-color": form.accentColor } as React.CSSProperties} className="flex flex-col gap-6">
+                            <CardTitle className="mb-0">{t("form.styleTheme")}</CardTitle>
+                            <div className="flex flex-col gap-3">
+                                <Label className="text-sm font-semibold text-zinc-300">{t("form.theme")}</Label>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                    {THEMES.map((theme) => (
+                                        <div
+                                            key={theme.id}
+                                            onClick={() => update("theme", theme.id)}
+                                            className={`group relative cursor-pointer rounded-xl overflow-hidden border-2 transition-all duration-300 ${form.theme === theme.id ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'border-transparent hover:border-zinc-700'}`}
+                                        >
+                                            {/* Background Image Container */}
+                                            <div className="absolute inset-0 overflow-hidden bg-zinc-900">
+                                                <img
+                                                    src={theme.image}
+                                                    alt={`Theme ${theme.id}`}
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                />
+                                            </div>
+
+                                            {/* Contrast Overlay for SVG Legibility */}
+                                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-500"></div>
+
+                                            {/* SVG Content overlay */}
+                                            <div className={`relative p-2 h-32 flex flex-col items-center justify-center ${theme.text} drop-shadow-md`}>
+                                                <ThemePreviewSVG />
+                                            </div>
+
+                                            {/* Theme Label */}
+                                            <div className="absolute bottom-0 inset-x-0 bg-black/40 backdrop-blur-md p-2 text-center text-xs font-semibold text-white border-t border-white/10 text-shadow-sm">
+                                                {t(`themes.${theme.id}`)}
+                                            </div>
+
+                                            {/* Selection Ring */}
+                                            {form.theme === theme.id && (
+                                                <div className="absolute top-2 right-2 h-5 w-5 bg-amber-500 rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(0,0,0,0.5)] z-10">
+                                                    <Check className="h-3 w-3 text-black" strokeWidth={3} />
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
-                        </>
+
+                            <div className="flex flex-col gap-3">
+                                <Label htmlFor="accentColor" className="text-sm font-semibold text-zinc-300">{t("form.accentColor")}</Label>
+                                <div className="flex items-center gap-4 bg-zinc-900/50 p-4 border border-zinc-800 rounded-xl hover:border-zinc-700 transition-colors">
+                                    <div className="relative h-12 w-20 rounded-lg overflow-hidden border border-zinc-700 shadow-inner">
+                                        <input
+                                            id="accentColor"
+                                            type="color"
+                                            value={form.accentColor}
+                                            onChange={(e) => update("accentColor", e.target.value)}
+                                            className="absolute -top-2 -left-2 w-32 h-32 cursor-pointer p-0 border-0"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-sm text-zinc-300 font-medium">Couleur Principale</span>
+                                        <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">
+                                            {form.accentColor}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     )}
 
                     {currentStep === "output" && (
@@ -393,35 +444,26 @@ export default function StudioPage() {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="flex flex-col gap-2">
-                                    <Label htmlFor="fps">{t("form.fps")}</Label>
-                                    <Input
-                                        id="fps"
-                                        type="number"
-                                        value={form.fps.toString()}
-                                        onChange={(e) =>
-                                            update("fps", parseInt(e.target.value) || 30)
-                                        }
-                                        min={24}
-                                        max={60}
-                                    />
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <Label htmlFor="duration">{t("form.duration")}</Label>
-                                    <Input
-                                        id="duration"
-                                        type="number"
-                                        value={form.durationSec.toString()}
-                                        onChange={(e) =>
-                                            update(
-                                                "durationSec",
-                                                parseInt(e.target.value) || 6
-                                            )
-                                        }
-                                        min={3}
-                                        max={30}
-                                    />
+                            <div className="flex flex-col gap-4">
+                                <div className="flex flex-col gap-3">
+                                    <Label className="text-sm font-semibold text-zinc-300">{t("form.duration")}</Label>
+                                    <div className="flex items-center gap-2 p-1 bg-zinc-900/80 border border-zinc-800 rounded-xl w-fit">
+                                        {[6, 10, 15].map((val) => (
+                                            <button
+                                                key={val}
+                                                onClick={() => update("durationSec", val)}
+                                                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${form.durationSec === val
+                                                    ? 'bg-amber-500 text-black shadow-[0_0_15px_rgba(245,158,11,0.3)]'
+                                                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+                                                    }`}
+                                            >
+                                                {t(`form.durations.${val}` as any) || `${val}s`}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-zinc-500 mt-1">
+                                        {t("form.durationHint")}
+                                    </p>
                                 </div>
                             </div>
                         </>
@@ -473,7 +515,15 @@ export default function StudioPage() {
             <MarketingIntake
                 open={intakeOpen}
                 onOpenChange={setIntakeOpen}
-                onStrategyReady={(concepts) => setStrategy(concepts)}
+                onStrategyReady={(concepts, logoUrl, lang) => {
+                    setStrategy(concepts);
+                    setForm((prev) => ({
+                        ...prev,
+                        logoUrl: logoUrl || prev.logoUrl,
+                        targetLanguage: lang
+                    }));
+                    setCurrentStep("style");
+                }}
             />
         </div>
     );

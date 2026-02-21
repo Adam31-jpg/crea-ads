@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
@@ -19,7 +19,9 @@ import {
   Shield,
   CreditCard,
   Play,
-  CheckCircle2
+  CheckCircle2,
+  Check,
+  X
 } from "lucide-react";
 import type { Variants } from "framer-motion";
 
@@ -96,6 +98,157 @@ const BackgroundHalos = () => {
     </div>
   );
 };
+
+/* ============================================================
+   COMPARISON BATTLE SECTION
+   ============================================================ */
+function DynamicTiltCard({ children, className }: { children: React.ReactNode, className?: string }) {
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+
+  const mouseXSpring = useSpring(x, { stiffness: 300, damping: 30 });
+  const mouseYSpring = useSpring(y, { stiffness: 300, damping: 30 });
+
+  const rotateX = useTransform(mouseYSpring, [-0.5, 0.5], ["7deg", "-7deg"]);
+  const rotateY = useTransform(mouseXSpring, [-0.5, 0.5], ["-7deg", "7deg"]);
+
+  // Dynamic Shadow Physics: Shift shadow opposite to the tilt.
+  const shadowX = useTransform(mouseXSpring, [-0.5, 0.5], [20, -20]);
+  const shadowY = useTransform(mouseYSpring, [-0.5, 0.5], [20, -20]);
+  const boxShadow = useMotionTemplate`0px 0px 50px rgba(245, 158, 11, 0.15), ${shadowX}px ${shadowY}px 50px rgba(245, 158, 11, 0.3)`;
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const xPct = mouseX / rect.width - 0.5;
+    const yPct = mouseY / rect.height - 0.5;
+    x.set(xPct);
+    y.set(yPct);
+  };
+
+  const handleMouseLeave = () => {
+    x.set(0);
+    y.set(0);
+  };
+
+  return (
+    <motion.div
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={{ rotateY, rotateX, boxShadow, transformStyle: "preserve-3d" }}
+      className={`relative rounded-3xl transition-all duration-300 ease-out group ${className}`}
+    >
+      <div style={{ transform: "translateZ(40px)", transformStyle: "preserve-3d" }} className="w-full h-full relative">
+        {children}
+      </div>
+    </motion.div>
+  );
+}
+
+function ComparisonBattle() {
+  const t = useTranslations("Landing.comparison");
+
+  const rows = [
+    { feature: t("f1"), comp: t("c1"), lumina: t("l1") },
+    { feature: t("f2"), comp: t("c2"), lumina: t("l2") },
+    { feature: t("f3"), comp: t("c3"), lumina: t("l3") },
+    { feature: t("f4"), comp: t("c4"), lumina: t("l4") },
+    { feature: t("f5"), comp: t("c5"), lumina: t("l5") },
+  ];
+
+  return (
+    <motion.section
+      variants={staggerContainer}
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, margin: "-100px" }}
+      className="px-6 pb-20 max-w-6xl mx-auto"
+    >
+      <motion.div variants={revealVariant} className="text-center mb-16">
+        <h2 className="text-4xl sm:text-5xl font-bold tracking-tighter bg-gradient-to-br from-amber-600 via-orange-500 to-yellow-600 dark:bg-gradient-to-r dark:from-amber-200 dark:via-yellow-400 dark:to-orange-500 text-transparent bg-clip-text">
+          {t("title")}
+        </h2>
+      </motion.div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-0 items-center">
+        {/* Column 1: Feature Names */}
+        <motion.div variants={revealVariant} className="hidden md:flex flex-col space-y-6 pt-16 pr-6">
+          {rows.map((row, idx) => (
+            <div key={idx} className="h-14 flex items-center justify-end">
+              <span className="text-lg font-bold text-zinc-400">{row.feature}</span>
+            </div>
+          ))}
+        </motion.div>
+
+        {/* Column 2: La Concurrence */}
+        <motion.div variants={revealVariant} className="flex flex-col rounded-3xl bg-zinc-100 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 p-8 shadow-inner z-0 scale-[0.98] opacity-80 backdrop-blur-sm">
+          <div className="text-center mb-8">
+            <h3 className="text-2xl font-bold text-zinc-500">{t("colCompetitor")}</h3>
+          </div>
+          <div className="flex flex-col space-y-6">
+            {rows.map((row, idx) => (
+              <div key={idx} className="h-14 flex flex-col justify-center items-center text-center">
+                <span className="md:hidden text-xs font-bold text-zinc-400 uppercase tracking-widest mb-1">{row.feature}</span>
+                <span className="flex items-center gap-2 text-zinc-500 font-medium line-through decoration-zinc-500/50 transition-colors duration-500 group-hover:text-zinc-600">
+                  <X className="h-4 w-4 text-zinc-600" />
+                  {row.comp}
+                </span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Column 3: Lumina */}
+        <motion.div variants={revealVariant} className="z-10 -ml-0 md:-ml-4">
+          <DynamicTiltCard className="p-[1px] relative bg-zinc-900 group">
+            {/* Animated Beam Masking Container */}
+            <div className="absolute inset-0 rounded-3xl overflow-hidden z-0">
+              <div className="absolute inset-0 opacity-60 group-hover:opacity-100 transition-opacity duration-1000">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200%] h-[200%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#00000000_70%,#f59e0b_100%)]" />
+              </div>
+            </div>
+            {/* Inner Background */}
+            <div className="absolute inset-[1px] bg-[#0A0A0A] backdrop-blur-xl rounded-3xl z-10" />
+
+            <div className="relative z-20 p-8 flex flex-col bg-amber-500/5 rounded-3xl border-t border-amber-500/20 transition-colors duration-500 h-full">
+              <div className="text-center mb-8">
+                <h3 className="text-3xl font-black bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent drop-shadow-sm">{t("colLumina")}</h3>
+              </div>
+              <div className="flex flex-col space-y-6">
+                {rows.map((row, idx) => (
+                  <div key={idx} className="h-14 flex flex-col justify-center items-center text-center">
+                    <span className="md:hidden text-xs font-bold text-amber-500/50 uppercase tracking-widest mb-1">{row.feature}</span>
+                    <span className="flex items-center gap-3 text-white font-bold text-lg">
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        whileInView={{ scale: [0, 1.2, 1] }}
+                        viewport={{ once: true }}
+                        transition={{ duration: 0.5, delay: 0.2 + idx * 0.1 }}
+                      >
+                        <div className="p-1 rounded-full bg-amber-500/20 flex items-center justify-center">
+                          <Check className="h-4 w-4 text-amber-500" strokeWidth={3} />
+                        </div>
+                      </motion.div>
+                      <span className="bg-gradient-to-br from-white to-zinc-300 bg-clip-text text-transparent">{row.lumina}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </DynamicTiltCard>
+        </motion.div>
+      </div>
+
+      {/* Sovereign Footer */}
+      <motion.div variants={revealVariant} className="mt-16 text-center max-w-2xl mx-auto">
+        <p className="text-xl font-medium text-zinc-300 dark:text-zinc-400 italic">
+          "{t("footer")}"
+        </p>
+      </motion.div>
+    </motion.section>
+  );
+}
 
 /* ============================================================
    PAGE COMPONENT
@@ -414,6 +567,11 @@ export default function LandingPage() {
           </div>
         </motion.section>
 
+
+        {/* =======================================================
+            SECTION 5.5: COMPARISON BATTLE
+            ======================================================= */}
+        <ComparisonBattle />
 
         {/* =======================================================
             SECTION 6: PRICING (SOPHISTICATED CREDIT PACKS)

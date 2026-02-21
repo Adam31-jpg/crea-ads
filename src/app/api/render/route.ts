@@ -20,6 +20,7 @@ interface AdConcept {
     visualDirection: string;
     colorMood: string;
     emphasis: string;
+    logo_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right" | null;
 }
 
 /** Retry a Supabase write up to `maxRetries` times with exponential backoff */
@@ -179,6 +180,8 @@ export async function POST(req: NextRequest) {
                     panX: 0,
                 },
                 enableMotionBlur: false,
+                logoUrl: product.logoUrl || null,
+                logoPosition: concept.logo_position || null,
                 layout: {
                     aspectRatio: formatToAspect(inputData.format),
                     safePadding: 40,
