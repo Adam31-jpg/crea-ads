@@ -7,10 +7,8 @@ const SERVE_URL = process.env.REMOTION_SERVE_URL!;
 const FUNCTION_NAME = process.env.REMOTION_FUNCTION_NAME!;
 const COMPOSITION_ID = "LuxuryPreview";
 
-// Stagger delay between Lambda triggers (ms) to avoid thundering herd
-const STAGGER_MS = 200;
-// Max concurrent Lambda triggers per request
-const CONCURRENCY_LIMIT = 5;
+// Delay between sequential Lambda triggers to avoid AWS burst limits (ms)
+const STAGGER_MS = 1500;
 
 interface AdConcept {
     index: number;
@@ -42,28 +40,6 @@ async function withRetry<T>(
     return { data: null as T, error: lastError };
 }
 
-/** Process renders in batches of CONCURRENCY_LIMIT with stagger delay */
-async function processInBatches<T>(
-    items: T[],
-    handler: (item: T) => Promise<void>,
-    concurrencyLimit: number,
-    staggerMs: number
-): Promise<void> {
-    for (let i = 0; i < items.length; i += concurrencyLimit) {
-        const batch = items.slice(i, i + concurrencyLimit);
-        console.log(`[Queue] Starting batch of ${batch.length} renders (offset ${i}/${items.length})...`);
-        const promises = batch.map((item, idx) =>
-            new Promise<void>((resolve) => {
-                // Stagger within each batch
-                setTimeout(async () => {
-                    await handler(item);
-                    resolve();
-                }, idx * staggerMs);
-            })
-        );
-        await Promise.allSettled(promises);
-    }
-}
 
 export async function POST(req: NextRequest) {
     // 1. Auth
@@ -172,11 +148,15 @@ export async function POST(req: NextRequest) {
         jobId: jobs[i].id,
     }));
 
-    // 7. Fire renders in staggered batches (non-blocking)
-    // Returns immediately — renders happen in background
-    processInBatches(
-        renderTasks,
-        async ({ concept, jobId }) => {
+    // 7. Fire renders sequentially with a strict stagger (non-blocking)
+    // Returns immediately — renders happen in background cascade
+    (async () => {
+        for (const [i, { concept, jobId }] of renderTasks.entries()) {
+            if (i > 0) {
+                console.log(`[Queue] Staggering next render by ${STAGGER_MS}ms to respect AWS limits...`);
+                await new Promise((resolve) => setTimeout(resolve, STAGGER_MS));
+            }
+
             const inputProps = {
                 headlineText: concept.headline,
                 subheadlineText: concept.subheadline,
@@ -206,12 +186,16 @@ export async function POST(req: NextRequest) {
                 },
             };
 
+            const webhookConfig = {
+                url: `${process.env.NEXT_PUBLIC_APP_URL}/api/lambda/webhook`,
+                secret: process.env.WEBHOOK_SECRET || "fallback_secret",
+            };
+
             try {
                 if (concept.type === "image") {
-                    // === CHECKPOINT 4: Pre-Lambda Trigger ===
-                    console.log(`[AWS] Triggering Lambda for JobID: ${jobId} (Type: image/still)`);
+                    console.log(`[AWS] Triggering Lambda securely for JobID: ${jobId} (Type: image/still)`);
 
-                    const { renderId, bucketName } =
+                    const { renderId, bucketName, url } =
                         await renderStillOnLambda({
                             region: REGION,
                             functionName: FUNCTION_NAME,
@@ -222,31 +206,27 @@ export async function POST(req: NextRequest) {
                             privacy: "public",
                         });
 
-                    // === CHECKPOINT 5: Post-Lambda / DB Update ===
-                    console.log(`[AWS] Lambda returned for JobID: ${jobId} — renderId: ${renderId}, bucket: ${bucketName}`);
+                    console.log(`[AWS] Lambda returned for JobID: ${jobId} — renderId: ${renderId}, bucket: ${bucketName}, url: ${url}`);
 
-                    const updateResult = await withRetry(() =>
+                    await withRetry(() =>
                         supabase
                             .from("jobs")
                             .update({
+                                status: "done",
+                                result_url: url,
                                 metadata: {
                                     concept,
                                     renderId,
                                     bucketName,
                                     region: REGION,
                                     renderType: "still",
+                                    functionName: FUNCTION_NAME,
                                 },
                             })
                             .eq("id", jobId)
                     );
-                    if (updateResult.error) {
-                        console.error(`[DB] Failed to update metadata for JobID: ${jobId}:`, JSON.stringify(updateResult.error));
-                    } else {
-                        console.log(`[DB] Metadata updated for JobID: ${jobId} (still)`);
-                    }
                 } else {
-                    // === CHECKPOINT 4: Pre-Lambda Trigger ===
-                    console.log(`[AWS] Triggering Lambda for JobID: ${jobId} (Type: video/media)`);
+                    console.log(`[AWS] Triggering Lambda securely for JobID: ${jobId} (Type: video/media)`);
 
                     const { renderId, bucketName } =
                         await renderMediaOnLambda({
@@ -257,12 +237,12 @@ export async function POST(req: NextRequest) {
                             inputProps,
                             codec: "h264",
                             framesPerLambda: 20,
+                            webhook: webhookConfig,
                         });
 
-                    // === CHECKPOINT 5: Post-Lambda / DB Update ===
                     console.log(`[AWS] Lambda returned for JobID: ${jobId} — renderId: ${renderId}, bucket: ${bucketName}`);
 
-                    const updateResult = await withRetry(() =>
+                    await withRetry(() =>
                         supabase
                             .from("jobs")
                             .update({
@@ -272,25 +252,17 @@ export async function POST(req: NextRequest) {
                                     bucketName,
                                     region: REGION,
                                     renderType: "media",
+                                    functionName: FUNCTION_NAME,
                                 },
                             })
                             .eq("id", jobId)
                     );
-                    if (updateResult.error) {
-                        console.error(`[DB] Failed to update metadata for JobID: ${jobId}:`, JSON.stringify(updateResult.error));
-                    } else {
-                        console.log(`[DB] Metadata updated for JobID: ${jobId} (media)`);
-                    }
                 }
             } catch (err: unknown) {
-                // === ERROR CHECKPOINT: Full stack trace ===
                 console.error(`[CRITICAL ERROR] JobID: ${jobId} (Type: ${concept.type})`, err);
 
-                const message =
-                    err instanceof Error
-                        ? err.message
-                        : "Unknown Lambda error";
-                const failUpdate = await withRetry(() =>
+                const message = err instanceof Error ? err.message : "Unknown Lambda error";
+                await withRetry(() =>
                     supabase
                         .from("jobs")
                         .update({
@@ -299,18 +271,10 @@ export async function POST(req: NextRequest) {
                         })
                         .eq("id", jobId)
                 );
-                if (failUpdate.error) {
-                    console.error(`[DB] Failed to mark JobID: ${jobId} as failed:`, JSON.stringify(failUpdate.error));
-                } else {
-                    console.log(`[DB] JobID: ${jobId} marked as failed`);
-                }
             }
-        },
-        CONCURRENCY_LIMIT,
-        STAGGER_MS
-    ).then(() => {
-        console.log(`[Queue] All Lambda triggers dispatched for batch ${batchId}. Batch status will be updated by the polling route as each render completes.`);
-    });
+        }
+        console.log(`[Queue] All Lambda triggers dispatched for batch ${batchId}. Awaiting webhooks.`);
+    })();
 
     return NextResponse.json({
         jobIds: jobs.map((j) => j.id),

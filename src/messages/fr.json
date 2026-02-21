@@ -1,0 +1,95 @@
+{
+    "Landing": {
+        "nav": {
+            "signIn": "Se connecter",
+            "getStarted": "Démarrer"
+        },
+        "hero": {
+            "beta": "Bêta Publique",
+            "h1": "L'usine à vidéo professionnelle. Redéfinie.",
+            "subtext": "Prenez le contrôle absolu de votre direction artistique. Entrez vos données avec une précision chirurgicale et générez des centaines de médias d'une qualité inégalée.",
+            "ctaPrimary": "Démarrer maintenant",
+            "ctaSecondary": "Voir la technologie",
+            "dashboardPlaceholder": "Dashboard Interface Preview"
+        },
+        "socialProof": {
+            "title": "Propulsé par l'infrastructure de géants."
+        },
+        "features": {
+            "c1Title": "Contrôle Artisanal",
+            "c1Desc": "Pas d'imports aveugles. Vous décidez de chaque pixel et chaque variable manuellement pour un rendu parfait.",
+            "c2Title": "Précision Chirurgicale",
+            "c2Desc": "Chaque vidéo est assemblée frame par frame. Une qualité artisanale, propulsée à une échelle industrielle.",
+            "c3Title": "Paiement à l'usage",
+            "c3Desc": "Pas d'abonnement toxique. Achetez des crédits, créez vos vidéos avec une liberté de création totale."
+        },
+        "process": {
+            "title": "Votre workflow, sublimé.",
+            "step1Title": "Maîtrisez les données",
+            "step1Desc": "Saisissez chaque variable manuellement pour assurer une qualité irréprochable.",
+            "step2Title": "Rendu Parallèle AWS",
+            "step2Desc": "Lumina déploie une flotte d'instances pour rendre vos médias simultanément.",
+            "step3Title": "Récupérez l'excellence",
+            "step3Desc": "Vos vidéos HD & 4K sont prêtes et archivées en toute sécurité."
+        },
+        "testimonials": {
+            "title": "Aimé par les créateurs exigeants.",
+            "feedback1": "\"Le niveau de contrôle manuel qu'offre Lumina assure que notre charte graphique n'est jamais compromise. C'est du travail d'orfèvre.\"",
+            "name1": "Alexandre D.",
+            "role1": "CEO d'Agence",
+            "feedback2": "\"Plus besoin d'attendre des heures. La précision et la rapidité sont déconcertantes.\"",
+            "name2": "Sarah K.",
+            "role2": "Media Buyer",
+            "feedback3": "\"Nous avons abandonné l'automatisation de masse pour revenir au contrôle manuel via Lumina. La qualité a explosé.\"",
+            "name3": "Julien M.",
+            "role3": "Directeur Artistique"
+        },
+        "pricing": {
+            "title": "Tarification",
+            "note": "Vos jetons n'expirent jamais. Utilisez-les à votre rythme. 1 jeton = 1 média généré.",
+            "badgePro": "Le plus populaire",
+            "p1Title": "Starter",
+            "p1Price": "15€",
+            "p1Credits": "50 crédits",
+            "p1Btn": "Acheter Starter",
+            "p1Adv1": "Rendu HD",
+            "p1Adv2": "Support mail",
+            "p1Adv3": "15 jours de rétention",
+            "p2Title": "Pro",
+            "p2Price": "45€",
+            "p2Credits": "200 crédits",
+            "p2Btn": "Acheter Pro",
+            "p2Adv1": "Rendu 4K",
+            "p2Adv2": "Support prioritaire",
+            "p2Adv3": "Badge 'Pro' sur vidéos",
+            "p3Title": "Business",
+            "p3Price": "90€",
+            "p3Credits": "500 crédits",
+            "p3Btn": "Acheter Business",
+            "p3Adv1": "Rendu Ultra-rapide",
+            "p3Adv2": "Support VIP 24/7",
+            "p3Adv3": "Archivage sécurisé"
+        },
+        "faq": {
+            "title": "Questions Fréquentes.",
+            "q1": "Comment fonctionne le système de jetons ?",
+            "a1": "C'est simple : 1 jeton équivaut à 1 média généré de bout en bout, sans frais supplémentaires.",
+            "q2": "Mes données sont-elles sécurisées ?",
+            "a2": "Absolument. Vos ressources sont stockées sur un stockage S3 crypté et supprimées automatiquement après 15 jours.",
+            "q3": "Puis-je modifier manuellement chaque asset ?",
+            "a3": "Oui. Lumina privilégie le contrôle manuel pour une précision totale de votre direction artistique.",
+            "q4": "Quel est le délai de rendu ?",
+            "a4": "Grâce à notre architecture sur AWS Lambda, la plupart de vos vidéos sont générées en quelques secondes, même pour des batchs importants.",
+            "q5": "Puis-je essayer gratuitement ?",
+            "a5": "Oui. Vous recevez 10 générations (jetons) offertes lors de la création de votre compte pour tester la technologie."
+        },
+        "cta": {
+            "title": "Prêt à révolutionner votre production vidéo ?",
+            "offer": "Essayez Lumina gratuitement. 1 batch (10 médias) offert à la création de votre compte.",
+            "btn": "Créer mon compte gratuitement"
+        },
+        "footer": {
+            "rights": "© 2026 Lumina. Tous droits réservés."
+        }
+    }
+}

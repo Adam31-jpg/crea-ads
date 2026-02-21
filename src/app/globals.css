@@ -1,17 +1,57 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 /* ============================================================
    LUMINA DESIGN SYSTEM — Single Source of Truth
    Change any HSL value here → entire UI updates instantly.
    ============================================================ */
 
 :root {
-  /* --- Brand --- */
+  /* --- Light Mode (Champagne / Gold base) --- */
+  --brand: 45 100% 52%;
+  --brand-foreground: 0 0% 5%;
+
+  /* --- Surfaces --- */
+  --background: 44 43% 96%;
+  /* #FDFBF7 -> HSL equivalent */
+  --foreground: 240 6% 6%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 6% 6%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 6% 6%;
+
+  /* --- Muted / Secondary --- */
+  --muted: 40 20% 90%;
+  --muted-foreground: 240 5% 45%;
+  --secondary: 40 20% 90%;
+  --secondary-foreground: 240 6% 6%;
+  --accent: 40 20% 90%;
+  --accent-foreground: 240 6% 6%;
+
+  /* --- Borders & Rings --- */
+  --border: 40 20% 85%;
+  --input: 40 20% 85%;
+  --ring: 45 100% 52%;
+
+  /* --- Semantic --- */
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 76% 40%;
+  --warning: 38 92% 50%;
+
+  /* --- Radius --- */
+  --radius: 0.625rem;
+}
+
+.dark {
+  /* --- Dark Mode (Charcoal / Amber) --- */
   --brand: 45 100% 52%;
   --brand-foreground: 0 0% 5%;
 
   /* --- Surfaces --- */
   --background: 240 6% 6%;
+  /* #0A0A0A approx */
   --foreground: 0 0% 95%;
   --card: 240 5% 9%;
   --card-foreground: 0 0% 95%;
@@ -36,9 +76,6 @@
   --destructive-foreground: 0 0% 100%;
   --success: 142 76% 40%;
   --warning: 38 92% 50%;
-
-  /* --- Radius --- */
-  --radius: 0.625rem;
 }
 
 @theme inline {

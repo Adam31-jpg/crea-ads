@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
     const meta = job.metadata as Record<string, unknown> | null;
     const renderId = meta?.renderId as string | undefined;
     const bucketName = meta?.bucketName as string | undefined;
+    const jobFunctionName = (meta?.functionName as string | undefined) || FUNCTION_NAME;
 
     if (!renderId || !bucketName) {
         console.log(`[Status] Job ${jobId} — no renderId/bucketName in metadata yet (status: ${job.status})`);
@@ -91,13 +92,14 @@ export async function GET(req: NextRequest) {
         });
     }
 
-    console.log(`[Status] Checking AWS for renderId: ${renderId} (bucket: ${bucketName}, region: ${REGION}, fn: ${FUNCTION_NAME})`);
+    console.log(`[Status] Checking AWS for renderId: ${renderId} (bucket: ${bucketName}, region: ${REGION}, fn: ${jobFunctionName})`);
 
     try {
+        console.log(`[Status] EXACT ARGS -> renderId: "${renderId}", bucketName: "${bucketName}", functionName: "${jobFunctionName}", region: "${REGION}"`);
         const progress = await getRenderProgress({
             renderId,
             bucketName,
-            functionName: FUNCTION_NAME,
+            functionName: jobFunctionName,
             region: REGION,
         });
 
@@ -177,8 +179,39 @@ export async function GET(req: NextRequest) {
             done: false,
         });
     } catch (err: unknown) {
+        console.error(`[Status][SEVERE DIAGNOSTIC] getRenderProgress threw an error for Job ${jobId}.`);
+        console.error(`[Status][SEVERE DIAGNOSTIC] Type of err:`, typeof err);
+        console.error(`[Status][SEVERE DIAGNOSTIC] Is Error:`, err instanceof Error);
+
+        if (err instanceof Error) {
+            console.error(`[Status][SEVERE DIAGNOSTIC] Error name:`, err.name);
+            console.error(`[Status][SEVERE DIAGNOSTIC] Error message:`, err.message);
+            console.error(`[Status][SEVERE DIAGNOSTIC] Error stack:`, err.stack);
+
+            // Check for hidden AWS SDK properties or raw response
+            const asAny = err as any;
+            if (asAny.response) {
+                console.error(`[Status][SEVERE DIAGNOSTIC] Response status:`, asAny.response.status);
+                console.error(`[Status][SEVERE DIAGNOSTIC] Response data:`, JSON.stringify(asAny.response.data));
+            }
+            if (asAny.cause) {
+                console.error(`[Status][SEVERE DIAGNOSTIC] Error cause:`, asAny.cause);
+            }
+            if (asAny.$metadata) {
+                console.error(`[Status][SEVERE DIAGNOSTIC] Error $metadata:`, JSON.stringify(asAny.$metadata));
+            }
+        } else {
+            console.error(`[Status][SEVERE DIAGNOSTIC] JSON stringified err:`, JSON.stringify(err, null, 2));
+        }
+
         const message = err instanceof Error ? err.message : "Progress check failed";
-        console.error(`[Status][ERROR] Job ${jobId} progress check failed:`, err);
+
+        // Handle Rate Limiting gracefully
+        if (message.includes("Rate Exceeded") || message.includes("TooManyRequestsException") || message.includes("429") || message.includes("no payload")) {
+            console.log(`[Status] Job ${jobId} rate limited by AWS. Passing throttle flag to client.`);
+            return NextResponse.json({ isThrottled: true, done: false, status: "rendering" });
+        }
+
         return NextResponse.json({ error: message, done: false }, { status: 500 });
     }
 }

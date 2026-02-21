@@ -24,12 +24,16 @@ import {
     PutRolePolicyCommand,
     GetRolePolicyCommand,
 } from '@aws-sdk/client-iam';
+import {
+    S3Client,
+    PutBucketLifecycleConfigurationCommand
+} from '@aws-sdk/client-s3';
 
 // --- Configuration ---
 const REGION = (process.env.REMOTION_AWS_REGION || 'us-east-1') as 'us-east-1';
 const MEMORY_SIZE = 2048;
 const TIMEOUT = 120;
-const DISK_SIZE = 512;
+const DISK_SIZE = 2048;
 const ROLE_NAME = 'remotion-lambda-role';
 const INLINE_POLICY_NAME = 'remotion-lambda-inline-policy';
 
@@ -139,6 +143,38 @@ function sleep(ms: number) {
 }
 
 /**
+ * Ensures S3 Bucket has a 15-day lifecycle expiration rule for renders/
+ */
+async function ensureBucketLifecycle(bucketName: string): Promise<void> {
+    const s3 = new S3Client({
+        region: REGION,
+        credentials: {
+            accessKeyId: process.env.REMOTION_AWS_ACCESS_KEY_ID!,
+            secretAccessKey: process.env.REMOTION_AWS_SECRET_ACCESS_KEY!,
+        },
+    });
+
+    try {
+        await s3.send(new PutBucketLifecycleConfigurationCommand({
+            Bucket: bucketName,
+            LifecycleConfiguration: {
+                Rules: [
+                    {
+                        ID: "ExpireOldRenders15Days",
+                        Filter: { Prefix: "renders/" },
+                        Status: "Enabled",
+                        Expiration: { Days: 15 }
+                    }
+                ]
+            }
+        }));
+        console.log(`   ✅ S3 Lifecycle Rule attached: 15-day expiration for renders/`);
+    } catch (err: any) {
+        console.error(`   ⚠️  Failed to attach S3 Lifecycle Rule: ${err.message}`);
+    }
+}
+
+/**
  * Deploys the Lambda function with retry logic for IAM propagation delays.
  */
 async function deployWithRetry(maxRetries = 3, delayMs = 15000) {
@@ -191,6 +227,7 @@ const deploy = async () => {
     console.log('\n📦 Step 2/4: Ensuring S3 bucket...');
     const { bucketName } = await getOrCreateBucket({ region: REGION });
     console.log(`   ✅ Bucket ready: ${bucketName}`);
+    await ensureBucketLifecycle(bucketName);
 
     // Step 3: Site
     console.log('\n📤 Step 3/4: Deploying site bundle to S3...');

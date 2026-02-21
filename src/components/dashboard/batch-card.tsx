@@ -52,6 +52,7 @@ import {
     Check,
     X,
     RefreshCw,
+    Clock,
 } from "lucide-react";
 
 // --- Types ---
@@ -146,6 +147,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
     const [deleting, setDeleting] = useState(false);
     const [retrying, setRetrying] = useState(false);
     const [retryingJobs, setRetryingJobs] = useState<Set<string>>(new Set());
+    const [resyncing, setResyncing] = useState(false);
     const [, setTick] = useState(0);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const router = useRouter();
@@ -177,6 +179,14 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
         batchStatus === "generating_assets";
     const isDone = batchStatus === "done";
     const isFailed = batchStatus === "failed";
+
+    // Expiration calculation (15 days)
+    const MAX_RETENTION_MS = 15 * 24 * 60 * 60 * 1000;
+    const batchAgeMs = Date.now() - new Date(batch.created_at).getTime();
+    const remainingMs = MAX_RETENTION_MS - batchAgeMs;
+    const remainingDays = Math.max(0, Math.ceil(remainingMs / (24 * 60 * 60 * 1000)));
+    const isExpiringSoon = remainingDays <= 3;
+    const isExpired = remainingDays === 0;
 
     const doneCount = jobs.filter((j) => j.status === "done").length;
     const failedCount = jobs.filter((j) => j.status === "failed").length;
@@ -253,6 +263,28 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
             toast.error("Failed to retry batch");
         }
         setRetrying(false);
+    };
+
+    const handleResync = async () => {
+        setResyncing(true);
+        try {
+            const stuckJobs = jobs.filter(j => j.status === "rendering" || j.status === "processing" || j.status === "generating_assets");
+            if (stuckJobs.length === 0) {
+                toast("No actively rendering jobs to sync.");
+                setResyncing(false);
+                return;
+            }
+
+            // Re-sync by triggering the fallback active polling route
+            for (const job of stuckJobs) {
+                await fetch(`/api/render/status?jobId=${job.id}`);
+            }
+            toast.success("Re-sync complete");
+            router.refresh();
+        } catch {
+            toast.error("Failed to re-sync");
+        }
+        setResyncing(false);
     };
 
     const handleRetryJob = async (jobId: string) => {
@@ -333,14 +365,14 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                     : ""
                 }
                 className={`relative aspect-square rounded-lg border-2 transition-all overflow-hidden ${jobDone
-                        ? "border-success/30 bg-success/5 hover:border-success cursor-pointer"
-                        : jobFailed
-                            ? "border-destructive/30 bg-destructive/5 hover:border-destructive cursor-pointer"
-                            : isStuck
-                                ? "border-amber-500/40 bg-amber-500/10 hover:border-amber-500 cursor-pointer"
-                                : jobRendering
-                                    ? "border-brand/20 bg-brand/5"
-                                    : "border-border bg-muted/30"
+                    ? "border-success/30 bg-success/5 hover:border-success cursor-pointer"
+                    : jobFailed
+                        ? "border-destructive/30 bg-destructive/5 hover:border-destructive cursor-pointer"
+                        : isStuck
+                            ? "border-amber-500/40 bg-amber-500/10 hover:border-amber-500 cursor-pointer"
+                            : jobRendering
+                                ? "border-brand/20 bg-brand/5"
+                                : "border-border bg-muted/30"
                     }`}
             >
                 {/* Video badge — always visible */}
@@ -415,19 +447,35 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
         <>
             <Card
                 className={`group relative overflow-hidden transition-all min-h-[220px] ${isRendering
-                        ? "border-brand/40 shadow-[0_0_20px_-4px_hsl(var(--brand)/0.3)] animate-[glow-pulse_3s_ease-in-out_infinite]"
-                        : isDone
-                            ? "border-success/20 hover:border-success/40"
-                            : isFailed
-                                ? "border-destructive/20 hover:border-destructive/40"
-                                : "hover:border-brand/30"
+                    ? "border-brand/40 shadow-[0_0_20px_-4px_hsl(var(--brand)/0.3)] animate-[glow-pulse_3s_ease-in-out_infinite]"
+                    : isDone
+                        ? "border-success/20 hover:border-success/40"
+                        : isFailed
+                            ? "border-destructive/20 hover:border-destructive/40"
+                            : "hover:border-brand/30"
                     }`}
             >
                 <CardHeader className="pb-4">
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                            <CardTitle className="text-xl font-bold truncate">
+                            <CardTitle className="text-xl font-bold truncate flex items-center gap-2">
                                 {batch.project_name}
+                                {isDone && !isExpired && (
+                                    <Badge
+                                        variant={isExpiringSoon ? "destructive" : "outline"}
+                                        className={`font-normal text-[10px] h-5 transition-all ${isExpiringSoon ? "animate-pulse" : "border-purple-500/40 bg-purple-500/10 text-purple-300 shadow-[0_0_15px_rgba(138,43,226,0.3)] hover:shadow-[0_0_20px_rgba(138,43,226,0.5)]"}`}
+                                        title="To maintain optimal system performance, your generated media is kept for 15 days. Please download your assets before this batch is permanently deleted from our servers."
+                                    >
+                                        <Clock className="h-3 w-3 mr-1" />
+                                        Expires in {remainingDays} day{remainingDays !== 1 ? 's' : ''}
+                                    </Badge>
+                                )}
+                                {isDone && isExpired && (
+                                    <Badge variant="destructive" className="font-normal text-[10px] h-5">
+                                        <Clock className="h-3 w-3 mr-1" />
+                                        Expired
+                                    </Badge>
+                                )}
                             </CardTitle>
                             <CardDescription className="mt-1.5">
                                 {new Date(batch.created_at).toLocaleDateString("en-US", {
@@ -473,6 +521,23 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                         <RotateCcw className="h-3 w-3" />
                                     )}
                                     {retrying ? "Retrying…" : "Retry All"}
+                                </Button>
+                            )}
+
+                            {isRendering && (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1.5 h-7 text-xs border-brand/30 hover:bg-brand/10 select-none"
+                                    onClick={handleResync}
+                                    disabled={resyncing}
+                                >
+                                    {resyncing ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        <RefreshCw className="h-3 w-3" />
+                                    )}
+                                    Re-Sync
                                 </Button>
                             )}
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { deleteRender } from "@remotion/lambda-client";
 
 /**
  * DELETE /api/batch/[id] — Comprehensive Clean Delete
@@ -66,7 +67,31 @@ export async function DELETE(
         }
     }
 
-    // 3. Delete jobs first, then batch
+    // 3. Cleanup AWS S3 generated videos via Remotion API
+    const { data: jobsToCleanup, error: fetchJobsErr } = await supabase
+        .from("jobs")
+        .select("id, metadata")
+        .eq("batch_id", id);
+
+    if (!fetchJobsErr && jobsToCleanup) {
+        // Map promises to softly bypass single failures
+        const awsCleanups = jobsToCleanup.map(async (job) => {
+            const region = (job.metadata as any)?.region;
+            const bucketName = (job.metadata as any)?.bucketName;
+            const renderId = (job.metadata as any)?.renderId;
+            if (region && bucketName && renderId) {
+                try {
+                    await deleteRender({ region, bucketName, renderId });
+                    console.log(`[Clean Delete] Deleted AWS S3 artifacts for renderId: ${renderId}`);
+                } catch (cleanupErr) {
+                    console.error(`[Clean Delete] Failed AWS S3 cleanup for renderId ${renderId}:`, cleanupErr);
+                }
+            }
+        });
+        await Promise.all(awsCleanups);
+    }
+
+    // 4. Delete jobs first, then batch
     // Use .select() to verify rows were actually affected (RLS can silently block)
     const { data: deletedJobs, error: jobsError } = await supabase
         .from("jobs")
