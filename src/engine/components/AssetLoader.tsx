@@ -30,6 +30,7 @@ export const AssetLoader: React.FC<AssetLoaderProps> = ({
     useEffect(() => {
         if (type === 'image') {
             const img = new Image();
+            img.crossOrigin = "anonymous";
             img.src = src;
             img.onload = () => {
                 setIsLoaded(true);

@@ -21,6 +21,9 @@ import {
     MarketingIntake,
     type AdConcept,
 } from "@/components/dashboard/marketing-intake";
+import { ThemeSelector } from "@/components/shared/studio/ThemeSelector";
+import { StrategyPreview } from "@/components/shared/studio/StrategyPreview";
+import { GENERATION_CONFIG } from "@/config/generation.config";
 import {
     Smartphone,
     Square,
@@ -61,7 +64,7 @@ const getFormatOptions = (t: any) => [
     },
 ] as const;
 
-const THEMES = [
+export const THEMES = [
     { id: "luxe-sombre", image: "/images/themes/luxe-sombre.jpg", text: "text-zinc-200" },
     { id: "studio-white", image: "/images/themes/studio-white.jpg", text: "text-zinc-800" },
     { id: "neon", image: "/images/themes/neon.jpg", text: "text-zinc-100" },
@@ -70,7 +73,7 @@ const THEMES = [
     { id: "sunset", image: "/images/themes/sunset.jpg", text: "text-zinc-100" },
 ];
 
-const ThemePreviewSVG = () => (
+export const ThemePreviewSVG = () => (
     <svg viewBox="0 0 100 100" className="w-full h-full opacity-80" preserveAspectRatio="xMidYMid meet">
         {/* Mock Image Placeholder */}
         <rect x="10" y="10" width="80" height="40" rx="4" fill="currentColor" fillOpacity="0.1" />
@@ -93,6 +96,8 @@ export default function StudioPage() {
     const [userId, setUserId] = useState<string>("");
     const [intakeOpen, setIntakeOpen] = useState(false);
     const [strategy, setStrategy] = useState<AdConcept[] | null>(null);
+    const [isStrategyReused, setIsStrategyReused] = useState(false);
+    const [marketingPrompt, setMarketingPrompt] = useState<{ productDescription: string; usps: string[]; targetAudience: string; } | null>(null);
     const router = useRouter();
     const supabase = createClient();
 
@@ -118,6 +123,27 @@ export default function StudioPage() {
         });
     }, [supabase]);
 
+    useEffect(() => {
+        // Force completely clean slate if normal "New Project" flow
+        setForm({
+            projectName: "",
+            productName: "",
+            tagline: "",
+            images: [],
+            heroImageIndex: 0,
+            logoUrl: null,
+            theme: "luxe-sombre",
+            accentColor: "#F59E0B",
+            format: "1080x1920",
+            fps: 30,
+            durationSec: 6,
+            targetLanguage: "Français",
+        });
+        setMarketingPrompt(null);
+        setStrategy(null);
+        setIsStrategyReused(false);
+    }, []);
+
     const update = (field: string, value: string | number) => {
         setForm((prev) => ({ ...prev, [field]: value }));
     };
@@ -136,6 +162,8 @@ export default function StudioPage() {
                 },
             ],
             strategy: strategy,
+            marketingPrompt: marketingPrompt,
+            isStrategyReused: isStrategyReused,
             theme: form.theme,
             accentColor: form.accentColor,
             format: form.format,
@@ -162,7 +190,7 @@ export default function StudioPage() {
             return;
         }
 
-        toast.success(t("toasts.batchSuccess"));
+        toast.success(t("toasts.batchSuccess", { total: GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH }));
 
         // 2. Trigger multi-render via API route
         try {
@@ -183,6 +211,8 @@ export default function StudioPage() {
             toast.success(
                 t("toasts.renderSuccess", { count: data.jobCount })
             );
+
+            // Removed duplicateBatch clean
 
             // Navigate to dashboard — realtime will handle progress updates
             router.push("/dashboard");
@@ -207,7 +237,7 @@ export default function StudioPage() {
         <div className="max-w-2xl mx-auto">
             <h1 className="text-2xl font-bold tracking-tight mb-2">{t("title")}</h1>
             <p className="text-muted-foreground text-sm mb-8">
-                {t("subtitle")}
+                {t("subtitle", { images: GENERATION_CONFIG.IMAGE_COUNT, videos: GENERATION_CONFIG.VIDEO_COUNT })}
             </p>
 
             {/* Step Indicator */}
@@ -288,131 +318,20 @@ export default function StudioPage() {
                     )}
 
                     {currentStep === "strategy" && (
-                        <>
-                            <CardTitle className="mb-1 flex items-center gap-2">
-                                <Sparkles className="h-5 w-5 text-brand" />
-                                {t("strategy.title")}
-                            </CardTitle>
-                            {!strategy ? (
-                                <div className="text-center py-8 space-y-4">
-                                    <p className="text-sm text-muted-foreground">
-                                        {t("strategy.emptyState")}
-                                    </p>
-                                    <Button
-                                        onClick={() => setIntakeOpen(true)}
-                                        className="gap-2"
-                                    >
-                                        <Sparkles className="h-4 w-4" />
-                                        {t("buttons.openDirector")}
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {strategy.map((c) => (
-                                            <div
-                                                key={c.index}
-                                                className="rounded-md border border-border/50 bg-muted/20 p-2.5"
-                                            >
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <span className="text-[10px] font-medium text-brand uppercase">
-                                                        {c.framework}
-                                                    </span>
-                                                    <span className="text-[10px] text-muted-foreground">
-                                                        {c.type === "video"
-                                                            ? t("strategy.video")
-                                                            : t("strategy.image")}
-                                                    </span>
-                                                </div>
-                                                <p className="text-xs font-semibold leading-tight">
-                                                    {c.headline}
-                                                </p>
-                                                <p className="text-[10px] text-muted-foreground mt-0.5">
-                                                    {c.cta}
-                                                </p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setIntakeOpen(true)}
-                                        className="gap-1.5"
-                                    >
-                                        <Sparkles className="h-3 w-3" />
-                                        {t("buttons.regenerate")}
-                                    </Button>
-                                </div>
-                            )}
-                        </>
+                        <StrategyPreview
+                            strategy={strategy}
+                            setIntakeOpen={setIntakeOpen}
+                        />
                     )}
 
                     {currentStep === "style" && (
-                        <div style={{ "--accent-color": form.accentColor } as React.CSSProperties} className="flex flex-col gap-6">
-                            <CardTitle className="mb-0">{t("form.styleTheme")}</CardTitle>
-                            <div className="flex flex-col gap-3">
-                                <Label className="text-sm font-semibold text-zinc-300">{t("form.theme")}</Label>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                    {THEMES.map((theme) => (
-                                        <div
-                                            key={theme.id}
-                                            onClick={() => update("theme", theme.id)}
-                                            className={`group relative cursor-pointer rounded-xl overflow-hidden border-2 transition-all duration-300 ${form.theme === theme.id ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'border-transparent hover:border-zinc-700'}`}
-                                        >
-                                            {/* Background Image Container */}
-                                            <div className="absolute inset-0 overflow-hidden bg-zinc-900">
-                                                <img
-                                                    src={theme.image}
-                                                    alt={`Theme ${theme.id}`}
-                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                />
-                                            </div>
-
-                                            {/* Contrast Overlay for SVG Legibility */}
-                                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-500"></div>
-
-                                            {/* SVG Content overlay */}
-                                            <div className={`relative p-2 h-32 flex flex-col items-center justify-center ${theme.text} drop-shadow-md`}>
-                                                <ThemePreviewSVG />
-                                            </div>
-
-                                            {/* Theme Label */}
-                                            <div className="absolute bottom-0 inset-x-0 bg-black/40 backdrop-blur-md p-2 text-center text-xs font-semibold text-white border-t border-white/10 text-shadow-sm">
-                                                {t(`themes.${theme.id}`)}
-                                            </div>
-
-                                            {/* Selection Ring */}
-                                            {form.theme === theme.id && (
-                                                <div className="absolute top-2 right-2 h-5 w-5 bg-amber-500 rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(0,0,0,0.5)] z-10">
-                                                    <Check className="h-3 w-3 text-black" strokeWidth={3} />
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="flex flex-col gap-3">
-                                <Label htmlFor="accentColor" className="text-sm font-semibold text-zinc-300">{t("form.accentColor")}</Label>
-                                <div className="flex items-center gap-4 bg-zinc-900/50 p-4 border border-zinc-800 rounded-xl hover:border-zinc-700 transition-colors">
-                                    <div className="relative h-12 w-20 rounded-lg overflow-hidden border border-zinc-700 shadow-inner">
-                                        <input
-                                            id="accentColor"
-                                            type="color"
-                                            value={form.accentColor}
-                                            onChange={(e) => update("accentColor", e.target.value)}
-                                            className="absolute -top-2 -left-2 w-32 h-32 cursor-pointer p-0 border-0"
-                                        />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-sm text-zinc-300 font-medium">Couleur Principale</span>
-                                        <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">
-                                            {form.accentColor}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <ThemeSelector
+                            theme={form.theme}
+                            accentColor={form.accentColor}
+                            update={update}
+                            THEMES={THEMES}
+                            ThemePreviewSVG={ThemePreviewSVG}
+                        />
                     )}
 
                     {currentStep === "output" && (
@@ -498,14 +417,23 @@ export default function StudioPage() {
                         {t("buttons.next")}
                     </Button>
                 ) : (
-                    <Button onClick={handleSubmit} disabled={loading || !strategy}>
+                    <Button onClick={handleSubmit} disabled={loading || !strategy} className="gap-2">
                         {loading ? (
                             <>
                                 <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                                {t("buttons.launching")}
+                                {t("buttons.launching", { total: GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH })}
                             </>
                         ) : (
-                            t("buttons.generate")
+                            <>
+                                <Sparkles className="h-4 w-4" />
+                                {t("buttons.generate", {
+                                    images: GENERATION_CONFIG.IMAGE_COUNT,
+                                    videos: GENERATION_CONFIG.VIDEO_COUNT
+                                })}
+                                <span className="ml-1 px-2 py-0.5 bg-black/20 rounded text-xs">
+                                    {(GENERATION_CONFIG.IMAGE_COUNT * GENERATION_CONFIG.IMAGE_SPARK_COST) + (GENERATION_CONFIG.VIDEO_COUNT * GENERATION_CONFIG.VIDEO_SPARK_COST)} Sparks
+                                </span>
+                            </>
                         )}
                     </Button>
                 )}
@@ -515,8 +443,19 @@ export default function StudioPage() {
             <MarketingIntake
                 open={intakeOpen}
                 onOpenChange={setIntakeOpen}
-                onStrategyReady={(concepts, logoUrl, lang) => {
+                initialMarketingPrompt={marketingPrompt}
+                initialStrategy={strategy}
+                initialTargetLanguage={form.targetLanguage}
+                onStrategyReady={(
+                    concepts: AdConcept[],
+                    logoUrl: string | null,
+                    lang: string,
+                    prompt: { productDescription: string; usps: string[]; targetAudience: string; },
+                    reused: boolean
+                ) => {
                     setStrategy(concepts);
+                    setMarketingPrompt(prompt);
+                    setIsStrategyReused(reused);
                     setForm((prev) => ({
                         ...prev,
                         logoUrl: logoUrl || prev.logoUrl,

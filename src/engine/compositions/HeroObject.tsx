@@ -1,21 +1,100 @@
 import React, { Suspense } from 'react';
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, Easing } from 'remotion';
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, Easing, delayRender, continueRender } from 'remotion';
 import { ThreeCanvas } from '@remotion/three';
-import { useTexture } from '@react-three/drei';
+import { useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
 import { AssetLoader } from '../components/AssetLoader';
+import { toast } from "sonner";
 
 interface HeroObjectProps {
     imageUrl: string;
     zoom?: number;
+    color?: string;
 }
 
-const HeroScene: React.FC<HeroObjectProps> = ({ imageUrl, zoom = 1 }) => {
+const HeroScene: React.FC<HeroObjectProps> = ({ imageUrl, zoom = 1, color = "#ffffff" }) => {
     const frame = useCurrentFrame();
     const { fps, durationInFrames } = useVideoConfig();
 
-    // This hook suspends, but AssetLoader ensures the image is preloaded
-    const texture = useTexture(imageUrl);
+    const [texture, setTexture] = React.useState<THREE.Texture | null>(null);
+
+    // 1. Add a cache-buster to the asset URL to bypass Lambda's Chromium cache
+    const textureUrl = `${imageUrl}?v=${Date.now()}`;
+
+    React.useEffect(() => {
+        const handle = delayRender("Loading: " + textureUrl);
+        console.log("[DEBUG-RENDER] Product URL:", textureUrl);
+
+        let isMounted = true;
+
+        // Task A & C: Pre-flight check via standard fetch to get exact HTTP status
+        fetch(textureUrl, { method: 'HEAD', mode: 'cors' })
+            .then(res => {
+                if (isMounted) {
+                    console.log(`[DEBUG-RENDER] Pre-flight HEAD status for ${textureUrl}: ${res.status} ${res.statusText}`);
+                    if (!res.ok) {
+                        console.error(`[DEBUG-RENDER] Pre-flight fetch failed: HTTP ${res.status} - ${res.statusText}`);
+                    }
+                    loadImage();
+                }
+            })
+            .catch(err => {
+                if (isMounted) {
+                    console.error("[DEBUG-RENDER] Pre-flight fetch completely blocked (likely strict CORS or Network down):", err);
+                    loadImage(); // try anyway in case HEAD was just blocked
+                }
+            });
+
+        function loadImage() {
+            // Pre-flight check via standard HTML Image
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+
+            img.onload = () => {
+                const loader = new THREE.TextureLoader();
+                loader.setCrossOrigin("anonymous");
+
+                loader.load(
+                    textureUrl,
+                    (tex) => {
+                        setTexture(tex);
+                        try { continueRender(handle); } catch (e) { }
+                    },
+                    undefined,
+                    (err) => {
+                        console.error("Texture loader failed:", err);
+                        try { continueRender(handle); } catch (e) { }
+                    }
+                );
+            };
+
+            img.onerror = (e) => {
+                console.error("Asset strictly unreachable (CORS/404) on Image Tag:", textureUrl, e);
+                toast.error("Unable to load product image. Please check your storage settings (CORS).");
+                // We fail gracefully to not hang the renderer, but the texture will be missing
+                try { continueRender(handle); } catch (err) { }
+            };
+
+            // Init load
+            img.src = textureUrl;
+        }
+
+        const backupTimeout = setTimeout(() => {
+            console.warn("Texture load timed out. Releasing lock to prevent deadlock.");
+            try { continueRender(handle); } catch (e) { }
+        }, 20000);
+
+        return () => {
+            isMounted = false;
+            clearTimeout(backupTimeout);
+            img.onload = null;
+            img.onerror = null;
+            try { continueRender(handle); } catch (e) { }
+        };
+    }, [textureUrl]);
+
+    if (!texture) return null;
+
     texture.minFilter = THREE.LinearFilter;
     texture.magFilter = THREE.LinearFilter;
     texture.needsUpdate = true;
@@ -46,7 +125,7 @@ const HeroScene: React.FC<HeroObjectProps> = ({ imageUrl, zoom = 1 }) => {
                 </mesh>
             </group>
 
-            <mesh position={[0, -3, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+            <mesh position={[0, -3.1, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
                 <planeGeometry args={[20, 20]} />
                 <shadowMaterial opacity={0.3} transparent />
             </mesh>

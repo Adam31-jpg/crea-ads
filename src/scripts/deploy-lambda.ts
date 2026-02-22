@@ -32,7 +32,7 @@ import {
 // --- Configuration ---
 const REGION = (process.env.REMOTION_AWS_REGION || 'us-east-1') as 'us-east-1';
 const MEMORY_SIZE = 2048;
-const TIMEOUT = 120;
+const TIMEOUT = 300;
 const DISK_SIZE = 2048;
 const ROLE_NAME = 'remotion-lambda-role';
 const INLINE_POLICY_NAME = 'remotion-lambda-inline-policy';

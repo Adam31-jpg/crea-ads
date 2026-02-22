@@ -70,10 +70,12 @@ export function resolveDesign(
         enableMotionBlur: false,
 
         layout: {
+            layoutType: 'converter',
             aspectRatio: '1:1', // Default, can be overridden
             safePadding: 100,
             contentScale: 1.0
-        }
+        },
+        elements: []
     };
 
     // 4. Merge Overrides (The "Override Priority" Logic)

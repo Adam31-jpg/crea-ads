@@ -12,6 +12,7 @@ const luxuryIntent = {
     colorMood: 'midnight' as const,
     emphasis: 'product_detail' as const,
     copyTone: 'elegant' as const,
+    layoutType: 'converter' as const,
 };
 
 // 2. Resolve Props using the Adapter
@@ -25,7 +26,7 @@ const luxuryProps = resolveDesign(luxuryIntent, {
 });
 
 const verticalOverrides = {
-    layout: { aspectRatio: '9:16' as const, safePadding: 140, contentScale: 0.85 }
+    layout: { layoutType: 'converter' as const, aspectRatio: '9:16' as const, safePadding: 140, contentScale: 0.85 }
 };
 
 const verticalProps = resolveDesign(luxuryIntent, {

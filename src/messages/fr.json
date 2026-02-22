@@ -215,7 +215,7 @@
         },
         "batch": {
             "smartLabels": {
-                "launching": "Lancement Lambda…",
+                "launching": "Lancement Génération…",
                 "frames": "Traitement des images…",
                 "uploading": "Fin de l'upload…",
                 "short": {
@@ -293,7 +293,7 @@
         },
         "studio": {
             "title": "Studio",
-            "subtitle": "Créez un pack publicitaire complet — 8 images + 2 vidéos boostées par l'IA.",
+            "subtitle": "Créez un pack publicitaire complet — {images} images + {videos} vidéos boostées par l'IA.",
             "steps": {
                 "product": "Infos Produit",
                 "strategy": "Stratégie IA",
@@ -330,14 +330,14 @@
             "buttons": {
                 "back": "← Précédent",
                 "next": "Suivant →",
-                "generate": "Générer le Pack (8+2) →",
+                "generate": "Générer le Pack ({images}+{videos}) →",
                 "regenerate": "Régénérer",
                 "openDirector": "Ouvrir l'IA Director",
-                "launching": "Lancement de 10 Rendus…"
+                "launching": "Lancement de {total} Rendus…"
             },
             "strategy": {
                 "title": "Stratégie Créative IA",
-                "emptyState": "Laissez Gemini concevoir 10 concepts publicitaires percutants pour votre produit.",
+                "emptyState": "Laissez notre IA concevoir {total} concepts publicitaires percutants pour votre produit.",
                 "video": "🎬 Vidéo",
                 "image": "🖼 Image"
             },
@@ -364,8 +364,7 @@
             },
             "intake": {
                 "title": "Directeur Créatif IA",
-                "subtitle": "Concevons ensemble vos 10 prochaines pépites publicitaires.",
-                "desc": "Parlez-nous de votre produit et de votre audience. Gemini concevra 10 concepts publicitaires percutants (8 images + 2 vidéos).",
+                "subtitle": "Notre IA concevra {total} concepts ({images} image + {videos} vidéo).",
                 "sections": {
                     "a": "L'Essence du Produit",
                     "b": "Les Piliers de Vente (USPs)",
@@ -397,7 +396,11 @@
                     "brandLogoTooltip": "Laissez vide pour aucune surimpression.",
                     "logoError": "Format de fichier invalide. Veuillez importer un fichier PNG.",
                     "logoUploadFailed": "Échec de l'upload du logo.",
-                    "logoSuccess": "Logo importé avec succès !"
+                    "logoSuccess": "Logo importé avec succès !",
+                    "quickImportTitle": "Import Rapide (Optionnel)",
+                    "downloadSample": "Télécharger le modèle (.json / .csv)",
+                    "importExisting": "Importer une stratégie existante (JSON/CSV)",
+                    "importSuccess": "Fichier reçu (Traitement bientôt disponible)"
                 },
                 "buttons": {
                     "generate": "Générer la Stratégie",
@@ -407,15 +410,15 @@
                 },
                 "toasts": {
                     "generateFailed": "Échec de la génération de la stratégie",
-                    "generateSuccess": "🧠 Stratégie IA générée ! Consultez vos 10 concepts.",
+                    "generateSuccess": "🧠 Stratégie IA générée ! Consultez vos {total} concepts.",
                     "connectFailed": "Échec de la connexion à l'IA"
                 },
                 "errors": {
                     "unauthorized": "Non autorisé",
                     "noApiKey": "Clé API non configurée",
                     "missingFields": "Champs requis manquants",
-                    "invalidFormat": "Format renvoyé par l'IA invalide. 10 concepts attendus.",
-                    "insufficient_funds": "Vous n'avez pas assez de Sparks pour cette génération (10 requis)."
+                    "invalidFormat": "Format renvoyé par l'IA invalide. {total} concepts attendus.",
+                    "insufficient_funds": "Vous n'avez pas assez de Sparks pour cette génération ({cost} requis)."
                 }
             },
             "formats": {
@@ -434,10 +437,25 @@
             },
             "toasts": {
                 "batchFailed": "Échec de création du batch",
-                "batchSuccess": "Batch créé ! Lancement de 10 rendus…",
+                "batchSuccess": "Batch créé ! Lancement de {total} rendus…",
                 "renderFailed": "Échec du lancement des rendus",
                 "renderSuccess": "🚀 {count} rendus lancés ! Suivez la progression sur le Dashboard."
             }
+        },
+        "duplicateModal": {
+            "title": "Dupliquer et Modifier",
+            "subtitle": "Ajustez simplement le thème ou le format de",
+            "subtitleSuffix": ". Le reste de la stratégie IA est préservé.",
+            "stepStyle": "Style & Thème",
+            "stepOutput": "Export",
+            "projectName": "Nom du projet (Copie)",
+            "projectNamePlaceholder": "Ex: Hiver Collection (Copie)",
+            "format": "Format d'exportation",
+            "duration": "Durée (Secondes)",
+            "back": "Retour",
+            "next": "Suivant",
+            "generating": "Création en cours...",
+            "generate": "Générer ({images} images, {videos} vidéos)"
         }
     },
     "Auth": {

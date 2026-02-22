@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -18,7 +18,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, Loader2, Image, Video, Check, UploadCloud, Globe } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { GENERATION_CONFIG } from "@/config/generation.config";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
     Select,
     SelectContent,
@@ -58,18 +65,24 @@ export interface AdConcept {
 interface MarketingIntakeProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onStrategyReady: (concepts: AdConcept[], logoUrl: string | null, targetLanguage: string) => void;
+    initialMarketingPrompt?: { productDescription: string; usps: string[]; targetAudience: string; } | null;
+    initialStrategy?: AdConcept[] | null;
+    initialTargetLanguage?: string;
+    onStrategyReady: (concepts: AdConcept[], logoUrl: string | null, targetLanguage: string, marketingPrompt: { productDescription: string; usps: string[]; targetAudience: string; }, isStrategyReused: boolean) => void;
 }
 
 export function MarketingIntake({
     open,
     onOpenChange,
+    initialMarketingPrompt,
+    initialStrategy,
+    initialTargetLanguage,
     onStrategyReady,
 }: MarketingIntakeProps) {
-    const [productDescription, setProductDescription] = useState("");
-    const [usps, setUsps] = useState(["", "", ""]);
-    const [targetAudience, setTargetAudience] = useState("");
-    const [targetLanguage, setTargetLanguage] = useState("Français");
+    const [productDescription, setProductDescription] = useState(initialMarketingPrompt?.productDescription || "");
+    const [usps, setUsps] = useState(initialMarketingPrompt?.usps || ["", "", ""]);
+    const [targetAudience, setTargetAudience] = useState(initialMarketingPrompt?.targetAudience || "");
+    const [targetLanguage, setTargetLanguage] = useState(initialTargetLanguage || "Français");
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
     const [uploadingLogo, setUploadingLogo] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -82,12 +95,45 @@ export function MarketingIntake({
         usps[0].length > 0 &&
         targetAudience.length > 0;
 
+    const isUnchanged = initialMarketingPrompt &&
+        productDescription === initialMarketingPrompt.productDescription &&
+        targetAudience === initialMarketingPrompt.targetAudience &&
+        targetLanguage === (initialTargetLanguage || "Français") &&
+        JSON.stringify(usps) === JSON.stringify(initialMarketingPrompt.usps);
+
+    // Deep State Hydration on Modal Open
+    useEffect(() => {
+        if (open) {
+            console.log("Modal received initialData:", initialMarketingPrompt);
+            if (initialMarketingPrompt) {
+                setProductDescription(initialMarketingPrompt.productDescription);
+                setUsps(initialMarketingPrompt.usps);
+                setTargetAudience(initialMarketingPrompt.targetAudience);
+            }
+            if (initialTargetLanguage) {
+                setTargetLanguage(initialTargetLanguage);
+            }
+            // Clear concepts state if user opens modal again (to force them to see the form or the strategy grid natively)
+            if (initialStrategy && isUnchanged) {
+                // Do not force clear if they haven't modified things
+            } else {
+                setConcepts(null);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
+
     const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
         if (file.type !== "image/png") {
             toast.error(t("form.logoError"));
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            toast.error("Le logo dépasse la taille maximum de 10Mo.");
             return;
         }
 
@@ -126,9 +172,12 @@ export function MarketingIntake({
             const data = await res.json();
 
             if (!res.ok) {
-                const knownErrors = ["unauthorized", "noApiKey", "missingFields", "invalidFormat"];
+                const knownErrors = ["unauthorized", "noApiKey", "missingFields", "invalidFormat", "insufficient_funds"];
                 if (data.error && knownErrors.includes(data.error)) {
-                    toast.error(t(`errors.${data.error}` as any));
+                    toast.error(t(`errors.${data.error}` as any, {
+                        total: GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH,
+                        cost: GENERATION_CONFIG.STRATEGY_SPARK_COST
+                    }));
                 } else {
                     toast.error(t("toasts.generateFailed"));
                 }
@@ -137,7 +186,7 @@ export function MarketingIntake({
             }
 
             setConcepts(data.concepts);
-            toast.success(t("toasts.generateSuccess"));
+            toast.success(t("toasts.generateSuccess", { total: GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH }));
         } catch {
             toast.error(t("toasts.connectFailed"));
         }
@@ -146,7 +195,15 @@ export function MarketingIntake({
 
     const handleConfirm = () => {
         if (concepts) {
-            onStrategyReady(concepts, logoUrl, targetLanguage);
+            onStrategyReady(concepts, logoUrl, targetLanguage, { productDescription, usps, targetAudience }, false);
+            onOpenChange(false);
+        }
+    };
+
+    const handleReuseStrategy = () => {
+        if (initialStrategy && initialMarketingPrompt) {
+            // Instantly bypass generation and use the imported strategy
+            onStrategyReady(initialStrategy, logoUrl, targetLanguage, initialMarketingPrompt, true);
             onOpenChange(false);
         }
     };
@@ -155,12 +212,32 @@ export function MarketingIntake({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-3xl bg-[#0A0A0A]/90 backdrop-blur-xl border-zinc-800 text-zinc-100 max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-2xl font-bold">
-                        <Sparkles className="h-6 w-6 text-amber-500 animate-pulse" />
-                        {t("title")}
-                    </DialogTitle>
+                    <div className="flex items-center justify-between">
+                        <DialogTitle className="flex items-center gap-2 text-2xl font-bold">
+                            <Sparkles className="h-6 w-6 text-amber-500 animate-pulse" />
+                            {t("title")}
+                        </DialogTitle>
+                        {isUnchanged && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20 px-2.5 py-1 text-xs cursor-help">
+                                            Stratégie réutilisée ✅
+                                        </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-[300px] text-xs">
+                                        <p>Vous économisez les Sparks liés à la génération IA en conservant vos textes. Seuls les frais de rendu vidéo et image s'appliquent.</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
+                    </div>
                     <DialogDescription className="text-zinc-400 text-base">
-                        {t("subtitle")}
+                        {t("subtitle", {
+                            total: GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH,
+                            images: GENERATION_CONFIG.IMAGE_COUNT,
+                            videos: GENERATION_CONFIG.VIDEO_COUNT
+                        })}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -293,23 +370,52 @@ export function MarketingIntake({
 
 
                         <motion.div variants={itemVariants} className="pt-2">
-                            <Button
-                                onClick={handleGenerate}
-                                disabled={!canGenerate || loading}
-                                className="w-full h-12 gap-2 text-base font-bold text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 border-none shadow-[0_0_20px_rgba(245,158,11,0.5)] hover:shadow-[0_0_30px_rgba(245,158,11,0.6)] transition-all disabled:opacity-50 disabled:shadow-none"
-                            >
-                                {loading ? (
-                                    <>
-                                        <Loader2 className="h-5 w-5 animate-spin" />
-                                        {t("buttons.generating")}
-                                    </>
+                            <AnimatePresence mode="popLayout">
+                                {isUnchanged ? (
+                                    <motion.div
+                                        key="btn-reuse"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        transition={{ duration: 0.2 }}
+                                    >
+                                        <Button
+                                            onClick={handleReuseStrategy}
+                                            disabled={!canGenerate}
+                                            className="w-full h-12 gap-2 text-base font-bold text-white bg-green-600 hover:bg-green-500 border-none shadow-[0_0_20px_rgba(22,163,74,0.3)] hover:shadow-[0_0_30px_rgba(22,163,74,0.5)] transition-all disabled:opacity-50 disabled:shadow-none"
+                                        >
+                                            <Check className="h-5 w-5" />
+                                            Utiliser la stratégie actuelle (0 Spark)
+                                        </Button>
+                                    </motion.div>
                                 ) : (
-                                    <>
-                                        <Sparkles className="h-5 w-5 animate-pulse" />
-                                        {t("buttons.generate")}
-                                    </>
+                                    <motion.div
+                                        key="btn-gen"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        transition={{ duration: 0.2 }}
+                                    >
+                                        <Button
+                                            onClick={handleGenerate}
+                                            disabled={!canGenerate || loading}
+                                            className="w-full h-12 gap-2 text-base font-bold text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 border-none shadow-[0_0_20px_rgba(245,158,11,0.5)] hover:shadow-[0_0_30px_rgba(245,158,11,0.6)] transition-all disabled:opacity-50 disabled:shadow-none"
+                                        >
+                                            {loading ? (
+                                                <>
+                                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                                    {t("buttons.generating")}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Sparkles className="h-5 w-5 animate-pulse" />
+                                                    {t("buttons.generate")} ({GENERATION_CONFIG.STRATEGY_SPARK_COST} Sparks)
+                                                </>
+                                            )}
+                                        </Button>
+                                    </motion.div>
                                 )}
-                            </Button>
+                            </AnimatePresence>
                         </motion.div>
                     </motion.div>
                 )}

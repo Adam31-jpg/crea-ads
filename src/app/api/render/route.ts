@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { renderMediaOnLambda, renderStillOnLambda } from "@remotion/lambda-client";
+import { GENERATION_CONFIG } from "@/config/generation.config";
 
 const REGION = (process.env.REMOTION_AWS_REGION || "us-east-1") as "us-east-1";
 const SERVE_URL = process.env.REMOTION_SERVE_URL!;
@@ -21,6 +22,8 @@ interface AdConcept {
     colorMood: string;
     emphasis: string;
     logo_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right" | null;
+    cameraMotion?: string;
+    layoutType?: "converter" | "minimalist";
 }
 
 /** Retry a Supabase write up to `maxRetries` times with exponential backoff */
@@ -73,6 +76,20 @@ export async function POST(req: NextRequest) {
 
     const concepts: AdConcept[] = inputData.strategy || [];
     const product = inputData.products?.[0] || {};
+
+    // DEBIT-BEFORE-RENDER LOGIC: Consume Sparks
+    const cost = (GENERATION_CONFIG.IMAGE_COUNT * GENERATION_CONFIG.IMAGE_SPARK_COST) + (GENERATION_CONFIG.VIDEO_COUNT * GENERATION_CONFIG.VIDEO_SPARK_COST);
+    if (cost > 0) {
+        const { error: debitError } = await supabase.rpc('decrement_credits', { p_user_id: user.id, p_amount: cost });
+
+        if (debitError) {
+            console.error("[Render API] Debit failed:", debitError);
+            return NextResponse.json(
+                { error: "insufficient_funds" },
+                { status: 402 } // Payment Required
+            );
+        }
+    }
 
     // === CHECKPOINT 1: Payload Intake ===
     console.log(`[Render] Payload received — batchId: ${batchId}, concepts: ${concepts.length}, userId: ${user.id}`);
@@ -158,6 +175,23 @@ export async function POST(req: NextRequest) {
                 await new Promise((resolve) => setTimeout(resolve, STAGGER_MS));
             }
 
+            const layoutType = concept.layoutType || 'converter';
+            const elements: any[] = [];
+
+            if (layoutType === 'converter') {
+                elements.push({ id: 'hl', type: 'headline', x: 5, y: 15, width: 50, align: 'left', content: concept.headline });
+                if (concept.subheadline) {
+                    elements.push({ id: 'shl', type: 'subheadline', x: 5, y: 35, width: 50, align: 'left', content: concept.subheadline });
+                }
+                elements.push({ id: 'cta', type: 'cta', x: 5, y: 55, align: 'left', content: concept.cta });
+            } else {
+                elements.push({ id: 'hl', type: 'headline', x: 50, y: 10, width: 80, align: 'center', content: concept.headline });
+                if (concept.subheadline) {
+                    elements.push({ id: 'shl', type: 'subheadline', x: 50, y: 80, width: 80, align: 'center', content: concept.subheadline });
+                }
+                elements.push({ id: 'cta', type: 'cta', x: 50, y: 90, align: 'center', content: concept.cta });
+            }
+
             const inputProps = {
                 headlineText: concept.headline,
                 subheadlineText: concept.subheadline,
@@ -168,25 +202,35 @@ export async function POST(req: NextRequest) {
                     primary: inputData.accentColor || "#D4AF37",
                     secondary: "#1E1E2E",
                     accent: inputData.accentColor || "#D4AF37",
-                    background: "#0A0A0F",
+                    background: concept.colorMood?.toLowerCase().includes("sunset")
+                        ? "#1a0b00"
+                        : concept.colorMood?.toLowerCase().includes("midnight")
+                            ? "#050510"
+                            : concept.colorMood?.toLowerCase().includes("electric")
+                                ? "#0f0518"
+                                : concept.colorMood?.toLowerCase().includes("white")
+                                    ? "#fcfcfc"
+                                    : "#0A0A0F",
                     textPrimary: "#FFFFFF",
                 },
                 fontFamily: "Bodoni" as const,
                 glassmorphism: { enabled: true, intensity: 0.6, blur: 12 },
                 camera: {
-                    zoomStart: 1,
-                    zoomEnd: 1.15,
-                    orbitSpeed: 0.4,
-                    panX: 0,
+                    zoomStart: concept.cameraMotion === 'zoom_impact' ? 1.5 : concept.cameraMotion === 'static_hero' ? 1.1 : 1,
+                    zoomEnd: concept.cameraMotion === 'zoom_impact' ? 1 : 1.15,
+                    orbitSpeed: concept.cameraMotion === 'orbit_center' ? 0.6 : 0.1,
+                    panX: concept.cameraMotion === 'pan_horizontal' ? 0.5 : 0,
                 },
                 enableMotionBlur: false,
                 logoUrl: product.logoUrl || null,
                 logoPosition: concept.logo_position || null,
                 layout: {
+                    layoutType,
                     aspectRatio: formatToAspect(inputData.format),
                     safePadding: 40,
                     contentScale: 1,
                 },
+                elements,
             };
 
             const webhookConfig = {
@@ -241,6 +285,7 @@ export async function POST(req: NextRequest) {
                             codec: "h264",
                             framesPerLambda: 20,
                             webhook: webhookConfig,
+                            timeoutInMilliseconds: 240000,
                         });
 
                     console.log(`[AWS] Lambda returned for JobID: ${jobId} — renderId: ${renderId}, bucket: ${bucketName}`);

@@ -41,6 +41,11 @@ export const SafeZone: React.FC<SafeZoneProps> = ({ aspectRatio, children, debug
 
     const safe = SAFE_AREAS[aspectRatio] || SAFE_AREAS['1:1'];
 
+    // If debug is false, do not bloat the DOM with wrapper divs
+    if (!debug) {
+        return <>{children}</>;
+    }
+
     // If aspect ratio logic needs to calculate scale factor
     // For now we assume the Composition width/height matches the aspect ratio target
 

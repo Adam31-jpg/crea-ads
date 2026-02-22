@@ -28,6 +28,12 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -37,8 +43,9 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, Play, AlertTriangle, Loader2, MoreVertical, RotateCcw, Archive, ArchiveRestore, Trash2, Image, Video, Check, X, RefreshCw, Clock } from "lucide-react";
+import { Download, Play, AlertTriangle, Loader2, MoreVertical, RotateCcw, Archive, ArchiveRestore, Trash2, Image, Video, Check, X, RefreshCw, Clock, Film, CheckCircle2, HeartPulse, Palette, Copy } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { DuplicateBatchModal } from "@/components/modals/DuplicateBatchModal";
 
 // --- Types ---
 
@@ -130,10 +137,12 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
     const [previewAsset, setPreviewAsset] = useState<Job | null>(null);
     const [errorDetail, setErrorDetail] = useState<string | null>(null);
     const [deleteOpen, setDeleteOpen] = useState(false);
+    const [duplicateOpen, setDuplicateOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [retrying, setRetrying] = useState(false);
     const [retryingJobs, setRetryingJobs] = useState<Set<string>>(new Set());
     const [resyncing, setResyncing] = useState(false);
+    const [autoResynced, setAutoResynced] = useState(false);
     const [, setTick] = useState(0);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const router = useRouter();
@@ -143,28 +152,21 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
     const primaryJob = jobs[0];
 
     // Computed batch status from jobs
-    const batchStatus =
-        jobs.length > 0
-            ? jobs.every((j) => j.status === "done")
-                ? "done"
-                : jobs.every((j) => j.status === "failed")
-                    ? "failed"
-                    : jobs.some(
-                        (j) =>
-                            j.status === "rendering" ||
-                            j.status === "processing" ||
-                            j.status === "generating_assets"
-                    )
-                        ? "rendering"
-                        : batch.status
-            : batch.status || "pending";
-
     const isRendering =
-        batchStatus === "rendering" ||
-        batchStatus === "processing" ||
-        batchStatus === "generating_assets";
-    const isDone = batchStatus === "done";
-    const isFailed = batchStatus === "failed";
+        jobs.length > 0
+            ? jobs.some(
+                (j) =>
+                    j.status === "rendering" ||
+                    j.status === "processing" ||
+                    j.status === "generating_assets" ||
+                    j.status === "pending"
+            )
+            : batch.status === "rendering" || batch.status === "processing" || batch.status === "generating_assets" || batch.status === "pending";
+
+    const isFailed = !isRendering && jobs.some((j) => j.status === "failed");
+    const isDone = !isRendering && !isFailed && jobs.every((j) => j.status === "done");
+
+    const batchStatus = isRendering ? "rendering" : isFailed ? "failed" : isDone ? "done" : "pending";
 
     // Expiration calculation (15 days)
     const MAX_RETENTION_MS = 15 * 24 * 60 * 60 * 1000;
@@ -190,10 +192,8 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
     }).length;
     const totalCount = jobs.length;
 
-    // Show global "Retry All" only when >50% failed or stuck
-    const problemCount = failedCount + stuckCount;
-    const showGlobalRetry =
-        totalCount > 0 && problemCount > 0 && problemCount / totalCount > 0.5;
+    // Show global "Retry All" / "Re-sync"
+    const showSyncRetryBtn = failedCount > 0 || (isRendering && stuckCount > 0);
 
     // Timer: tick every second while rendering
     const startTimer = useCallback(() => {
@@ -214,6 +214,37 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
         return stopTimer;
     }, [isRendering, startTimer, stopTimer]);
 
+    // --- Auto-Resync Stuck Jobs ---
+    useEffect(() => {
+        if (!isRendering) return;
+
+        // Check if any job is stuck
+        const hasStuckJob = jobs.some(j => {
+            if (j.status !== "rendering" && j.status !== "processing" && j.status !== "generating_assets") return false;
+            const elapsed = j.created_at ? Date.now() - new Date(j.created_at).getTime() : 0;
+            return elapsed > 120_000;
+        });
+
+        if (hasStuckJob && !autoResynced) {
+            console.log(`[BatchCard] Detected stuck jobs. Auto-resyncing batch ${batch.id}...`);
+            setAutoResynced(true); // Ensure it only fires once automatically
+            // Need to wrap in an async IIFE to call handleResync internally without dependency cycles
+            // but handleResync is defined below. Let's define the resync loop directly here to avoid dependency issues.
+            const autoTriggerResync = async () => {
+                const stuckJobs = jobs.filter(j =>
+                    (j.status === "rendering" || j.status === "processing" || j.status === "generating_assets") &&
+                    (j.created_at ? Date.now() - new Date(j.created_at).getTime() > 120_000 : false)
+                );
+
+                for (const job of stuckJobs) {
+                    await fetch(`/api/render/status?jobId=${job.id}`).catch(() => { });
+                }
+                router.refresh();
+            };
+            autoTriggerResync();
+        }
+    }, [isRendering, jobs, autoResynced, batch.id, router]);
+
     // --- Actions ---
 
     const handleDelete = async () => {
@@ -228,47 +259,39 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
             }
         } catch {
             toast.error(t("toasts.delFailed"));
+        } finally {
+            setDeleting(false);
+            setDeleteOpen(false);
         }
-        setDeleting(false);
-        setDeleteOpen(false);
     };
 
-    const handleRetryAll = async () => {
-        setRetrying(true);
-        try {
-            const res = await fetch(`/api/batch/${batch.id}/retry`, {
-                method: "POST",
-            });
-            const data = await res.json();
-            if (!res.ok) toast.error(data.error || t("toasts.retryFailed"));
-            else {
-                toast.success(t("toasts.retrySuccess"));
-                router.refresh();
-            }
-        } catch {
-            toast.error(t("toasts.retryFailed"));
-        }
-        setRetrying(false);
+    const handleDuplicate = () => {
+        setDuplicateOpen(true);
     };
 
-    const handleResync = async () => {
+    const handleSyncAndRetry = async () => {
         setResyncing(true);
         try {
             const stuckJobs = jobs.filter(j => j.status === "rendering" || j.status === "processing" || j.status === "generating_assets");
-            if (stuckJobs.length === 0) {
-                toast(t("toasts.noResync"));
-                setResyncing(false);
-                return;
+
+            // Re-sync stuck jobs
+            for (const job of stuckJobs) {
+                await fetch(`/api/render/status?jobId=${job.id}`).catch(() => { });
             }
 
-            // Re-sync by triggering the fallback active polling route
-            for (const job of stuckJobs) {
-                await fetch(`/api/render/status?jobId=${job.id}`);
+            // Retry failed jobs at the batch level
+            if (failedCount > 0) {
+                const res = await fetch(`/api/batch/${batch.id}/retry`, { method: "POST" });
+                if (!res.ok) {
+                    const data = await res.json();
+                    toast.error(data.error || t("toasts.retryFailed"));
+                }
             }
-            toast.success(t("toasts.resyncSuccess"));
+
+            toast.success("Synchronisation et relance complètes");
             router.refresh();
         } catch {
-            toast.error(t("toasts.resyncFailed"));
+            toast.error("Erreur lors de la synchronisation");
         }
         setResyncing(false);
     };
@@ -316,19 +339,23 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
     // --- Cell Component ---
 
     const JobCell = ({ job }: { job: Job }) => {
-        const jobDone = job.status === "done";
-        const jobFailed = job.status === "failed";
+        const hasResult = !!job.result_url;
+        const jobDone = job.status === "done" || hasResult; // Overrule state if result exists
+        const jobFailed = job.status === "failed" && !hasResult;
         const jobRendering =
-            job.status === "rendering" ||
-            job.status === "processing" ||
-            job.status === "generating_assets";
+            (job.status === "rendering" ||
+                job.status === "processing" ||
+                job.status === "generating_assets") && !hasResult;
         const isVideo = job.type === "video";
         const isRetryingThis = retryingJobs.has(job.id);
 
         const elapsedMs = job.created_at
             ? Date.now() - new Date(job.created_at).getTime()
             : 0;
-        const isStuck = jobRendering && elapsedMs > STUCK_THRESHOLD_MS;
+        const isStuck = jobRendering && elapsedMs > 120_000;
+
+        // If it was already auto-resynced but still stuck after, consider it failed UX-wise
+        const isVisualFailure = jobFailed || (isStuck && autoResynced);
 
         return (
             <button
@@ -352,7 +379,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                 }
                 className={`relative aspect-square rounded-lg border-2 transition-all overflow-hidden ${jobDone
                     ? "border-success/30 bg-success/5 hover:border-success cursor-pointer"
-                    : jobFailed
+                    : isVisualFailure
                         ? "border-destructive/30 bg-destructive/5 hover:border-destructive cursor-pointer"
                         : isStuck
                             ? "border-amber-500/40 bg-amber-500/10 hover:border-amber-500 cursor-pointer"
@@ -375,7 +402,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                     </div>
                 )}
 
-                {!isRetryingThis && isStuck && (
+                {!isRetryingThis && isStuck && !isVisualFailure && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
                         <RefreshCw className="h-4 w-4 text-amber-500" />
                         <span className="text-[9px] text-amber-500 font-semibold">
@@ -386,9 +413,9 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
 
                 {!isRetryingThis && jobRendering && !isStuck && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-                        <Loader2 className="h-4 w-4 animate-[spin_3s_linear_infinite] text-brand" />
+                        <Loader2 className="h-4 w-4 animate-spin text-brand" />
                         <span className="text-[8px] text-muted-foreground font-medium leading-none text-center">
-                            {getSmartLabelShort(elapsedMs, t)}
+                            {isVideo ? 'Vidéo' : 'Image'}
                         </span>
                     </div>
                 )}
@@ -410,13 +437,13 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                     </div>
                 )}
 
-                {jobFailed && !isRetryingThis && (
+                {isVisualFailure && !isRetryingThis && (
                     <div className="absolute inset-0 flex items-center justify-center">
                         <X className="h-5 w-5 text-destructive" />
                     </div>
                 )}
 
-                {!jobRendering && !jobDone && !jobFailed && (
+                {!jobRendering && !jobDone && !isVisualFailure && (
                     <div className="absolute inset-0 flex items-center justify-center">
                         {isVideo ? (
                             <Video className="h-4 w-4 text-muted-foreground" />
@@ -477,52 +504,46 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                             </CardDescription>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                            <Badge variant={statusVariant(batchStatus)}>
-                                {isRendering && (
-                                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                )}
-                                {isRendering && hasMultipleJobs
-                                    ? getBatchSmartLabel(jobs, t)
-                                    : t(`status.${batchStatus}`)}
-                                {isRendering && totalCount > 1 && (
-                                    <span className="ml-1 tabular-nums">
-                                        {doneCount}/{totalCount}
-                                    </span>
+                            <Badge variant={isFailed ? "outline" : statusVariant(batchStatus)} className={isFailed ? "border-destructive/30 text-destructive bg-destructive/5" : ""}>
+                                {isRendering ? (
+                                    <>
+                                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                        Génération en cours... {doneCount}/{totalCount}
+                                    </>
+                                ) : isFailed ? (
+                                    `Terminé : ${doneCount} Succès, ${failedCount} Échec(s)`
+                                ) : (
+                                    t(`status.${batchStatus}`)
                                 )}
                             </Badge>
 
-                            {showGlobalRetry && (
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="gap-1.5 h-7 text-xs border-brand/30 hover:bg-brand/10"
-                                    onClick={handleRetryAll}
-                                    disabled={retrying}
-                                >
-                                    {retrying ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                        <RotateCcw className="h-3 w-3" />
-                                    )}
-                                    {retrying ? t("card.retrying") : t("card.retryAll")}
-                                </Button>
-                            )}
-
-                            {isRendering && (
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="gap-1.5 h-7 text-xs border-brand/30 hover:bg-brand/10 select-none"
-                                    onClick={handleResync}
-                                    disabled={resyncing}
-                                >
-                                    {resyncing ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                        <RefreshCw className="h-3 w-3" />
-                                    )}
-                                    {t("card.resync")}
-                                </Button>
+                            {showSyncRetryBtn && (
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="gap-1.5 h-7 text-xs border-brand/30 hover:bg-brand/10 select-none"
+                                                onClick={handleSyncAndRetry}
+                                                disabled={resyncing}
+                                            >
+                                                {resyncing ? (
+                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                ) : (
+                                                    <RefreshCw className="h-3 w-3" />
+                                                )}
+                                                Synchroniser & Relancer
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="max-w-[280px] text-xs leading-relaxed z-50 p-3">
+                                            Si un rendu échoue, vous pouvez tenter de le relancer ici. Si l'échec persiste, aucun Spark ne sera débité. En cas de problème technique récurrent, veuillez{' '}
+                                            <a href="/bug" target="_blank" rel="noopener noreferrer" className="underline font-medium text-brand">
+                                                signaler un bug
+                                            </a>.
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
                             )}
 
                             <DropdownMenu>
@@ -591,7 +612,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                         <div className="flex items-center gap-2">
                             {isRendering && (
                                 <p className="text-sm text-muted-foreground flex items-center gap-2">
-                                    <Loader2 className="h-4 w-4 animate-[spin_3s_linear_infinite] text-brand" />
+                                    <Loader2 className="h-4 w-4 animate-spin text-brand" />
                                     {t("card.renderingProgress")}
                                 </p>
                             )}
@@ -764,6 +785,12 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <DuplicateBatchModal
+                open={duplicateOpen}
+                onOpenChange={setDuplicateOpen}
+                sourceBatch={batch}
+            />
         </>
     );
 }

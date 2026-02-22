@@ -12,6 +12,7 @@ export const luxuryIntent = {
     colorMood: 'midnight' as const,
     emphasis: 'product_detail' as const,
     copyTone: 'elegant' as const,
+    layoutType: 'converter' as const,
 };
 
 export const RemoteImageScenario = resolveDesign(luxuryIntent, {

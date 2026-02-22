@@ -89,49 +89,98 @@ export const MasterComposition: React.FC<Props> = (props) => {
                         {/* Layer 1: 3D Hero Object */}
                         <AbsoluteFill style={{
                             transform: `scale(${beatScale})`,
+                            left: layout.layoutType === 'converter' ? '25%' : '0%',
                         }}>
-                            <HeroObject imageUrl={productImageUrl} zoom={camera.zoomStart} />
+                            <HeroObject imageUrl={productImageUrl} zoom={camera.zoomStart} color={colors.accent} />
                         </AbsoluteFill>
 
                         {/* Layer 2: Safe Zone & UI Content */}
-                        <SafeZone aspectRatio={layout.aspectRatio} debug={true}>
-                            <div style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                textAlign: 'center',
-                                gap: 20,
-                                zIndex: 10,
-                                width: '100%', // ensure full width for centering
-                            }}>
-                                <h1 style={{
-                                    fontFamily,
-                                    color: colors.textPrimary,
-                                    fontSize: dynamicFontSize,
-                                    margin: 0,
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.05em',
-                                    maxWidth: '90%', // Keep it away from edges
-                                    lineHeight: 1.1,
-                                    // Allow wrapping
-                                    whiteSpace: 'pre-wrap',
-                                }}>
-                                    {headlineText}
-                                </h1>
+                        <SafeZone aspectRatio={layout.aspectRatio}>
+                            {props.elements && props.elements.length > 0 ? (
+                                props.elements.map(el => {
+                                    const isHeadline = el.type === 'headline';
+                                    const fontSize = isHeadline ? dynamicFontSize : (el.type === 'subheadline' ? subheadSize : subheadSize * 0.8);
+                                    const color = isHeadline ? colors.textPrimary : colors.accent;
+                                    const fontWeight = isHeadline ? 'bold' : 300;
+                                    const textTransform = isHeadline ? 'uppercase' : 'none';
 
-                                {props.subheadlineText && (
-                                    <h2 style={{
+                                    return (
+                                        <div key={el.id} style={{
+                                            position: 'absolute',
+                                            left: `${el.x}%`,
+                                            top: `${el.y}%`,
+                                            transform: el.align === 'center' ? 'translateX(-50%)' : 'none',
+                                            width: el.width ? `${el.width}%` : 'auto',
+                                            textAlign: el.align,
+                                            fontFamily,
+                                            fontSize,
+                                            color,
+                                            fontWeight,
+                                            textTransform: textTransform as any,
+                                            letterSpacing: isHeadline ? '0.05em' : 'normal',
+                                            lineHeight: 1.1,
+                                            whiteSpace: 'pre-wrap',
+                                            zIndex: 10,
+                                        }}>
+                                            {el.type === 'cta' ? (
+                                                <div style={{
+                                                    backgroundColor: colors.primary,
+                                                    color: '#000',
+                                                    padding: '12px 24px',
+                                                    borderRadius: '8px',
+                                                    display: 'inline-block',
+                                                    fontWeight: 'bold',
+                                                    fontSize: subheadSize * 0.7,
+                                                    textTransform: 'uppercase',
+                                                }}>
+                                                    {el.content}
+                                                </div>
+                                            ) : (
+                                                el.content
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                // Fallback for old renders without elements array
+                                <div style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    textAlign: 'center',
+                                    gap: 20,
+                                    zIndex: 10,
+                                    width: '100%', // ensure full width for centering
+                                }}>
+                                    <h1 style={{
                                         fontFamily,
-                                        color: colors.accent,
-                                        fontSize: subheadSize,
+                                        color: colors.textPrimary,
+                                        fontSize: dynamicFontSize,
                                         margin: 0,
-                                        fontWeight: 300,
-                                        maxWidth: '80%',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.05em',
+                                        maxWidth: '90%', // Keep it away from edges
+                                        lineHeight: 1.1,
+                                        // Allow wrapping
+                                        whiteSpace: 'pre-wrap',
                                     }}>
-                                        {props.subheadlineText}
-                                    </h2>
-                                )}
-                            </div>
+                                        {headlineText}
+                                    </h1>
+
+                                    {props.subheadlineText && (
+                                        <h2 style={{
+                                            fontFamily,
+                                            color: colors.accent,
+                                            fontSize: subheadSize,
+                                            margin: 0,
+                                            fontWeight: 300,
+                                            maxWidth: '80%',
+                                        }}>
+                                            {props.subheadlineText}
+                                        </h2>
+                                    )}
+                                </div>
+                            )}
                         </SafeZone>
 
                         {/* Layer 3: Brand Logo */}

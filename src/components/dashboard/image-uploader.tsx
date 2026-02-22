@@ -31,14 +31,20 @@ export function ImageUploader({
     const uploadFiles = useCallback(
         async (files: FileList | File[]) => {
             const fileArray = Array.from(files);
-            const valid = fileArray.filter((f) =>
-                ["image/png", "image/jpeg", "image/webp"].includes(f.type)
-            );
 
-            if (valid.length === 0) {
-                toast.error(t("errorType"));
-                return;
-            }
+            const valid = fileArray.filter((f) => {
+                if (!["image/png", "image/jpeg", "image/webp"].includes(f.type)) {
+                    toast.error(t("errorType"));
+                    return false;
+                }
+                if (f.size > 10 * 1024 * 1024) {
+                    toast.error(`Fichier trop volumineux (max 10Mo): ${f.name}`);
+                    return false;
+                }
+                return true;
+            });
+
+            if (valid.length === 0) return;
 
             setUploading(true);
             const newUrls: string[] = [];

@@ -68,15 +68,15 @@ const THEMES: ThemeMap = {
 const getLayoutForAspectRatio = (aspectRatio: RemotionProps['layout']['aspectRatio']): RemotionProps['layout'] => {
     switch (aspectRatio) {
         case '9:16':
-            return { aspectRatio: '9:16', safePadding: 140, contentScale: 0.85 }; // Smaller content to fit safe zones
+            return { layoutType: 'converter', aspectRatio: '9:16', safePadding: 140, contentScale: 0.85 }; // Smaller content to fit safe zones
         case '1:1':
-            return { aspectRatio: '1:1', safePadding: 50, contentScale: 1.0 };
+            return { layoutType: 'converter', aspectRatio: '1:1', safePadding: 50, contentScale: 1.0 };
         case '16:9':
-            return { aspectRatio: '16:9', safePadding: 80, contentScale: 1.1 }; // Widescreen can handle larger text
+            return { layoutType: 'converter', aspectRatio: '16:9', safePadding: 80, contentScale: 1.1 }; // Widescreen can handle larger text
         case '4:5':
-            return { aspectRatio: '4:5', safePadding: 60, contentScale: 0.95 };
+            return { layoutType: 'converter', aspectRatio: '4:5', safePadding: 60, contentScale: 0.95 };
         default:
-            return { aspectRatio: '1:1', safePadding: 50, contentScale: 1.0 };
+            return { layoutType: 'converter', aspectRatio: '1:1', safePadding: 50, contentScale: 1.0 };
     }
 };
 
@@ -115,6 +115,7 @@ export function resolveDesign(
 
         // Spread Computed Layout
         layout: layout,
+        elements: [],
     };
 
     // 5. Apply Overrides (Deep Merge strategy might be better, but shallow for now is safer for exact control)

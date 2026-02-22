@@ -10,6 +10,7 @@ export const CreativeIntentSchema = z.object({
     colorMood: z.enum(['sunset', 'midnight', 'studio_white', 'electric_neon', 'brand_consistent']),
     emphasis: z.enum(['product_detail', 'typography_heavy', 'balanced']),
     copyTone: z.enum(['punchy', 'elegant', 'urgent']),
+    layoutType: z.enum(['converter', 'minimalist']).default('converter'),
 });
 
 export type CreativeIntent = z.infer<typeof CreativeIntentSchema>;
@@ -19,6 +20,17 @@ export type CreativeIntent = z.infer<typeof CreativeIntentSchema>;
  * Low-level, deterministic properties that control the React components.
  * This schema serves as the "Contract" for the Rendering Engine.
  */
+export const UIElementSchema = z.object({
+    id: z.string(),
+    type: z.enum(['headline', 'subheadline', 'badge', 'logo', 'cta']),
+    x: z.number(), // Percentage 0-100
+    y: z.number(), // Percentage 0-100
+    width: z.number().optional(), // Percentage 0-100
+    height: z.number().optional(), // Percentage 0-100
+    content: z.string().optional(),
+    align: z.enum(['left', 'center', 'right']).default('center'),
+});
+
 export const RemotionPropsSchema = z.object({
     // --- Content Props ---
     headlineText: z.string().max(100, "Headline too long (max 100)"),
@@ -72,10 +84,12 @@ export const RemotionPropsSchema = z.object({
 
     // --- Social Safe Areas (Responsive Layout) ---
     layout: z.object({
+        layoutType: z.enum(['converter', 'minimalist']).default('converter'),
         aspectRatio: z.enum(['1:1', '9:16', '16:9', '4:5']),
         safePadding: z.number(), // px
         contentScale: z.number(), // 0.8 to 1.2
     }),
+    elements: z.array(UIElementSchema).default([]),
 });
 
 export type RemotionProps = z.infer<typeof RemotionPropsSchema>;
