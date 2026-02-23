@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
     // 3. Fetch job
     const { data: job, error } = await supabase
         .from("jobs")
-        .select("id, status, metadata, batch_id, error_message, result_url")
+        .select("id, status, metadata, batch_id, user_id, error_message, result_url")
         .eq("id", jobId)
         .eq("user_id", user.id)
         .single();
@@ -147,19 +147,36 @@ export async function GET(req: NextRequest) {
             console.log(`[Status] Job ${jobId} render FAILED — ${errorMsg}`);
 
             console.log(`[Status] DB update attempt — marking Job ${jobId} as failed`);
-            const { error: updateErr } = await supabase
+            const { data: updatedJob, error: updateErr } = await supabase
                 .from("jobs")
                 .update({
                     status: "failed",
                     error_message: errorMsg,
                     updated_at: new Date().toISOString(),
                 })
-                .eq("id", job.id);
+                .eq("id", job.id)
+                .neq("status", "failed")
+                .select("id")
+                .maybeSingle();
 
             if (updateErr) {
                 console.error(`[Status][DB ERROR] Failed to mark Job ${jobId} as failed:`, JSON.stringify(updateErr));
-            } else {
+            } else if (updatedJob) {
                 console.log(`[Status] Job ${jobId} → failed ✓`);
+                // Refund 1 Spark automatically using RPC
+                if (job.user_id) {
+                    const { error: rpcErr } = await supabase.rpc("increment_credits", {
+                        p_user_id: job.user_id,
+                        p_amount: 1
+                    });
+                    if (rpcErr) {
+                        console.error(`[Status] Failed to refund Spark for Job ${jobId}:`, rpcErr);
+                    } else {
+                        console.log(`[Status] Refunded 1 Spark to user ${job.user_id} for failed Job ${jobId}`);
+                    }
+                }
+            } else {
+                console.log(`[Status] Job ${jobId} was already marked as failed (likely by webhook).`);
             }
 
             // Check if this was the LAST job → update batch

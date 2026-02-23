@@ -13,26 +13,26 @@ const SAFE_AREAS = {
     '9:16': {
         top: 220, // UI Top Elements
         bottom: 400, // Captions/Audio/Home Bar
-        left: 40,
+        left: 60, // Increased to >5% (54px)
         right: 140, // Like/Share buttons
     },
     '1:1': {
-        top: 50,
-        bottom: 50,
-        left: 50,
-        right: 50,
+        top: 60,
+        bottom: 60,
+        left: 60,
+        right: 60,
     },
     '16:9': {
-        top: 50,
-        bottom: 50,
+        top: 60,
+        bottom: 60,
         left: 100, // YouTube Overlay?
         right: 100,
     },
     '4:5': {
-        top: 50,
-        bottom: 50,
-        left: 50,
-        right: 50,
+        top: 70,
+        bottom: 70,
+        left: 60,
+        right: 60,
     }
 };
 
@@ -41,14 +41,7 @@ export const SafeZone: React.FC<SafeZoneProps> = ({ aspectRatio, children, debug
 
     const safe = SAFE_AREAS[aspectRatio] || SAFE_AREAS['1:1'];
 
-    // If debug is false, do not bloat the DOM with wrapper divs
-    if (!debug) {
-        return <>{children}</>;
-    }
-
-    // If aspect ratio logic needs to calculate scale factor
-    // For now we assume the Composition width/height matches the aspect ratio target
-
+    // Always constrain content, regardless of debug mode
     return (
         <AbsoluteFill>
             {/* Content Layer - Constrained */}

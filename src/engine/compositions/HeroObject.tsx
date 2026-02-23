@@ -21,33 +21,24 @@ const HeroScene: React.FC<HeroObjectProps> = ({ imageUrl, zoom = 1, color = "#ff
     // 1. Add a cache-buster to the asset URL to bypass Lambda's Chromium cache
     const textureUrl = `${imageUrl}?v=${Date.now()}`;
 
+    // Debug: Check if textureUrl is valid
+    console.log("[DEBUG-RENDER] Raw imageUrl:", imageUrl);
+    if (!imageUrl || imageUrl.includes("undefined")) {
+        console.error("[HeroObject] CRITICAL: textureUrl is undefined or invalid!", textureUrl);
+    }
+
     React.useEffect(() => {
         const handle = delayRender("Loading: " + textureUrl);
         console.log("[DEBUG-RENDER] Product URL:", textureUrl);
 
         let isMounted = true;
+        let img: HTMLImageElement | null = null;
 
-        // Task A & C: Pre-flight check via standard fetch to get exact HTTP status
-        fetch(textureUrl, { method: 'HEAD', mode: 'cors' })
-            .then(res => {
-                if (isMounted) {
-                    console.log(`[DEBUG-RENDER] Pre-flight HEAD status for ${textureUrl}: ${res.status} ${res.statusText}`);
-                    if (!res.ok) {
-                        console.error(`[DEBUG-RENDER] Pre-flight fetch failed: HTTP ${res.status} - ${res.statusText}`);
-                    }
-                    loadImage();
-                }
-            })
-            .catch(err => {
-                if (isMounted) {
-                    console.error("[DEBUG-RENDER] Pre-flight fetch completely blocked (likely strict CORS or Network down):", err);
-                    loadImage(); // try anyway in case HEAD was just blocked
-                }
-            });
+        const loadImage = () => {
+            if (typeof window === 'undefined') return;
 
-        function loadImage() {
             // Pre-flight check via standard HTML Image
-            const img = new Image();
+            img = new Image();
             img.crossOrigin = "anonymous";
 
             img.onload = () => {
@@ -57,6 +48,10 @@ const HeroScene: React.FC<HeroObjectProps> = ({ imageUrl, zoom = 1, color = "#ff
                 loader.load(
                     textureUrl,
                     (tex) => {
+                        if (!isMounted) return;
+                        tex.minFilter = THREE.LinearFilter;
+                        tex.magFilter = THREE.LinearFilter;
+                        tex.needsUpdate = true;
                         setTexture(tex);
                         try { continueRender(handle); } catch (e) { }
                     },
@@ -77,7 +72,28 @@ const HeroScene: React.FC<HeroObjectProps> = ({ imageUrl, zoom = 1, color = "#ff
 
             // Init load
             img.src = textureUrl;
-        }
+        };
+
+        // Task A & C: Pre-flight check via standard fetch to get exact HTTP status
+        fetch(textureUrl, { method: 'HEAD', mode: 'cors' })
+            .then(res => {
+                if (isMounted) {
+                    console.log(`[DEBUG-RENDER] Pre-flight HEAD status for ${textureUrl}: ${res.status} ${res.statusText}`);
+                    if (res.ok) {
+                        loadImage();
+                    } else {
+                        console.error(`[DEBUG-RENDER] Pre-flight fetch failed: HTTP ${res.status} - ${res.statusText}`);
+                        toast.error(`Erreur ${res.status}: Image produit introuvable.`);
+                        try { continueRender(handle); } catch (e) { }
+                    }
+                }
+            })
+            .catch(err => {
+                if (isMounted) {
+                    console.error("[DEBUG-RENDER] Pre-flight fetch completely blocked (likely strict CORS or Network down):", err);
+                    loadImage(); // try anyway in case HEAD was just blocked
+                }
+            });
 
         const backupTimeout = setTimeout(() => {
             console.warn("Texture load timed out. Releasing lock to prevent deadlock.");
@@ -87,17 +103,15 @@ const HeroScene: React.FC<HeroObjectProps> = ({ imageUrl, zoom = 1, color = "#ff
         return () => {
             isMounted = false;
             clearTimeout(backupTimeout);
-            img.onload = null;
-            img.onerror = null;
+            if (img) {
+                img.onload = null;
+                img.onerror = null;
+            }
             try { continueRender(handle); } catch (e) { }
         };
     }, [textureUrl]);
 
     if (!texture) return null;
-
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.needsUpdate = true;
 
     const img = texture.image as HTMLImageElement;
     const imageAspect = img.width / img.height;
@@ -114,14 +128,14 @@ const HeroScene: React.FC<HeroObjectProps> = ({ imageUrl, zoom = 1, color = "#ff
 
     return (
         <>
-            <ambientLight intensity={0.5} />
-            <directionalLight position={[5, 10, 5]} intensity={1.5} castShadow />
-            <spotLight position={[-5, 5, -5]} intensity={3} angle={0.5} penumbra={1} color="#ffffff" />
+            <ambientLight intensity={1.2} />
+            <directionalLight position={[5, 10, 5]} intensity={2.5} castShadow />
+            <spotLight position={[-5, 5, -5]} intensity={4} angle={0.5} penumbra={1} color={color} />
 
             <group position={[0, floatY, 0]} rotation={[0, rotationY, 0]}>
                 <mesh position={[0, 0, 0]} castShadow>
                     <planeGeometry args={[planeWidth, planeHeight, 32, 32]} />
-                    <meshStandardMaterial map={texture} transparent side={THREE.DoubleSide} alphaTest={0.5} />
+                    <meshStandardMaterial map={texture} transparent side={THREE.DoubleSide} />
                 </mesh>
             </group>
 

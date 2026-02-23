@@ -438,9 +438,21 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                 )}
 
                 {isVisualFailure && !isRetryingThis && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <X className="h-5 w-5 text-destructive" />
-                    </div>
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="absolute inset-0 flex items-center justify-center cursor-help">
+                                    <X className="h-5 w-5 text-destructive" />
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[280px] text-xs leading-relaxed z-50 p-3">
+                                Échec du rendu. Pas d'inquiétude : vos Sparks ne sont débités que pour les créatives réussies. Essayez de relancer via le bouton de synchronisation. Si le problème persiste,{' '}
+                                <a href="/bug" target="_blank" rel="noopener noreferrer" className="underline font-medium text-brand">
+                                    signalez-le ici
+                                </a>.
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                 )}
 
                 {!jobRendering && !jobDone && !isVisualFailure && (
@@ -455,6 +467,10 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
             </button>
         );
     };
+
+    // Preview aspect ratio
+    const aspectRatio = (batch.input_data?.aspectRatio as string) || "9:16";
+    const ratioValue = aspectRatio.replace(":", "/");
 
     return (
         <>
@@ -618,33 +634,27 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                             )}
                             {/* Download/Preview — only when done */}
                             {isDone && primaryJob?.result_url && (
-                                <>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="gap-1.5"
-                                        asChild
-                                    >
-                                        <a
-                                            href={primaryJob.result_url}
-                                            download
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                        >
-                                            <Download className="h-3.5 w-3.5" />
-                                            {t("card.download")}
-                                        </a>
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        className="gap-1.5"
-                                        onClick={() => setPreviewAsset(primaryJob)}
-                                    >
-                                        <Play className="h-3.5 w-3.5" />
-                                        {t("card.preview")}
-                                    </Button>
-                                </>
+                                <div 
+                                    onClick={() => setPreviewAsset(primaryJob)} 
+                                    style={{ 
+                                        cursor: 'pointer',
+                                        width: '100%',
+                                        aspectRatio: ratioValue,
+                                        overflow: 'hidden',
+                                        borderRadius: 'var(--radius)',
+                                        backgroundColor: '#f4f4f5'
+                                    }}
+                                >
+                                    <img 
+                                        src={primaryJob.result_url} 
+                                        alt="Batch preview" 
+                                        style={{ 
+                                            width: '100%', 
+                                            height: '100%', 
+                                            objectFit: 'cover' 
+                                        }} 
+                                    />
+                                </div>
                             )}
                             {isFailed && (
                                 <Button
@@ -691,23 +701,29 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                         </DialogDescription>
                     </DialogHeader>
                     {previewAsset?.result_url && previewAsset.type === "video" && (
-                        <div className="aspect-video rounded-lg overflow-hidden bg-black">
+                        <div 
+                            className="rounded-lg overflow-hidden bg-black w-full"
+                            style={{ aspectRatio: ratioValue }}
+                        >
                             <video
                                 src={previewAsset.result_url}
                                 controls
                                 muted
                                 autoPlay
-                                className="h-full w-full object-contain"
+                                className="h-full w-full object-cover"
                             />
                         </div>
                     )}
                     {previewAsset?.result_url && previewAsset.type === "image" && (
-                        <div className="rounded-lg overflow-hidden bg-black flex items-center justify-center">
+                        <div 
+                            className="rounded-lg overflow-hidden bg-black flex items-center justify-center w-full"
+                            style={{ aspectRatio: ratioValue }}
+                        >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                                 src={previewAsset.result_url}
                                 alt="Full size preview"
-                                className="max-h-[70vh] object-contain"
+                                className="w-full h-full object-cover"
                             />
                         </div>
                     )}

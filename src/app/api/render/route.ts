@@ -24,6 +24,7 @@ interface AdConcept {
     logo_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right" | null;
     cameraMotion?: string;
     layoutType?: "converter" | "minimalist";
+    background_prompt: string;
 }
 
 /** Retry a Supabase write up to `maxRetries` times with exponential backoff */
@@ -42,6 +43,77 @@ async function withRetry<T>(
         }
     }
     return { data: null as T, error: lastError };
+}
+
+/** Generate a realistic background via Fal.ai and upload it to Supabase Storage */
+async function fetchFalAiBackground(prompt: string, supabase: any, aspectRatio: string): Promise<string | null> {
+    const FAL_KEY = process.env.FAL_KEY;
+    if (!FAL_KEY) {
+        console.warn("[Fal.ai] Missing FAL_KEY in environment variables");
+        return null;
+    }
+    
+    // Map project aspect ratio to Fal.ai supported image_size
+    // Fal.ai common sizes: square_hd, square, portrait_4_5, portrait_16_9, landscape_4_3, landscape_16_9
+    let image_size = "square_hd";
+    if (aspectRatio === "9:16") image_size = "portrait_16_9"; // Exact vertical match
+    if (aspectRatio === "16:9") image_size = "landscape_16_9";
+    if (aspectRatio === "1:1") image_size = "square_hd";
+
+    try {
+        console.log(`[Fal.ai] Requesting background for prompt: "${prompt}" with size: ${image_size}`);
+        const response = await fetch("https://fal.run/" + GENERATION_CONFIG.AI_MODELS.BACKGROUND, {
+            method: "POST",
+            headers: {
+                "Authorization": `Key ${FAL_KEY}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                prompt,
+                image_size,
+                num_inference_steps: 4,
+                num_images: 1,
+                enable_safety_checker: true,
+                sync_mode: true
+            })
+        });
+
+        if (!response.ok) {
+            console.error(`[Fal.ai] API Error: ${response.statusText} - ${await response.text()}`);
+            return null;
+        }
+
+        const data = await response.json();
+        const imageUrl = data.images?.[0]?.url;
+        if (!imageUrl) return null;
+
+        // Stream to Supabase to save RAM instead of processing base64
+        console.log(`[Fal.ai] Success. Streaming Blob to ${GENERATION_CONFIG.STORAGE_BUCKETS.BACKGROUNDS}...`);
+        const imageRes = await fetch(imageUrl);
+        const imageBlob = await imageRes.blob();
+
+        const fileName = `bg_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+            .from(GENERATION_CONFIG.STORAGE_BUCKETS.BACKGROUNDS)
+            .upload(fileName, imageBlob, {
+                contentType: "image/jpeg",
+                upsert: true
+            });
+
+        if (uploadErr) {
+            console.error(`[Fal.ai] Supabase upload failed:`, uploadErr);
+            return null;
+        }
+
+        const { data: publicUrlData } = supabase.storage
+            .from(GENERATION_CONFIG.STORAGE_BUCKETS.BACKGROUNDS)
+            .getPublicUrl(fileName);
+
+        return publicUrlData.publicUrl;
+    } catch (e) {
+        console.error(`[Fal.ai] Unexpected error:`, e);
+        return null;
+    }
 }
 
 
@@ -192,12 +264,34 @@ export async function POST(req: NextRequest) {
                 elements.push({ id: 'cta', type: 'cta', x: 50, y: 90, align: 'center', content: concept.cta });
             }
 
+            // --- Phase 7: Fal.ai Dynamic Background Generation ---
+            let backgroundImageUrl: string | null = null;
+            let hasRefunded = false;
+
+            console.log(`[Queue] Concept for JobID ${jobId}:`, JSON.stringify(concept, null, 2));
+
+            const currentAspectRatio = formatToAspect(inputData.format);
+
+            if (concept.background_prompt) {
+                backgroundImageUrl = await fetchFalAiBackground(concept.background_prompt, supabase, currentAspectRatio);
+                if (!backgroundImageUrl) {
+                    console.log(`[Queue] Triggering atomic 1-Spark refund for failed Fal.ai generation on JobID ${jobId}`);
+                    await supabase.rpc('increment_credits', { p_user_id: user.id, p_amount: 1 });
+                    hasRefunded = true;
+                }
+            } else {
+                console.warn(`[Queue] No background_prompt generated for JobID ${jobId}, executing 1-Spark refund safety fallback`);
+                await supabase.rpc('increment_credits', { p_user_id: user.id, p_amount: 1 });
+                hasRefunded = true;
+            }
+
             const inputProps = {
                 headlineText: concept.headline,
                 subheadlineText: concept.subheadline,
                 ctaText: concept.cta,
                 productImageUrl:
                     product.images?.[product.heroImageIndex ?? 0] || "",
+                backgroundImageUrl: backgroundImageUrl || undefined,
                 colors: {
                     primary: inputData.accentColor || "#D4AF37",
                     secondary: "#1E1E2E",
@@ -285,7 +379,7 @@ export async function POST(req: NextRequest) {
                             codec: "h264",
                             framesPerLambda: 20,
                             webhook: webhookConfig,
-                            timeoutInMilliseconds: 240000,
+                            timeoutInMilliseconds: 600000,
                         });
 
                     console.log(`[AWS] Lambda returned for JobID: ${jobId} — renderId: ${renderId}, bucket: ${bucketName}`);
@@ -308,6 +402,16 @@ export async function POST(req: NextRequest) {
                 }
             } catch (err: unknown) {
                 console.error(`[CRITICAL ERROR] JobID: ${jobId} (Type: ${concept.type})`, err);
+
+                // --- CRITICAL SAFETY: Refund user if render fails (and wasn't already refunded by Fal.ai logic) ---
+                if (!hasRefunded) {
+                    console.warn(`[Queue] Remotion render failed for JobID ${jobId}, executing 1-Spark refund safety fallback`);
+                    try {
+                        await supabase.rpc('increment_credits', { p_user_id: user.id, p_amount: 1 });
+                    } catch (refundErr) {
+                        console.error(`[CRITICAL] Failed to process refund for JobID ${jobId}:`, refundErr);
+                    }
+                }
 
                 const message = err instanceof Error ? err.message : "Unknown Lambda error";
                 await withRetry(() =>

@@ -14,6 +14,7 @@ interface AdConcept {
     cta: string;
     colorMood: string;
     emphasis: string;
+    background_prompt: string;
     [key: string]: unknown;
 }
 

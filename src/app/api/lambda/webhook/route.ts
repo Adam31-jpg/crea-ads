@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
         // Note: metadata->>renderId is the JSONB operator to find it
         const { data: job, error: jobErr } = await supabaseAdmin
             .from("jobs")
-            .select("id, batch_id, metadata")
+            .select("id, batch_id, user_id, metadata")
             .eq("metadata->>renderId", renderId)
             .single();
 
@@ -123,20 +123,40 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            const { error: updateErr } = await supabaseAdmin
+            const { data: updatedJob, error: updateErr } = await supabaseAdmin
                 .from("jobs")
                 .update({
                     status: "failed",
                     error_message: errorMsg,
                     updated_at: new Date().toISOString(),
                 })
-                .eq("id", job.id);
+                .eq("id", job.id)
+                .neq("status", "failed")
+                .select("id")
+                .maybeSingle();
 
             if (updateErr) {
                 console.error(`[Webhook] Failed to mark Job ${job.id} as failed:`, updateErr);
                 return NextResponse.json({ error: "dbUpdateFailed" }, { status: 500 });
             }
-            console.log(`[Webhook] Job ${job.id} marked as failed. Reason: ${errorMsg}`);
+
+            if (updatedJob) {
+                console.log(`[Webhook] Job ${job.id} marked as failed. Reason: ${errorMsg}`);
+                // Refund 1 Spark automatically using RPC
+                if (job.user_id) {
+                    const { error: rpcErr } = await supabaseAdmin.rpc("increment_credits", {
+                        p_user_id: job.user_id,
+                        p_amount: 1
+                    });
+                    if (rpcErr) {
+                        console.error(`[Webhook] Failed to refund Spark for Job ${job.id}:`, rpcErr);
+                    } else {
+                        console.log(`[Webhook] Refunded 1 Spark to user ${job.user_id} for failed Job ${job.id}`);
+                    }
+                }
+            } else {
+                console.log(`[Webhook] Job ${job.id} was already marked as failed (likely by active polling).`);
+            }
         } else {
             console.warn(`[Webhook] Received unknown type for renderId: ${renderId}`, type);
         }

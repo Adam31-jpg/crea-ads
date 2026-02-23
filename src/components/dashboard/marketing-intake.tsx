@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -60,6 +60,7 @@ export interface AdConcept {
     colorMood: string;
     emphasis: string;
     logo_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right" | null;
+    background_prompt: string;
 }
 
 interface MarketingIntakeProps {
@@ -87,6 +88,7 @@ export function MarketingIntake({
     const [uploadingLogo, setUploadingLogo] = useState(false);
     const [loading, setLoading] = useState(false);
     const [concepts, setConcepts] = useState<AdConcept[] | null>(null);
+    const isSubmitting = useRef(false);
     const t = useTranslations("Dashboard.studio.intake");
     const supabase = createClient();
 

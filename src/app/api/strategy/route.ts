@@ -5,7 +5,7 @@ import { GENERATION_CONFIG } from "@/config/generation.config";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
 
-const getSystemPrompt = (targetLanguage: string) => `### ROLE
+const getSystemPrompt = (targetLanguage: string, aspectRatio: string = "9:16") => `### ROLE
 You are Lumina's Elite AI Creative Director — a hybrid of a world-class performance marketer and a technical art director. Your goal is to generate ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} high-converting ad concepts for Meta, TikTok, and Google Ads.
 
 ### CORE MISSION: "VALUE INFERENCE"
@@ -25,6 +25,14 @@ Each object MUST strictly follow this schema:
 - "emphasis": "product_detail" | "typography_heavy" | "balanced"
 - "layoutType": "converter" | "minimalist" (converter = text left & product right. minimalist = centered & minimal text)
 - "logo_position": string | null (You will receive a has_logo parameter. If true, select one from: 'top-left', 'top-right', 'bottom-left', 'bottom-right'. If false, return null.)
+- "background_prompt": string (Generate a highly descriptive background_prompt for image generation (Flux) that describes a commercial studio environment matching the product. REQUIRED: Must be a non-empty string. If unsure, generate a generic luxury studio background.)
+
+### LAYOUT GEOMETRY (Format: ${aspectRatio})
+1. PORTRAIT (9:16): Optimize for vertical scanning. Stack Headline, Subheadline, and CTA centrally. Set y-coordinates between 15% and 85%.
+2. LANDSCAPE (16:9): Optimize for horizontal split.
+   - If layoutType is 'converter': Place Product Mesh on the RIGHT (x > 50%) and Text/CTA on the LEFT (x < 50%).
+   - If layoutType is 'minimalist': Center elements but keep vertical margins at 10%.
+3. COORDINATES: Ensure all (x, y) coordinates stay within a 10% safety margin from edges.
 
 ### FRAMEWORKS & STRATEGY (Adapt and select from these hooks for your generated concepts)
 - "THE HOOK-POINT" (Stop the scroll). Focus on a massive problem or shocking benefit.
@@ -38,7 +46,9 @@ Each object MUST strictly follow this schema:
 3. CONVERSION FIRST: Headlines must use power words (Secret, Ultimate, Hack, Transform).
 4. VISUAL PRECISION: Specify lighting (e.g., "High-key studio lighting") and movement for videos.
 5. QUALITY OVERRIDE: If the user input is "bad", your output must be "excellent".
-6. LANGUAGE ENFORCEMENT: Generate all creative copy (Headlines, Subheadlines, CTAs) strictly in the requested target language: ${targetLanguage}. Use high-converting, native-level marketing vocabulary in that language.`;
+6. LANGUAGE ENFORCEMENT: Generate all creative copy (Headlines, Subheadlines, CTAs) strictly in the requested target language: ${targetLanguage}. Use high-converting, native-level marketing vocabulary in that language.
+7. BACKGROUND PROMPT: You MUST generate a valid 'background_prompt' for every concept. It CANNOT be null or empty.
+   - CRITICAL FALLBACK: If you cannot determine a specific background, use exactly: "luxury studio background, soft lighting, 8k, photorealistic, neutral colors".`;
 
 export async function POST(req: NextRequest) {
     // Auth
@@ -57,7 +67,7 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    const { productDescription, usps, targetAudience, logoUrl, targetLanguage = "Français" } = await req.json();
+    const { productDescription, usps, targetAudience, logoUrl, targetLanguage = "Français", aspectRatio = "9:16" } = await req.json();
 
     if (!productDescription || !usps || !targetAudience) {
         return NextResponse.json(
@@ -104,15 +114,16 @@ Generate ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} ad concepts as a JSON array.
         // 1. The Brain (Strategic Intelligence)
         try {
             const response = await ai.models.generateContent({
-                model: "gemini-3-pro-preview",
+                model: GENERATION_CONFIG.AI_MODELS.STRATEGY,
                 contents: userPrompt,
                 config: {
-                    systemInstruction: getSystemPrompt(targetLanguage),
+                    systemInstruction: getSystemPrompt(targetLanguage, aspectRatio),
                     temperature: 0.8,
                     maxOutputTokens: 8192,
                 },
             });
             text = response.text ?? "";
+            if (!text) throw new Error("Empty response from Pro model");
         } catch (proErr) {
             console.warn("[Strategy API] Pro model failed, falling back to Flash", proErr);
             // Fallback to Flash if Pro is unavailable
@@ -120,13 +131,15 @@ Generate ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} ad concepts as a JSON array.
                 model: "gemini-3-flash-preview",
                 contents: userPrompt,
                 config: {
-                    systemInstruction: getSystemPrompt(targetLanguage),
+                    systemInstruction: getSystemPrompt(targetLanguage, aspectRatio),
                     temperature: 0.8,
                     maxOutputTokens: 8192,
                 },
             });
             text = fallbackResponse.text ?? "";
         }
+
+        console.log("[Strategy API] Raw Gemini response:", text);
 
         // Clean any potential markdown from the response
         let cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();

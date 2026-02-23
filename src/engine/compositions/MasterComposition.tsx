@@ -1,5 +1,5 @@
 import React from 'react';
-import { AbsoluteFill, useVideoConfig } from 'remotion';
+import { AbsoluteFill, useVideoConfig, Img } from 'remotion';
 import { z } from 'zod';
 import { CameraMotionBlur } from '@remotion/motion-blur';
 import { HeroObject } from './HeroObject';
@@ -58,9 +58,7 @@ export const MasterComposition: React.FC<Props> = (props) => {
 
     const backgroundStyle: React.CSSProperties = {
         backgroundColor: colors.background,
-        background: props.backgroundImageUrl ? `url(${props.backgroundImageUrl})` : `linear-gradient(to bottom, ${colors.background}, ${colors.secondary})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
+        background: props.backgroundImageUrl ? undefined : `linear-gradient(to bottom, ${colors.background}, ${colors.secondary})`,
     };
 
     // Helper to wrap content in MotionBlur or Fragment
@@ -86,10 +84,21 @@ export const MasterComposition: React.FC<Props> = (props) => {
 
                     <AbsoluteFill style={backgroundStyle}>
 
+                        {/* Layer 0: Background Image Component */}
+                        {props.backgroundImageUrl && (
+                            <Img
+                                src={props.backgroundImageUrl}
+                                className="absolute inset-0 w-full h-full object-cover"
+                                crossOrigin="anonymous"
+                            />
+                        )}
+
                         {/* Layer 1: 3D Hero Object */}
                         <AbsoluteFill style={{
                             transform: `scale(${beatScale})`,
-                            left: layout.layoutType === 'converter' ? '25%' : '0%',
+                            left: layout.layoutType === 'converter' 
+                                ? (layout.aspectRatio === '16:9' ? '30%' : '20%') 
+                                : '0%',
                         }}>
                             <HeroObject imageUrl={productImageUrl} zoom={camera.zoomStart} color={colors.accent} />
                         </AbsoluteFill>
@@ -181,12 +190,12 @@ export const MasterComposition: React.FC<Props> = (props) => {
                                     )}
                                 </div>
                             )}
-                        </SafeZone>
 
-                        {/* Layer 3: Brand Logo */}
-                        {logoUrl && logoPosition && (
-                            <BrandLogo src={logoUrl} position={logoPosition} />
-                        )}
+                            {/* Layer 3: Brand Logo - Now inside SafeZone */}
+                            {logoUrl && logoPosition && (
+                                <BrandLogo src={logoUrl} position={logoPosition} />
+                            )}
+                        </SafeZone>
 
                     </AbsoluteFill>
                 </TransitionLayer>
