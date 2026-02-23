@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import {
     AbsoluteFill,
     useCurrentFrame,
     useVideoConfig,
     interpolate,
     Easing,
+    delayRender,
+    continueRender,
 } from 'remotion';
 import { ThreeCanvas } from '@remotion/three';
-import { useLoader } from '@react-three/fiber';
+import { useLoader, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
 interface HeroObjectProps {
@@ -19,49 +21,31 @@ interface HeroObjectProps {
 }
 
 // ─── Animation constants ──────────────────────────────────────────────────────
-// 3 complete float oscillations across the full video duration.
 const FLOAT_CYCLES = 3;
 
-// ─── DebugProbe ───────────────────────────────────────────────────────────────
-// A small always-visible bright red cube positioned above the product.
-// PURPOSE: Proves the 3D canvas is painting at all.
-//   • If this cube IS visible in the render → the Canvas and WebGL are working.
-//     The product itself is the problem (texture CORS / URL issue).
-//   • If this cube is NOT visible → the entire <ThreeCanvas> layer is hidden
-//     (z-index, opacity, or CSS occlusion).
-// REMOVE this component once the root cause is confirmed.
-const DebugProbe: React.FC<{ xOffset: number }> = ({ xOffset }) => (
-    <mesh position={[xOffset, 4.2, 0]}>
-        <boxGeometry args={[0.5, 0.5, 0.5]} />
-        {/* meshBasicMaterial is unaffected by scene lighting — always full-brightness red */}
-        <meshBasicMaterial color="#FF0000" />
-    </mesh>
-);
-
-// ─── DebugCube ────────────────────────────────────────────────────────────────
-// A large red slab that occupies the same screen area as the product mesh.
-// Rendered in place of the product when:
-//   (a) The texture is still loading  — shown by the local <React.Suspense> fallback
-//   (b) useLoader throws an error     — shown by TextureErrorBoundary
-// Together with DebugProbe it gives a clear two-signal diagnostic:
-//   • Red probe only              → texture loaded but product mesh invisible
-//   • Red probe + DebugCube       → texture failed or is still loading
-//   • Neither visible             → the 3D canvas is occluded entirely
-const DebugCube: React.FC<{ xOffset: number }> = ({ xOffset }) => (
-    <mesh position={[xOffset, 0, 0]}>
-        <boxGeometry args={[3.5, 5, 0.3]} />
-        <meshBasicMaterial color="#FF0000" />
-    </mesh>
-);
+// ─── OnReadyEffect ────────────────────────────────────────────────────────────
+// A zero-geometry R3F node whose only job is to fire onReady() once on mount.
+// Used as the terminal node in every scene branch so that continueRender is
+// always called exactly once regardless of which path was taken:
+//   • texture loaded successfully  → ProductMesh mounts → fires onReady
+//   • texture CORS / 404 error     → ErrorBoundary fallback mounts → fires onReady
+//   • imageUrl was invalid         → renders OnReadyEffect directly → fires onReady
+const OnReadyEffect: React.FC<{ onReady: () => void }> = ({ onReady }) => {
+    useEffect(() => {
+        onReady();
+    }, [onReady]);
+    return null;
+};
 
 // ─── TextureErrorBoundary ─────────────────────────────────────────────────────
-// Catches errors thrown by useLoader (CORS failures, 404s, etc.).
+// Catches errors thrown by useLoader (CORS failures, 404s, network timeouts).
 // Must live INSIDE Canvas so it can render R3F primitives in its fallback.
+// Accepts onReady so it can release the Remotion delayRender gate even on error.
 class TextureErrorBoundary extends React.Component<
-    { children: React.ReactNode; xOffset: number },
+    { children: React.ReactNode; onReady: () => void },
     { hasError: boolean }
 > {
-    constructor(props: { children: React.ReactNode; xOffset: number }) {
+    constructor(props: { children: React.ReactNode; onReady: () => void }) {
         super(props);
         this.state = { hasError: false };
     }
@@ -69,29 +53,39 @@ class TextureErrorBoundary extends React.Component<
         return { hasError: true };
     }
     componentDidCatch(error: Error) {
-        console.error('[HeroObject] Texture load FAILED (CORS/404) — showing DebugCube:', error.message);
+        console.error('[HeroObject] Texture load failed (CORS / 404):', error.message);
     }
     render() {
         if (this.state.hasError) {
-            return <DebugCube xOffset={this.props.xOffset} />;
+            // Nothing visible rendered — product slot is empty on error.
+            // OnReadyEffect still fires so the render gate is released.
+            return <OnReadyEffect onReady={this.props.onReady} />;
         }
         return this.props.children;
     }
 }
 
 // ─── ProductMesh ──────────────────────────────────────────────────────────────
-// Contains useLoader: suspends (throws Promise) until texture is cached.
-// Lives inside a local React.Suspense so the suspension is caught HERE, not
-// by ThreeCanvas's outer SuspenseLoader. This lets lights and DebugProbe render
-// immediately while ProductMesh is still waiting for the network.
+// Contains useLoader which suspends (throws a Promise) until the texture is
+// cached by Three.js. The component can only mount AFTER the texture resolves,
+// making useEffect a reliable post-load signal.
 interface ProductMeshProps {
     imageUrl: string;
     zoom: number;
     xOffset: number;
     floatY: number;
     rotationY: number;
+    onReady: () => void;
 }
-const ProductMesh: React.FC<ProductMeshProps> = ({ imageUrl, zoom, xOffset, floatY, rotationY }) => {
+
+const ProductMesh: React.FC<ProductMeshProps> = ({
+    imageUrl,
+    zoom,
+    xOffset,
+    floatY,
+    rotationY,
+    onReady,
+}) => {
     const texture = useLoader(THREE.TextureLoader, imageUrl, (loader) => {
         (loader as THREE.TextureLoader).setCrossOrigin('anonymous');
     }) as THREE.Texture;
@@ -103,6 +97,19 @@ const ProductMesh: React.FC<ProductMeshProps> = ({ imageUrl, zoom, xOffset, floa
     const imageAspect = img?.width && img?.height ? img.width / img.height : 1;
     const planeWidth  = 5 * imageAspect;
     const planeHeight = 5;
+
+    // `advance` drives R3F's demand-mode render loop. ThreeCanvas renders one
+    // empty frame during canvas creation (its own delayRender pass), then idles.
+    // When ProductMesh mounts the texture is loaded but the GL buffer still shows
+    // that empty first frame. Calling advance() here forces a second render pass
+    // that writes the textured product into the WebGL buffer *before* we call
+    // onReady() — ensuring Puppeteer screenshots the correct, fully-painted frame.
+    const { advance } = useThree();
+
+    useEffect(() => {
+        advance(performance.now()); // flush texture → GL buffer
+        onReady();                  // release Remotion's screenshot gate
+    }, [onReady, advance]);
 
     return (
         <>
@@ -118,7 +125,7 @@ const ProductMesh: React.FC<ProductMeshProps> = ({ imageUrl, zoom, xOffset, floa
                 </mesh>
             </group>
 
-            {/* Shadow catcher — grounded beneath the product */}
+            {/* Shadow catcher grounded beneath the product */}
             <mesh position={[xOffset, -3.1, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
                 <planeGeometry args={[20, 20]} />
                 <shadowMaterial opacity={0.3} transparent />
@@ -128,26 +135,29 @@ const ProductMesh: React.FC<ProductMeshProps> = ({ imageUrl, zoom, xOffset, floa
 };
 
 // ─── HeroScene ────────────────────────────────────────────────────────────────
-// Orchestrates the 3D scene. Lights and DebugProbe live OUTSIDE the Suspense
-// boundary so they always render regardless of texture state.
+// Orchestrates the 3D scene. Lights live outside the Suspense boundary so
+// they are always present regardless of texture state.
 //
-// Suspense hierarchy:
-//   ThreeCanvas (outer SuspenseLoader — handles canvas creation delayRender)
-//     └─ HeroScene
-//          ├─ lights               ← always on
-//          ├─ DebugProbe           ← always visible (diagnostic — remove for production)
-//          └─ [imageUrl valid?]
-//               YES → React.Suspense (local boundary for texture loading)
-//                       ├─ fallback: DebugCube   ← shown while texture is loading
-//                       └─ TextureErrorBoundary
-//                            └─ ProductMesh      ← shown once texture is ready
-//               NO  → DebugCube directly          ← URL was bad, signals the root cause
-const HeroScene: React.FC<HeroObjectProps> = ({
+// Rendering paths:
+//   imageUrl valid
+//     └─ React.Suspense (local — intercepts useLoader's thrown Promise)
+//          ├─ fallback: null (product slot empty while texture loads)
+//          └─ TextureErrorBoundary
+//               ├─ error: OnReadyEffect (releases gate, empty product slot)
+//               └─ ProductMesh (texture ready → fires onReady via useEffect)
+//   imageUrl invalid
+//     └─ OnReadyEffect (releases gate immediately, empty product slot)
+interface HeroSceneProps extends HeroObjectProps {
+    onTextureReady: () => void;
+}
+
+const HeroScene: React.FC<HeroSceneProps> = ({
     imageUrl,
     zoom = 1,
     color = '#ffffff',
     layoutType = 'converter',
     aspectRatio = '9:16',
+    onTextureReady,
 }) => {
     const frame = useCurrentFrame();
     const { durationInFrames } = useVideoConfig();
@@ -166,9 +176,8 @@ const HeroScene: React.FC<HeroObjectProps> = ({
             ? aspectRatio === '16:9' ? 3 : 2
             : 0;
 
-    // A URL is valid only if it's a non-empty string that doesn't contain the
-    // literal text "undefined", which indicates a broken upload path like
-    // "https://…/storage/…/undefined/filename.jpg".
+    // Guard against broken Supabase storage paths that contain the literal
+    // text "undefined" (e.g. "…/product-assets/undefined/filename.jpg").
     const hasValidImageUrl =
         typeof imageUrl === 'string' &&
         imageUrl.trim() !== '' &&
@@ -176,11 +185,6 @@ const HeroScene: React.FC<HeroObjectProps> = ({
 
     return (
         <>
-            {/*
-             * ─── Lighting ────────────────────────────────────────────────────
-             * Defined outside the Suspense boundary so they are always present.
-             * DebugCube / ProductMesh are both lit by these lights.
-             */}
             <ambientLight intensity={2.0} />
             <directionalLight position={[5, 10, 5]}  intensity={4.0} castShadow />
             <directionalLight position={[-5, 5, 2]}  intensity={2.0} />
@@ -192,61 +196,54 @@ const HeroScene: React.FC<HeroObjectProps> = ({
                 color={color}
             />
 
-            {/*
-             * DebugProbe — tiny always-visible red cube above the product.
-             * DIAGNOSTIC: if this is visible → ThreeCanvas is painting.
-             *             if this is NOT visible → the canvas layer is occluded.
-             * Remove once root cause confirmed.
-             */}
-            <DebugProbe xOffset={xOffset} />
-
             {hasValidImageUrl ? (
-                /*
-                 * Normal path — local Suspense intercepts useLoader's Promise.
-                 * While texture loads: DebugCube shows (loading signal).
-                 * On CORS/404 error: TextureErrorBoundary shows DebugCube (error signal).
-                 * On success: ProductMesh shows the actual product.
-                 */
-                <React.Suspense fallback={<DebugCube xOffset={xOffset} />}>
-                    <TextureErrorBoundary xOffset={xOffset}>
+                <React.Suspense fallback={null}>
+                    <TextureErrorBoundary onReady={onTextureReady}>
                         <ProductMesh
                             imageUrl={imageUrl}
                             zoom={zoom}
                             xOffset={xOffset}
                             floatY={floatY}
                             rotationY={rotationY}
+                            onReady={onTextureReady}
                         />
                     </TextureErrorBoundary>
                 </React.Suspense>
             ) : (
-                /*
-                 * Bad URL path — skip ProductMesh entirely (do NOT call useLoader
-                 * with an invalid URL; it would produce a confusing R3F error).
-                 * DebugCube in the product slot signals the broken URL upstream.
-                 */
-                <DebugCube xOffset={xOffset} />
+                // URL is invalid — release the delay gate immediately so the
+                // render does not hang. Product slot will be empty.
+                <OnReadyEffect onReady={onTextureReady} />
             )}
         </>
     );
 };
 
 // ─── HeroObject ───────────────────────────────────────────────────────────────
-// NEVER returns null. Even with a bad imageUrl the ThreeCanvas always mounts
-// so the DebugProbe is always visible — confirming the 3D layer is active.
+// Top-level wrapper that owns the Remotion delayRender gate.
+//
+// Why useMemo for delayRender?
+//   delayRender must be called synchronously during component initialisation —
+//   before ThreeCanvas or any child renders. useMemo with [] runs exactly once,
+//   at the moment the component is first evaluated, satisfying that constraint.
+//   A useState initialiser would also work but introduces an unnecessary setter.
+//
+// Why a separate gate rather than relying on ThreeCanvas's internal one?
+//   ThreeCanvas's internal delayRender is released after state.advance() (canvas
+//   creation + one render pass). That happens before the texture is loaded via
+//   useLoader. Our gate is released only after ProductMesh mounts, guaranteeing
+//   the texture is in the WebGL buffer when Puppeteer takes the screenshot.
 export const HeroObject: React.FC<HeroObjectProps> = (props) => {
     const { width, height } = useVideoConfig();
 
-    const urlIsValid =
-        typeof props.imageUrl === 'string' &&
-        props.imageUrl.trim() !== '' &&
-        !props.imageUrl.includes('undefined');
+    const handle = useMemo(
+        () => delayRender('Waiting for product texture to load'),
+        []
+    );
 
-    if (!urlIsValid) {
-        console.error(
-            '[HeroObject] Invalid/empty imageUrl received — 3D canvas will render debug geometry only:',
-            props.imageUrl
-        );
-    }
+    const onTextureReady = useCallback(
+        () => continueRender(handle),
+        [handle]
+    );
 
     return (
         <AbsoluteFill>
@@ -259,8 +256,7 @@ export const HeroObject: React.FC<HeroObjectProps> = (props) => {
                 orthographic={false}
                 camera={{ position: [0, 0, 12], fov: 50 }}
             >
-                {/* HeroScene checks its own urlIsValid — no need to short-circuit here */}
-                <HeroScene {...props} />
+                <HeroScene {...props} onTextureReady={onTextureReady} />
             </ThreeCanvas>
         </AbsoluteFill>
     );

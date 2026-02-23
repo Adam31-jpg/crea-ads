@@ -246,13 +246,18 @@ function buildFalPrompt(
  * This helper intercepts that case before it reaches Remotion.
  */
 function sanitiseProductUrl(rawUrl: string | undefined | null): string {
-    if (
-        !rawUrl ||
-        rawUrl.trim() === '' ||
-        rawUrl.includes('undefined') ||
-        rawUrl.includes('null')
-    ) {
-        console.warn('[Render] Invalid product image URL — using fallback placeholder:', rawUrl);
+    if (!rawUrl || rawUrl.trim() === '') {
+        console.warn('[Render] Empty product image URL — using fallback placeholder.');
+        return PRODUCT_IMAGE_FALLBACK;
+    }
+    // Reject Supabase storage URLs where a path *segment* is literally "undefined"
+    // or "null" (e.g. ".../product-assets/undefined/filename.jpg") while allowing
+    // brand slugs that legitimately contain those substrings (e.g. "annulled",
+    // "thumbnail", "nullify-brand", etc.).
+    // The regex matches the word only when bounded by a slash, ?, &, = or string end.
+    const BROKEN_SEGMENT = /(?:^|\/)(?:undefined|null)(?:\/|$)/i;
+    if (BROKEN_SEGMENT.test(rawUrl)) {
+        console.warn('[Render] Broken path segment in product image URL — using fallback placeholder:', rawUrl);
         return PRODUCT_IMAGE_FALLBACK;
     }
     return rawUrl;
