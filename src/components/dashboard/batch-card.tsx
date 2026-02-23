@@ -469,8 +469,19 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
     };
 
     // Preview aspect ratio
-    const aspectRatio = (batch.input_data?.aspectRatio as string) || "9:16";
-    const ratioValue = aspectRatio.replace(":", "/");
+    // input_data stores the raw format string (e.g. "1080x1920"), not an "aspectRatio" key.
+    // Reading the wrong field made ratioValue always fall back to "9/16" regardless of format.
+    const FORMAT_TO_CSS_RATIO: Record<string, string> = {
+        "1080x1920": "9/16",
+        "1920x1080": "16/9",
+        "1080x1080": "1/1",
+        "1080x1350": "4/5",
+    };
+    const format = (batch.input_data?.format as string) || "1080x1920";
+    const ratioValue = FORMAT_TO_CSS_RATIO[format] ?? "9/16";
+    // Used to narrow the preview dialog for portrait orientations so the modal
+    // doesn't become taller than the viewport.
+    const isPortrait = ratioValue === "9/16" || ratioValue === "4/5";
 
     return (
         <>
@@ -691,7 +702,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                 open={!!previewAsset}
                 onOpenChange={() => setPreviewAsset(null)}
             >
-                <DialogContent className="sm:max-w-2xl">
+                <DialogContent className={isPortrait ? "sm:max-w-sm" : "sm:max-w-2xl"}>
                     <DialogHeader>
                         <DialogTitle>{batch.project_name}</DialogTitle>
                         <DialogDescription>

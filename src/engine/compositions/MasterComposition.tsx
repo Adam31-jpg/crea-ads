@@ -85,25 +85,44 @@ export const MasterComposition: React.FC<Props> = (props) => {
                     <AbsoluteFill style={backgroundStyle}>
 
                         {/* Layer 0: Background Image Component */}
+                        {/* CRITICAL — use explicit 4-sided pinning (top/right/bottom/left: 0) with
+                            NO width/height. Combining `inset: 0` with `width: 100%; height: 100%`
+                            is overconstrained for position:absolute. The CSS spec resolves conflicts
+                            by dropping `bottom` and using `height: 100%` against the containing-block
+                            content-area, which in headless Chromium can return ~50% of the intended
+                            height — producing the "top-half image, bottom-half dark" split.
+                            Using only the 4 edge pins lets the browser derive size without conflict.
+                            Tailwind classes are intentionally absent: they are not guaranteed to be
+                            present in Remotion Lambda's stripped CSS bundle. */}
                         {props.backgroundImageUrl && (
                             <Img
                                 src={props.backgroundImageUrl}
-                                className="absolute inset-0 w-full h-full object-cover"
                                 crossOrigin="anonymous"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    objectFit: 'cover',
+                                    zIndex: 0,
+                                }}
                             />
                         )}
 
-                        {/* Layer 1: 3D Hero Object */}
-                        <AbsoluteFill style={{
-                            transform: `scale(${beatScale})`,
-                            left: layout.layoutType === 'converter' 
-                                ? (layout.aspectRatio === '16:9' ? '30%' : '20%') 
-                                : '0%',
-                        }}>
-                            <HeroObject imageUrl={productImageUrl} zoom={camera.zoomStart} color={colors.accent} />
+                        {/* Layer 1: 3D Hero Object — explicit zIndex: 10 sits above the background */}
+                        <AbsoluteFill style={{ transform: `scale(${beatScale})`, zIndex: 10 }}>
+                            <HeroObject
+                                imageUrl={productImageUrl}
+                                zoom={camera.zoomStart}
+                                color={colors.accent}
+                                layoutType={layout.layoutType}
+                                aspectRatio={layout.aspectRatio}
+                            />
                         </AbsoluteFill>
 
-                        {/* Layer 2: Safe Zone & UI Content */}
+                        {/* Layer 2: Safe Zone & UI Content — zIndex: 20 sits above the 3D canvas */}
+                        <div style={{ position: 'absolute', inset: 0, zIndex: 20 }}>
                         <SafeZone aspectRatio={layout.aspectRatio}>
                             {props.elements && props.elements.length > 0 ? (
                                 props.elements.map(el => {
@@ -196,6 +215,7 @@ export const MasterComposition: React.FC<Props> = (props) => {
                                 <BrandLogo src={logoUrl} position={logoPosition} />
                             )}
                         </SafeZone>
+                        </div>
 
                     </AbsoluteFill>
                 </TransitionLayer>

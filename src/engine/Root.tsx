@@ -39,11 +39,23 @@ const verticalProps = resolveDesign(luxuryIntent, {
 export const RemotionRoot: React.FC = () => {
     return (
         <>
-            {/* Scenario A: Luxury Minimal (1:1) */}
+            {/* ── 9:16 Portrait (1080 × 1920) — most common social format ── */}
             <Composition
-                id="LuxuryPreview"
+                id="LuxuryPreview-9-16"
                 component={MasterComposition}
-                durationInFrames={150}
+                durationInFrames={180}
+                fps={30}
+                width={1080}
+                height={1920}
+                schema={RemotionPropsSchema}
+                defaultProps={verticalProps}
+            />
+
+            {/* ── 1:1 Square (1080 × 1080) ── */}
+            <Composition
+                id="LuxuryPreview-1-1"
+                component={MasterComposition}
+                durationInFrames={180}
                 fps={30}
                 width={1080}
                 height={1080}
@@ -51,11 +63,47 @@ export const RemotionRoot: React.FC = () => {
                 defaultProps={luxuryProps}
             />
 
-            {/* Scenario B: Vertical Layout (9:16) */}
+            {/* ── 16:9 Landscape (1920 × 1080) ── */}
+            <Composition
+                id="LuxuryPreview-16-9"
+                component={MasterComposition}
+                durationInFrames={180}
+                fps={30}
+                width={1920}
+                height={1080}
+                schema={RemotionPropsSchema}
+                defaultProps={luxuryProps}
+            />
+
+            {/* ── 4:5 Portrait (1080 × 1350) — Instagram feed ── */}
+            <Composition
+                id="LuxuryPreview-4-5"
+                component={MasterComposition}
+                durationInFrames={180}
+                fps={30}
+                width={1080}
+                height={1350}
+                schema={RemotionPropsSchema}
+                defaultProps={verticalProps}
+            />
+
+            {/* ── Legacy alias — kept so any previously stored template_id still resolves ── */}
+            <Composition
+                id="LuxuryPreview"
+                component={MasterComposition}
+                durationInFrames={180}
+                fps={30}
+                width={1080}
+                height={1920}
+                schema={RemotionPropsSchema}
+                defaultProps={verticalProps}
+            />
+
+            {/* ── Local dev vertical preview (alias) ── */}
             <Composition
                 id="VerticalPreview"
                 component={MasterComposition}
-                durationInFrames={150}
+                durationInFrames={180}
                 fps={30}
                 width={1080}
                 height={1920}

@@ -11,17 +11,21 @@ interface BrandLogoProps {
 export const BrandLogo: React.FC<BrandLogoProps> = ({ src, position }) => {
     if (!src || !position) return null;
 
-    // Intelligent Scaling constraints (Max 15%) & Safe Zone (5%)
+    // All sizing and positioning values are CSS percentages, relative to
+    // the SafeZone container.  Because SafeZone now derives its dimensions
+    // from SAFE_AREA_FRACTIONS × actual render resolution, these % values
+    // scale correctly at 720p, 1080p, 4K, or any other resolution without
+    // any changes here.
     const style: React.CSSProperties = {
         position: "absolute",
-        maxWidth: "15%",
-        maxHeight: "15%",
+        maxWidth: "15%",   // max 15% of SafeZone width
+        maxHeight: "15%",  // max 15% of SafeZone height
         objectFit: "contain",
         filter: "drop-shadow(0px 4px 10px rgba(0,0,0,0.5))",
-        zIndex: 50, // ensures it floats above product/hero objects
+        zIndex: 50,
     };
 
-    // Apply exact positioning logic with a 5% safe zone margin
+    // 5% inset from each SafeZone edge — resolution-independent by inheritance.
     switch (position) {
         case "top-left":
             style.top = "5%";
