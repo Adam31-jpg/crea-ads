@@ -6,6 +6,46 @@ const REGION = (process.env.REMOTION_AWS_REGION || "us-east-1") as "us-east-1";
 const FUNCTION_NAME = process.env.REMOTION_FUNCTION_NAME!;
 
 /**
+ * Wraps getRenderProgress with exponential backoff to survive AWS Lambda
+ * GetFunction throttling (TooManyRequestsException / 429).
+ * Retries up to 3 times: 0 ms → 2 s → 4 s, then gives up and re-throws.
+ */
+async function getRenderProgressWithBackoff(
+    args: Parameters<typeof getRenderProgress>[0]
+): ReturnType<typeof getRenderProgress> {
+    const MAX_ATTEMPTS = 3;
+    const BASE_DELAY_MS = 2_000;
+
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        try {
+            return await getRenderProgress(args);
+        } catch (err: unknown) {
+            lastErr = err;
+            const msg = err instanceof Error ? err.message : String(err);
+            const isThrottled =
+                msg.includes("Rate Exceeded") ||
+                msg.includes("TooManyRequestsException") ||
+                msg.includes("Throttling") ||
+                msg.includes("429") ||
+                msg.includes("no payload");
+
+            if (!isThrottled) throw err; // Non-throttle errors fail immediately
+
+            if (attempt < MAX_ATTEMPTS - 1) {
+                const delay = BASE_DELAY_MS * Math.pow(2, attempt); // 2s, 4s
+                console.warn(
+                    `[Status] AWS throttled (attempt ${attempt + 1}/${MAX_ATTEMPTS}). ` +
+                    `Backing off ${delay}ms before retry...`
+                );
+                await new Promise((r) => setTimeout(r, delay));
+            }
+        }
+    }
+    throw lastErr;
+}
+
+/**
  * After marking a single job as done or failed, check if ALL jobs for the
  * same batch are now terminal.  If so, update the batch status once.
  */
@@ -96,7 +136,7 @@ export async function GET(req: NextRequest) {
 
     try {
         console.log(`[Status] EXACT ARGS -> renderId: "${renderId}", bucketName: "${bucketName}", functionName: "${jobFunctionName}", region: "${REGION}"`);
-        const progress = await getRenderProgress({
+        const progress = await getRenderProgressWithBackoff({
             renderId,
             bucketName,
             functionName: jobFunctionName,

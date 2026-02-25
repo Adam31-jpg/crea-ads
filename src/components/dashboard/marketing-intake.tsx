@@ -69,6 +69,12 @@ interface MarketingIntakeProps {
     initialMarketingPrompt?: { productDescription: string; usps: string[]; targetAudience: string; } | null;
     initialStrategy?: AdConcept[] | null;
     initialTargetLanguage?: string;
+    /** Selected theme from Step 1 — forwarded to strategy API so Gemini writes
+     *  prompts inside the correct aesthetic world from the very first call. */
+    theme?: string;
+    /** Brand accent color from Step 1 — forwarded so Gemini can curate it
+     *  for adaptive_text_color before the user even sees the strategy. */
+    accentColor?: string;
     onStrategyReady: (concepts: AdConcept[], logoUrl: string | null, targetLanguage: string, marketingPrompt: { productDescription: string; usps: string[]; targetAudience: string; }, isStrategyReused: boolean) => void;
 }
 
@@ -78,6 +84,8 @@ export function MarketingIntake({
     initialMarketingPrompt,
     initialStrategy,
     initialTargetLanguage,
+    theme,
+    accentColor,
     onStrategyReady,
 }: MarketingIntakeProps) {
     const [productDescription, setProductDescription] = useState(initialMarketingPrompt?.productDescription || "");
@@ -168,7 +176,18 @@ export function MarketingIntake({
             const res = await fetch("/api/strategy", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ productDescription, usps, targetAudience, logoUrl, targetLanguage }),
+                body: JSON.stringify({
+                    productDescription,
+                    usps,
+                    targetAudience,
+                    logoUrl,
+                    targetLanguage,
+                    // Theme and accentColor are locked in Step 1 before this modal opens.
+                    // Passing them here ensures Gemini's system prompt is theme-aware
+                    // and background_prompts are written inside the correct aesthetic world.
+                    theme:       theme       ?? "luxe-sombre",
+                    accentColor: accentColor ?? "#F59E0B",
+                }),
             });
 
             const data = await res.json();

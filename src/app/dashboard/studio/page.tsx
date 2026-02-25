@@ -34,13 +34,17 @@ import {
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-type Step = "product" | "strategy" | "style" | "output";
+// Step sequence: product → style → strategy → output
+// Critical: theme is locked in step 2 (style) BEFORE the MarketingIntake
+// modal opens. When the user clicks "Next" on the style step the modal fires
+// immediately so Gemini receives the activeTheme in its first call.
+type Step = "product" | "style" | "strategy" | "output";
 
 const getSteps = (t: any): { key: Step; label: string; icon: string }[] => [
-    { key: "product", label: t("steps.product"), icon: "1" },
+    { key: "product",  label: t("steps.product"),  icon: "1"  },
+    { key: "style",    label: t("steps.style"),    icon: "2"  },
     { key: "strategy", label: t("steps.strategy"), icon: "✨" },
-    { key: "style", label: t("steps.style"), icon: "2" },
-    { key: "output", label: t("steps.output"), icon: "3" },
+    { key: "output",   label: t("steps.output"),   icon: "3"  },
 ];
 
 const getFormatOptions = (t: any) => [
@@ -225,12 +229,12 @@ export default function StudioPage() {
         }
     };
 
-    // Validation
+    // Validation — gates the "Next" button per step
     const canProceed: Record<Step, boolean> = {
-        product: form.productName.length > 0 && form.tagline.length > 0,
-        strategy: strategy !== null && strategy.length === 10,
-        style: true,
-        output: true,
+        product:  form.productName.length > 0 && form.tagline.length > 0,
+        style:    true, // theme always has a default; no blocking required
+        strategy: strategy !== null,
+        output:   true,
     };
 
     return (
@@ -267,6 +271,8 @@ export default function StudioPage() {
             {/* Step Content */}
             <Card>
                 <CardContent className="pt-6 flex flex-col gap-5">
+
+                    {/* ── Step 1: Product Information ─────────────────────────── */}
                     {currentStep === "product" && (
                         <>
                             <CardTitle className="mb-1">{t("form.productInfo")}</CardTitle>
@@ -317,13 +323,11 @@ export default function StudioPage() {
                         </>
                     )}
 
-                    {currentStep === "strategy" && (
-                        <StrategyPreview
-                            strategy={strategy}
-                            setIntakeOpen={setIntakeOpen}
-                        />
-                    )}
-
+                    {/* ── Step 2: Style & Thème ────────────────────────────────
+                         Theme is locked HERE before any Gemini call.
+                         The "Next" button on this step opens MarketingIntake
+                         immediately, passing form.theme + form.accentColor so
+                         the strategy API receives the correct activeTheme.      */}
                     {currentStep === "style" && (
                         <ThemeSelector
                             theme={form.theme}
@@ -334,6 +338,15 @@ export default function StudioPage() {
                         />
                     )}
 
+                    {/* ── Step 3: Stratégie IA ─────────────────────────────── */}
+                    {currentStep === "strategy" && (
+                        <StrategyPreview
+                            strategy={strategy}
+                            setIntakeOpen={setIntakeOpen}
+                        />
+                    )}
+
+                    {/* ── Step 4: Output Settings ───────────────────────────── */}
                     {currentStep === "output" && (
                         <>
                             <CardTitle className="mb-1">{t("form.outputSettings")}</CardTitle>
@@ -406,6 +419,17 @@ export default function StudioPage() {
                 {currentStep !== "output" ? (
                     <Button
                         onClick={() => {
+                            if (currentStep === "style") {
+                                // Theme is now locked — open the intake modal so Gemini
+                                // receives form.theme as activeTheme on the very first call.
+                                // We advance to the strategy step at the same time so
+                                // closing the modal without generating lands on the correct
+                                // step (user can still use the "Modifier la stratégie" CTA
+                                // inside StrategyPreview to re-open the modal).
+                                setCurrentStep("strategy");
+                                setIntakeOpen(true);
+                                return;
+                            }
                             const idx = steps.findIndex(
                                 (s) => s.key === currentStep
                             );
@@ -413,8 +437,16 @@ export default function StudioPage() {
                                 setCurrentStep(steps[idx + 1].key);
                         }}
                         disabled={!canProceed[currentStep]}
+                        className={currentStep === "style" ? "gap-2" : ""}
                     >
-                        {t("buttons.next")}
+                        {currentStep === "style" ? (
+                            <>
+                                <Sparkles className="h-4 w-4" />
+                                {t("buttons.next") || "Générer la stratégie IA"}
+                            </>
+                        ) : (
+                            t("buttons.next")
+                        )}
                     </Button>
                 ) : (
                     <Button onClick={handleSubmit} disabled={loading || !strategy} className="gap-2">
@@ -439,13 +471,16 @@ export default function StudioPage() {
                 )}
             </div>
 
-            {/* Marketing Intake Modal */}
+            {/* Marketing Intake Modal — receives theme + accentColor so the
+                strategy API call includes them in the Gemini payload */}
             <MarketingIntake
                 open={intakeOpen}
                 onOpenChange={setIntakeOpen}
                 initialMarketingPrompt={marketingPrompt}
                 initialStrategy={strategy}
                 initialTargetLanguage={form.targetLanguage}
+                theme={form.theme}
+                accentColor={form.accentColor}
                 onStrategyReady={(
                     concepts: AdConcept[],
                     logoUrl: string | null,
@@ -461,7 +496,9 @@ export default function StudioPage() {
                         logoUrl: logoUrl || prev.logoUrl,
                         targetLanguage: lang
                     }));
-                    setCurrentStep("style");
+                    // Strategy confirmed — advance to output settings.
+                    // Theme was locked in step 2; strategy step already active.
+                    setCurrentStep("output");
                 }}
             />
         </div>

@@ -12,6 +12,61 @@ import { BrandLogo } from '../components/BrandLogo';
 
 type Props = z.infer<typeof RemotionPropsSchema>;
 
+// ─── Text Treatment Renderer ──────────────────────────────────────────────────
+// Returns CSS properties split into two layers:
+//   containerStyle — applied to the outer positioning div (glass / hero_block)
+//   textStyle      — applied to the text node itself (shadow / outline)
+const FONT_WEIGHT_MAP = { thin: 100, regular: 300, bold: 700, black: 900 } as const;
+
+type TextTreatment = 'none' | 'shadow' | 'glass' | 'outline' | 'hero_block';
+type FontWeightKey = keyof typeof FONT_WEIGHT_MAP;
+
+function getTextTreatmentStyles(treatment: TextTreatment): {
+    containerStyle: React.CSSProperties;
+    textStyle: React.CSSProperties;
+} {
+    switch (treatment) {
+        case 'glass':
+            return {
+                containerStyle: {
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    backgroundColor: 'rgba(0,0,0,0.28)',
+                    borderRadius: '10px',
+                    padding: '8px 16px',
+                },
+                textStyle: {},
+            };
+        case 'hero_block':
+            return {
+                containerStyle: {
+                    backgroundColor: 'rgba(0,0,0,0.62)',
+                    borderRadius: '4px',
+                    padding: '6px 12px',
+                },
+                textStyle: {},
+            };
+        case 'outline':
+            return {
+                containerStyle: {},
+                textStyle: {
+                    WebkitTextStroke: '1.5px rgba(0,0,0,0.85)',
+                    textShadow: '0 0 6px rgba(0,0,0,0.45)',
+                },
+            };
+        case 'shadow':
+            return {
+                containerStyle: {},
+                textStyle: {
+                    textShadow: '0 2px 12px rgba(0,0,0,0.9), 0 0 30px rgba(0,0,0,0.5)',
+                },
+            };
+        case 'none':
+        default:
+            return { containerStyle: {}, textStyle: {} };
+    }
+}
+
 export const MasterComposition: React.FC<Props> = (props) => {
     const {
         productImageUrl,
@@ -25,6 +80,12 @@ export const MasterComposition: React.FC<Props> = (props) => {
         enableMotionBlur,
         logoUrl,
         logoPosition,
+        sceneLightDirection,
+        contactSurface,
+        compositionIntent = 'direct_response',
+        lightingIntent,
+        productImageUrls,
+        hideHeroObject = false,
     } = props;
 
     const isDev = process.env.NODE_ENV === 'development';
@@ -34,8 +95,15 @@ export const MasterComposition: React.FC<Props> = (props) => {
     const beatScale = 1 + kick * 0.05;
 
     const baseFontSize    = 60 * layout.contentScale;
-    const dynamicFontSize = headlineText.length > 20 ? baseFontSize * 0.6 : baseFontSize;
+    // Cinematic intent uses an oversized headline — 1.8× — to fill the frame with type.
+    const cinematicScale  = compositionIntent === 'cinematic' ? 1.8 : 1;
+    const dynamicFontSize = (headlineText.length > 20 ? baseFontSize * 0.6 : baseFontSize) * cinematicScale;
     const subheadSize     = 30 * layout.contentScale;
+
+    // Derive product URL list: bundle array takes precedence over single URL.
+    const resolvedImageUrls = (productImageUrls && productImageUrls.length > 0)
+        ? productImageUrls
+        : [productImageUrl];
 
     const backgroundStyle: React.CSSProperties = {
         backgroundColor: colors.background,
@@ -85,26 +153,47 @@ export const MasterComposition: React.FC<Props> = (props) => {
                         )}
 
                         {/* ── Layer 1: 3D product ── */}
-                        <AbsoluteFill style={{ transform: `scale(${beatScale})`, zIndex: 10 }}>
-                            <HeroObject
-                                imageUrl={productImageUrl}
-                                zoom={camera.zoomStart}
-                                color={colors.accent}
-                                layoutType={layout.layoutType}
-                                aspectRatio={layout.aspectRatio}
-                            />
-                        </AbsoluteFill>
+                        {/* Suppressed for still images where BRIA has already baked the product */}
+                        {/* into the background — rendering both would create a double-layer artifact. */}
+                        {!hideHeroObject && (
+                            <AbsoluteFill style={{ transform: `scale(${beatScale})`, zIndex: 10 }}>
+                                <HeroObject
+                                    imageUrl={productImageUrl}
+                                    productImageUrls={resolvedImageUrls}
+                                    zoom={camera.zoomStart}
+                                    color={colors.accent}
+                                    layoutType={layout.layoutType}
+                                    aspectRatio={layout.aspectRatio}
+                                    sceneLightDirection={sceneLightDirection}
+                                    contactSurface={contactSurface}
+                                    lightingIntent={lightingIntent}
+                                />
+                            </AbsoluteFill>
+                        )}
 
                         {/* ── Layer 2: Safe zone + UI text + logo ── */}
                         <AbsoluteFill style={{ zIndex: 20 }}>
                             <SafeZone aspectRatio={layout.aspectRatio}>
                                 {props.elements && props.elements.length > 0 ? (
                                     props.elements.map(el => {
-                                        const isHeadline   = el.type === 'headline';
-                                        const fontSize     = isHeadline ? dynamicFontSize : el.type === 'subheadline' ? subheadSize : subheadSize * 0.8;
-                                        const color        = isHeadline ? colors.textPrimary : colors.accent;
-                                        const fontWeight   = isHeadline ? 'bold' : 300;
+                                        const isHeadline    = el.type === 'headline';
+                                        const fontSize      = isHeadline ? dynamicFontSize : el.type === 'subheadline' ? subheadSize : subheadSize * 0.8;
+                                        const color         = isHeadline ? colors.textPrimary : colors.accent;
                                         const textTransform = isHeadline ? 'uppercase' : 'none';
+
+                                        const weightKey = (el as typeof el & { font_weight?: FontWeightKey }).font_weight;
+                                        const fontWeight: number = weightKey
+                                            ? FONT_WEIGHT_MAP[weightKey]
+                                            : (isHeadline ? 700 : 300);
+
+                                        const rawTreatment = (el as typeof el & { text_treatment?: string }).text_treatment;
+                                        const treatment: TextTreatment =
+                                            ['none', 'shadow', 'glass', 'outline', 'hero_block'].includes(rawTreatment ?? '')
+                                                ? (rawTreatment as TextTreatment)
+                                                : 'shadow';
+                                        const { containerStyle, textStyle } = getTextTreatmentStyles(
+                                            el.type === 'cta' ? 'none' : treatment
+                                        );
 
                                         return (
                                             <div key={el.id} style={{
@@ -122,6 +211,7 @@ export const MasterComposition: React.FC<Props> = (props) => {
                                                 letterSpacing: isHeadline ? '0.05em' : 'normal',
                                                 lineHeight: 1.1,
                                                 whiteSpace: 'pre-wrap',
+                                                ...containerStyle,
                                             }}>
                                                 {el.type === 'cta' ? (
                                                     <div style={{
@@ -137,48 +227,12 @@ export const MasterComposition: React.FC<Props> = (props) => {
                                                         {el.content}
                                                     </div>
                                                 ) : (
-                                                    el.content
+                                                    <span style={textStyle}>{el.content}</span>
                                                 )}
                                             </div>
                                         );
                                     })
-                                ) : (
-                                    <div style={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        textAlign: 'center',
-                                        gap: 20,
-                                        width: '100%',
-                                    }}>
-                                        <h1 style={{
-                                            fontFamily,
-                                            color: colors.textPrimary,
-                                            fontSize: dynamicFontSize,
-                                            margin: 0,
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.05em',
-                                            maxWidth: '90%',
-                                            lineHeight: 1.1,
-                                            whiteSpace: 'pre-wrap',
-                                        }}>
-                                            {headlineText}
-                                        </h1>
-
-                                        {props.subheadlineText && (
-                                            <h2 style={{
-                                                fontFamily,
-                                                color: colors.accent,
-                                                fontSize: subheadSize,
-                                                margin: 0,
-                                                fontWeight: 300,
-                                                maxWidth: '80%',
-                                            }}>
-                                                {props.subheadlineText}
-                                            </h2>
-                                        )}
-                                    </div>
-                                )}
+                                ) : null /* empty elements = intentional editorial/cinematic canvas */}
 
                                 {logoUrl && logoPosition && (
                                     <BrandLogo src={logoUrl} position={logoPosition} />

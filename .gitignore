@@ -36,6 +36,11 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Secret credential files — NEVER commit these
+config/google-service-account.json
+config/*.json
+*.json.key
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

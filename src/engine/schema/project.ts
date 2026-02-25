@@ -29,6 +29,10 @@ export const UIElementSchema = z.object({
     height: z.number().optional(), // Percentage 0-100
     content: z.string().optional(),
     align: z.enum(['left', 'center', 'right']).default('center'),
+    /** Visual legibility treatment applied to text against the generated background. */
+    text_treatment: z.enum(['none', 'shadow', 'glass', 'outline', 'hero_block']).default('shadow'),
+    /** Per-element font weight override from the Director's Brain. */
+    font_weight: z.enum(['thin', 'regular', 'bold', 'black']).optional(),
 });
 
 export const RemotionPropsSchema = z.object({
@@ -90,6 +94,39 @@ export const RemotionPropsSchema = z.object({
         contentScale: z.number(), // 0.8 to 1.2
     }),
     elements: z.array(UIElementSchema).default([]),
+
+    /** Dominant light direction inferred by Gemini — aligns 3D light with the painted scene. */
+    sceneLightDirection: z.string().optional(),
+
+    /** Surface material the product rests on — drives shadow opacity and tint. */
+    contactSurface: z.string().optional(),
+
+    /**
+     * Controls text density for the composition.
+     * direct_response = full HL+SHL+CTA (conversion focus)
+     * editorial        = HL+SHL only (visual-first)
+     * cinematic        = headline only, oversized (maximum visual impact)
+     */
+    compositionIntent: z.enum(['direct_response', 'editorial', 'cinematic']).default('direct_response'),
+
+    /** 3D lighting preset that matches the background scene mood. */
+    lightingIntent: z.string().optional(),
+
+    /**
+     * Bundle-aware product URL array (up to 3).
+     * When present, HeroObject renders a group-shot layout.
+     * Falls back to [productImageUrl] when absent.
+     */
+    productImageUrls: z.array(z.string().url()).min(1).max(3).optional(),
+
+    /**
+     * When true, the Three.js HeroObject layer is suppressed entirely.
+     * Set by the render API for still images where the product is already
+     * baked into the background by BRIA — rendering HeroObject on top
+     * would cause a "double layer" sticker artifact.
+     * Videos always receive false (default) to keep the 3D pipeline alive.
+     */
+    hideHeroObject: z.boolean().default(false),
 });
 
 export type RemotionProps = z.infer<typeof RemotionPropsSchema>;

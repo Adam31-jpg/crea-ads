@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
     AbsoluteFill,
     useCurrentFrame,
@@ -12,35 +12,119 @@ import { ThreeCanvas } from '@remotion/three';
 import { useLoader, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
+// ─── Props ────────────────────────────────────────────────────────────────────
+
 interface HeroObjectProps {
-    imageUrl: string;
+    imageUrl?: string;
+    /** Bundle-aware product URL array (1–3 images). Takes precedence over imageUrl. */
+    productImageUrls?: string[];
     zoom?: number;
     color?: string;
     layoutType?: 'converter' | 'minimalist';
     aspectRatio?: '9:16' | '16:9' | '1:1' | '4:5';
+    /** Dominant light direction from the Director's Brain — aligns 3D light with the background scene. */
+    sceneLightDirection?: string;
+    /** Surface material the product rests on — drives shadow opacity and tint. */
+    contactSurface?: string;
+    /** 3D lighting preset matching the background scene mood. */
+    lightingIntent?: string;
 }
 
 // ─── Animation constants ──────────────────────────────────────────────────────
 const FLOAT_CYCLES = 3;
 
+// ─── Light Rig Lookup ─────────────────────────────────────────────────────────
+const LIGHT_RIGS: Record<string, {
+    primary: [number, number, number];
+    fill:    [number, number, number];
+}> = {
+    'top-left':   { primary: [-5, 10, 5],  fill: [4,  5, 2]  },
+    'top-right':  { primary: [5,  10, 5],  fill: [-4, 5, 2]  },
+    'overhead':   { primary: [0,  12, 3],  fill: [0,  5, -2] },
+    'side-left':  { primary: [-10, 5, 3],  fill: [4,  8, 2]  },
+    'side-right': { primary: [10,  5, 3],  fill: [-4, 8, 2]  },
+};
+const DEFAULT_RIG = LIGHT_RIGS['top-right'];
+
+// ─── Surface Shadow Lookup ────────────────────────────────────────────────────
+const SURFACE_SHADOWS: Record<string, { opacity: number; color: string }> = {
+    volcanic: { opacity: 0.75, color: '#1a0f0a' },
+    marble:   { opacity: 0.55, color: '#0f1420' },
+    wood:     { opacity: 0.60, color: '#1f1208' },
+    glass:    { opacity: 0.25, color: '#0a0a15' },
+    stone:    { opacity: 0.70, color: '#0f1a0f' },
+    rubber:   { opacity: 0.75, color: '#0a0a0a' },
+    sand:     { opacity: 0.55, color: '#1a1508' },
+    ceramic:  { opacity: 0.50, color: '#141414' },
+};
+const DEFAULT_SHADOW = SURFACE_SHADOWS['marble'];
+
+// ─── Lighting Config Lookup ───────────────────────────────────────────────────
+// Controls ambient/primary/fill intensities, rim light, and meshStandardMaterial
+// roughness + metalness. Tuning these per scene mood is the key to making the
+// flat-plane product look like a photograph rather than a sticker.
+interface LightingConfig {
+    ambientIntensity: number;
+    primaryIntensity: number;
+    fillIntensity:    number;
+    rimIntensity:     number;
+    rimColor:         string;
+    roughness:        number;
+    metalness:        number;
+}
+
+const LIGHTING_CONFIGS: Record<string, LightingConfig> = {
+    harsh_sunlight:  { ambientIntensity: 1.0, primaryIntensity: 8.0, fillIntensity: 0.5, rimIntensity: 0,   rimColor: '#ffffff', roughness: 0.10, metalness: 0.05 },
+    soft_spa:        { ambientIntensity: 3.5, primaryIntensity: 2.5, fillIntensity: 3.0, rimIntensity: 1.5, rimColor: '#fff8f0', roughness: 0.70, metalness: 0.00 },
+    dramatic_window: { ambientIntensity: 0.8, primaryIntensity: 6.0, fillIntensity: 0.8, rimIntensity: 0.5, rimColor: '#f5e6d0', roughness: 0.15, metalness: 0.10 },
+    rim_glow:        { ambientIntensity: 1.5, primaryIntensity: 3.0, fillIntensity: 1.0, rimIntensity: 5.0, rimColor: '#d4af37', roughness: 0.05, metalness: 0.30 },
+    clinical_bright: { ambientIntensity: 4.0, primaryIntensity: 3.0, fillIntensity: 4.0, rimIntensity: 0,   rimColor: '#ffffff', roughness: 0.50, metalness: 0.00 },
+    golden_hour:     { ambientIntensity: 1.2, primaryIntensity: 5.0, fillIntensity: 1.5, rimIntensity: 3.0, rimColor: '#ffb347', roughness: 0.20, metalness: 0.15 },
+};
+const DEFAULT_LIGHTING = LIGHTING_CONFIGS['rim_glow'];
+
+// ─── Group Shot Layout ────────────────────────────────────────────────────────
+// Computes per-product 3D positioning for 1, 2, or 3 products.
+// zDepth (negative = further from camera) creates genuine perspective-based
+// depth scaling without any CSS tricks — products appear naturally smaller
+// at distance with the fov:50 perspective camera.
+interface ProductSlot {
+    xOffset:    number;
+    zDepth:     number;
+    scale:      number;
+    floatPhase: number; // phase offset so products don't bob in sync
+}
+
+function buildGroupLayout(
+    count: number,
+    layoutType: 'converter' | 'minimalist',
+): ProductSlot[] {
+    const isConverter = layoutType === 'converter';
+
+    if (count === 1) {
+        return [{ xOffset: isConverter ? 2 : 0, zDepth: 0, scale: 1, floatPhase: 0 }];
+    }
+    if (count === 2) {
+        return [
+            { xOffset: isConverter ? 1   : -1.5, zDepth: 0,    scale: 1.00, floatPhase: 0    },
+            { xOffset: isConverter ? 3.5 :  1.5, zDepth: -1.5, scale: 0.75, floatPhase: 0.33 },
+        ];
+    }
+    // count >= 3: left large, center medium, right small — classic "group shot"
+    return [
+        { xOffset: -2, zDepth:  0,    scale: 1.00, floatPhase: 0    },
+        { xOffset:  0, zDepth: -1.0,  scale: 0.80, floatPhase: 0.25 },
+        { xOffset:  2, zDepth: -2.5,  scale: 0.60, floatPhase: 0.50 },
+    ];
+}
+
 // ─── OnReadyEffect ────────────────────────────────────────────────────────────
-// A zero-geometry R3F node whose only job is to fire onReady() once on mount.
-// Used as the terminal node in every scene branch so that continueRender is
-// always called exactly once regardless of which path was taken:
-//   • texture loaded successfully  → ProductMesh mounts → fires onReady
-//   • texture CORS / 404 error     → ErrorBoundary fallback mounts → fires onReady
-//   • imageUrl was invalid         → renders OnReadyEffect directly → fires onReady
 const OnReadyEffect: React.FC<{ onReady: () => void }> = ({ onReady }) => {
-    useEffect(() => {
-        onReady();
-    }, [onReady]);
+    useEffect(() => { onReady(); }, [onReady]);
     return null;
 };
 
 // ─── TextureErrorBoundary ─────────────────────────────────────────────────────
-// Catches errors thrown by useLoader (CORS failures, 404s, network timeouts).
-// Must live INSIDE Canvas so it can render R3F primitives in its fallback.
-// Accepts onReady so it can release the Remotion delayRender gate even on error.
 class TextureErrorBoundary extends React.Component<
     { children: React.ReactNode; onReady: () => void },
     { hasError: boolean }
@@ -49,42 +133,41 @@ class TextureErrorBoundary extends React.Component<
         super(props);
         this.state = { hasError: false };
     }
-    static getDerivedStateFromError() {
-        return { hasError: true };
-    }
+    static getDerivedStateFromError() { return { hasError: true }; }
     componentDidCatch(error: Error) {
         console.error('[HeroObject] Texture load failed (CORS / 404):', error.message);
     }
     render() {
-        if (this.state.hasError) {
-            // Nothing visible rendered — product slot is empty on error.
-            // OnReadyEffect still fires so the render gate is released.
-            return <OnReadyEffect onReady={this.props.onReady} />;
-        }
+        if (this.state.hasError) return <OnReadyEffect onReady={this.props.onReady} />;
         return this.props.children;
     }
 }
 
 // ─── ProductMesh ──────────────────────────────────────────────────────────────
-// Contains useLoader which suspends (throws a Promise) until the texture is
-// cached by Three.js. The component can only mount AFTER the texture resolves,
-// making useEffect a reliable post-load signal.
 interface ProductMeshProps {
     imageUrl: string;
     zoom: number;
-    xOffset: number;
+    slot: ProductSlot;
     floatY: number;
     rotationY: number;
     onReady: () => void;
+    shadowOpacity: number;
+    shadowColor: string;
+    roughness: number;
+    metalness: number;
 }
 
 const ProductMesh: React.FC<ProductMeshProps> = ({
     imageUrl,
     zoom,
-    xOffset,
+    slot,
     floatY,
     rotationY,
     onReady,
+    shadowOpacity,
+    shadowColor,
+    roughness,
+    metalness,
 }) => {
     const texture = useLoader(THREE.TextureLoader, imageUrl, (loader) => {
         (loader as THREE.TextureLoader).setCrossOrigin('anonymous');
@@ -98,66 +181,65 @@ const ProductMesh: React.FC<ProductMeshProps> = ({
     const planeWidth  = 5 * imageAspect;
     const planeHeight = 5;
 
-    // `advance` drives R3F's demand-mode render loop. ThreeCanvas renders one
-    // empty frame during canvas creation (its own delayRender pass), then idles.
-    // When ProductMesh mounts the texture is loaded but the GL buffer still shows
-    // that empty first frame. Calling advance() here forces a second render pass
-    // that writes the textured product into the WebGL buffer *before* we call
-    // onReady() — ensuring Puppeteer screenshots the correct, fully-painted frame.
+    const effectiveZoom = zoom * slot.scale;
+    const phaseOffset   = slot.floatPhase * Math.PI * 2;
+    const slotFloatY    = floatY + Math.sin(phaseOffset) * 0.05; // tiny extra phase per slot
+
     const { advance } = useThree();
 
     useEffect(() => {
-        advance(performance.now()); // flush texture → GL buffer
-        onReady();                  // release Remotion's screenshot gate
+        advance(performance.now());
+        onReady();
     }, [onReady, advance]);
 
     return (
         <>
-            <group position={[xOffset, floatY, 0]} rotation={[0, rotationY, 0]}>
-                <mesh castShadow scale={[zoom, zoom, 1]}>
+            <group
+                position={[slot.xOffset, slotFloatY, slot.zDepth]}
+                rotation={[0, rotationY * (1 - slot.floatPhase * 0.5), 0]}
+            >
+                <mesh castShadow scale={[effectiveZoom, effectiveZoom, 1]}>
                     <planeGeometry args={[planeWidth, planeHeight, 1, 1]} />
                     <meshStandardMaterial
                         map={texture}
                         transparent
                         side={THREE.DoubleSide}
                         alphaTest={0.01}
+                        roughness={roughness}
+                        metalness={metalness}
                     />
                 </mesh>
             </group>
 
-            {/* Shadow catcher grounded beneath the product */}
-            <mesh position={[xOffset, -3.1, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+            {/* Shadow catcher — per-slot, positioned at this product's base */}
+            <mesh
+                position={[slot.xOffset, -3.1 + slot.zDepth * 0.05, slot.zDepth]}
+                rotation={[-Math.PI / 2, 0, 0]}
+                receiveShadow
+            >
                 <planeGeometry args={[20, 20]} />
-                <shadowMaterial opacity={0.3} transparent />
+                <shadowMaterial color={shadowColor} opacity={shadowOpacity * slot.scale} transparent />
             </mesh>
         </>
     );
 };
 
 // ─── HeroScene ────────────────────────────────────────────────────────────────
-// Orchestrates the 3D scene. Lights live outside the Suspense boundary so
-// they are always present regardless of texture state.
-//
-// Rendering paths:
-//   imageUrl valid
-//     └─ React.Suspense (local — intercepts useLoader's thrown Promise)
-//          ├─ fallback: null (product slot empty while texture loads)
-//          └─ TextureErrorBoundary
-//               ├─ error: OnReadyEffect (releases gate, empty product slot)
-//               └─ ProductMesh (texture ready → fires onReady via useEffect)
-//   imageUrl invalid
-//     └─ OnReadyEffect (releases gate immediately, empty product slot)
 interface HeroSceneProps extends HeroObjectProps {
-    onTextureReady: () => void;
+    imageUrls: string[];
+    onSlotReady: () => void;
 }
 
 const HeroScene: React.FC<HeroSceneProps> = ({
-    imageUrl,
+    imageUrls,
     zoom = 1,
     color = '#ffffff',
     layoutType = 'converter',
     aspectRatio = '9:16',
-    onTextureReady,
+    sceneLightDirection,
+    contactSurface,
+    lightingIntent,
+    onSlotReady,
 }) => {
     const frame = useCurrentFrame();
     const { durationInFrames } = useVideoConfig();
@@ -171,23 +253,40 @@ const HeroScene: React.FC<HeroSceneProps> = ({
         { easing: Easing.bezier(0.42, 0, 0.58, 1) }
     );
 
-    const xOffset =
-        layoutType === 'converter'
-            ? aspectRatio === '16:9' ? 3 : 2
-            : 0;
+    const rig     = LIGHT_RIGS[sceneLightDirection ?? ''] ?? DEFAULT_RIG;
+    const shadow  = SURFACE_SHADOWS[contactSurface ?? ''] ?? DEFAULT_SHADOW;
+    const lConfig = LIGHTING_CONFIGS[lightingIntent ?? ''] ?? DEFAULT_LIGHTING;
 
-    // Guard against broken Supabase storage paths that contain the literal
-    // text "undefined" (e.g. "…/product-assets/undefined/filename.jpg").
-    const hasValidImageUrl =
-        typeof imageUrl === 'string' &&
-        imageUrl.trim() !== '' &&
-        !imageUrl.includes('undefined');
+    const slots = buildGroupLayout(imageUrls.length, layoutType);
+
+    // Configure the primary directional light's shadow map before the first
+    // advance() flush so PCFSoftShadowMap renders at full 2048×2048 resolution.
+    const dirLightRef = useRef<THREE.DirectionalLight>(null);
+    useLayoutEffect(() => {
+        const light = dirLightRef.current;
+        if (!light) return;
+        light.shadow.mapSize.width  = 2048;
+        light.shadow.mapSize.height = 2048;
+        light.shadow.camera.near   = 0.5;
+        light.shadow.camera.far    = 50;
+        light.shadow.camera.left   = -8;
+        light.shadow.camera.right  = 8;
+        light.shadow.camera.top    = 8;
+        light.shadow.camera.bottom = -8;
+        light.shadow.radius        = 4;
+        light.shadow.needsUpdate   = true;
+    }, []);
 
     return (
         <>
-            <ambientLight intensity={2.0} />
-            <directionalLight position={[5, 10, 5]}  intensity={4.0} castShadow />
-            <directionalLight position={[-5, 5, 2]}  intensity={2.0} />
+            <ambientLight intensity={lConfig.ambientIntensity} />
+            <directionalLight
+                ref={dirLightRef}
+                position={rig.primary}
+                intensity={lConfig.primaryIntensity}
+                castShadow
+            />
+            <directionalLight position={rig.fill} intensity={lConfig.fillIntensity} />
             <spotLight
                 position={[0, 8, 8]}
                 intensity={6}
@@ -196,54 +295,85 @@ const HeroScene: React.FC<HeroSceneProps> = ({
                 color={color}
             />
 
-            {hasValidImageUrl ? (
-                <React.Suspense fallback={null}>
-                    <TextureErrorBoundary onReady={onTextureReady}>
-                        <ProductMesh
-                            imageUrl={imageUrl}
-                            zoom={zoom}
-                            xOffset={xOffset}
-                            floatY={floatY}
-                            rotationY={rotationY}
-                            onReady={onTextureReady}
-                        />
-                    </TextureErrorBoundary>
-                </React.Suspense>
-            ) : (
-                // URL is invalid — release the delay gate immediately so the
-                // render does not hang. Product slot will be empty.
-                <OnReadyEffect onReady={onTextureReady} />
+            {/* Rim light — behind the product, creates contour glow separating it from background */}
+            {lConfig.rimIntensity > 0 && (
+                <pointLight
+                    position={[0, 3, -8]}
+                    intensity={lConfig.rimIntensity}
+                    color={lConfig.rimColor}
+                    distance={20}
+                    decay={2}
+                />
             )}
+
+            {imageUrls.map((url, i) => {
+                const isValid =
+                    typeof url === 'string' &&
+                    url.trim() !== '' &&
+                    !url.includes('undefined');
+
+                if (!isValid) {
+                    return <OnReadyEffect key={i} onReady={onSlotReady} />;
+                }
+
+                return (
+                    <React.Suspense key={i} fallback={null}>
+                        <TextureErrorBoundary onReady={onSlotReady}>
+                            <ProductMesh
+                                imageUrl={url}
+                                zoom={zoom}
+                                slot={slots[i] ?? slots[0]}
+                                floatY={floatY}
+                                rotationY={rotationY}
+                                onReady={onSlotReady}
+                                shadowOpacity={shadow.opacity}
+                                shadowColor={shadow.color}
+                                roughness={lConfig.roughness}
+                                metalness={lConfig.metalness}
+                            />
+                        </TextureErrorBoundary>
+                    </React.Suspense>
+                );
+            })}
         </>
     );
 };
 
 // ─── HeroObject ───────────────────────────────────────────────────────────────
-// Top-level wrapper that owns the Remotion delayRender gate.
-//
-// Why useMemo for delayRender?
-//   delayRender must be called synchronously during component initialisation —
-//   before ThreeCanvas or any child renders. useMemo with [] runs exactly once,
-//   at the moment the component is first evaluated, satisfying that constraint.
-//   A useState initialiser would also work but introduces an unnecessary setter.
-//
-// Why a separate gate rather than relying on ThreeCanvas's internal one?
-//   ThreeCanvas's internal delayRender is released after state.advance() (canvas
-//   creation + one render pass). That happens before the texture is loaded via
-//   useLoader. Our gate is released only after ProductMesh mounts, guaranteeing
-//   the texture is in the WebGL buffer when Puppeteer takes the screenshot.
+// Top-level wrapper. Owns a counter-based Remotion delayRender gate that waits
+// for ALL product textures to load before unblocking the screenshot pipeline.
 export const HeroObject: React.FC<HeroObjectProps> = (props) => {
     const { width, height } = useVideoConfig();
 
-    const handle = useMemo(
-        () => delayRender('Waiting for product texture to load'),
+    // Resolve the authoritative URL list: bundle array > single imageUrl fallback.
+    const imageUrls = useMemo(
+        () =>
+            props.productImageUrls && props.productImageUrls.length > 0
+                ? props.productImageUrls
+                : [props.imageUrl ?? ''],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         []
     );
 
-    const onTextureReady = useCallback(
-        () => continueRender(handle),
-        [handle]
+    const totalCount = imageUrls.length;
+
+    // Counter gate — opens only after every slot's texture is in the GL buffer.
+    // useMemo fires synchronously during the first render, satisfying Remotion's
+    // requirement that delayRender is called before any async work begins.
+    const handle = useMemo(
+        () => delayRender(`Waiting for ${totalCount} product texture(s)`),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        []
     );
+
+    const loadedCount = useRef(0);
+
+    const onSlotReady = useCallback(() => {
+        loadedCount.current += 1;
+        if (loadedCount.current >= totalCount) {
+            continueRender(handle);
+        }
+    }, [handle, totalCount]);
 
     return (
         <AbsoluteFill>
@@ -252,11 +382,15 @@ export const HeroObject: React.FC<HeroObjectProps> = (props) => {
                 height={height}
                 style={{ backgroundColor: 'transparent' }}
                 gl={{ alpha: true, preserveDrawingBuffer: true }}
-                shadows
+                shadows="soft"
                 orthographic={false}
                 camera={{ position: [0, 0, 12], fov: 50 }}
             >
-                <HeroScene {...props} onTextureReady={onTextureReady} />
+                <HeroScene
+                    {...props}
+                    imageUrls={imageUrls}
+                    onSlotReady={onSlotReady}
+                />
             </ThreeCanvas>
         </AbsoluteFill>
     );

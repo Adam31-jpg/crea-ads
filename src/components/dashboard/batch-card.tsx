@@ -236,8 +236,11 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                     (j.created_at ? Date.now() - new Date(j.created_at).getTime() > 120_000 : false)
                 );
 
-                for (const job of stuckJobs) {
-                    await fetch(`/api/render/status?jobId=${job.id}`).catch(() => { });
+                // Stagger status checks by 600 ms each to avoid hitting the
+                // AWS Lambda GetFunction API rate limit simultaneously.
+                for (let i = 0; i < stuckJobs.length; i++) {
+                    if (i > 0) await new Promise((r) => setTimeout(r, 600));
+                    await fetch(`/api/render/status?jobId=${stuckJobs[i].id}`).catch(() => { });
                 }
                 router.refresh();
             };
@@ -274,9 +277,10 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
         try {
             const stuckJobs = jobs.filter(j => j.status === "rendering" || j.status === "processing" || j.status === "generating_assets");
 
-            // Re-sync stuck jobs
-            for (const job of stuckJobs) {
-                await fetch(`/api/render/status?jobId=${job.id}`).catch(() => { });
+            // Re-sync stuck jobs — staggered to avoid AWS throttling
+            for (let i = 0; i < stuckJobs.length; i++) {
+                if (i > 0) await new Promise((r) => setTimeout(r, 600));
+                await fetch(`/api/render/status?jobId=${stuckJobs[i].id}`).catch(() => { });
             }
 
             // Retry failed jobs at the batch level
