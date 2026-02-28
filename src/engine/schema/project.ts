@@ -35,6 +35,115 @@ export const UIElementSchema = z.object({
     font_weight: z.enum(['thin', 'regular', 'bold', 'black']).optional(),
 });
 
+// ─── Layout Config — Spatial Design System ───────────────────────────────────
+// Gemini outputs one of these per concept. It defines both WHERE the product sits
+// in the background scene (→ negative space instruction injected into fal prompt)
+// and WHERE every Remotion overlay element is positioned (→ inputProps).
+// Stored verbatim in jobs.metadata for Lumina Studio readiness.
+
+export const SocialProofSchema = z.object({
+    x: z.number().min(0).max(100),   // % from left
+    y: z.number().min(0).max(100),   // % from top
+    scale: z.number().min(0.5).max(2),    // relative to default size
+});
+
+export const ArrowSchema = z.object({
+    startPos: z.tuple([z.number(), z.number()]),  // [x%, y%]
+    endPos: z.tuple([z.number(), z.number()]),  // [x%, y%]
+    curvature: z.number().min(-1).max(1),           // -1 = concave, 0 = straight, 1 = convex
+});
+
+export const TrustBarSchema = z.object({
+    y_position: z.number().min(0).max(100),  // % from top
+    opacity: z.number().min(0).max(1),
+    /** Optional trust label override. Defaults to "AS SEEN ON" strip if omitted. */
+    label: z.string().optional(),
+});
+
+// ─── Component Registry Schemas (Lego Architecture) ──────────────────────────
+
+export const PointerBenefitSchema = z.object({
+    component: z.literal('PointerBenefit'),
+    props: z.object({
+        label: z.string(),
+        x: z.number().min(0).max(100),
+        y: z.number().min(0).max(100),
+        dotColor: z.string().regex(/^#/, "Must be hex code").optional(),
+    }),
+});
+
+export const FeatureSwitchSchema = z.object({
+    component: z.literal('FeatureSwitch'),
+    props: z.object({
+        label: z.string(),
+        x: z.number().min(0).max(100),
+        y: z.number().min(0).max(100),
+        isActive: z.boolean().default(true),
+        activeColor: z.string().regex(/^#/, "Must be hex code").optional(),
+    }),
+});
+
+export const BackgroundPatternSchema = z.object({
+    component: z.literal('BackgroundPattern'),
+    props: z.object({
+        text: z.string(),
+        opacity: z.number().min(0).max(1).default(0.1),
+        color: z.string().regex(/^#/, "Must be hex code").optional(),
+        rotation: z.number().default(-15),
+    }),
+});
+
+export const AnyComponentSchema = z.discriminatedUnion('component', [
+    PointerBenefitSchema,
+    FeatureSwitchSchema,
+    BackgroundPatternSchema,
+]);
+
+export type AnyComponentConfig = z.infer<typeof AnyComponentSchema>;
+
+export const LayoutConfigSchema = z.object({
+    /**
+     * 1-sentence description of the spatial composition.
+     * e.g. "Product anchored bottom-right, negative space reserved top-left for typography."
+     */
+    spatial_strategy: z.string(),
+
+    /**
+     * The canvas zone where the image generation model MUST leave clean, empty
+     * space for Remotion text overlays. This is injected verbatim into the fal.ai prompt:
+     * "with a minimalist, out-of-focus, empty area in the [zone] for typography".
+     */
+    negative_space_zone: z.enum([
+        'top-left', 'top-right', 'bottom-left', 'bottom-right',
+        'top', 'bottom', 'left', 'right', 'center',
+    ]),
+
+    /** Primary headline layout — MUST mirror the matching entry in elements[]. */
+    headline: z.object({
+        text: z.string(),
+        x: z.number().min(0).max(100),
+        y: z.number().min(0).max(100),
+        width: z.number().min(10).max(90),
+        fontSize: z.number().min(20).max(120),
+        textAlign: z.enum(['left', 'center', 'right']),
+        color: z.string(),                   // hex color
+    }),
+
+    /** ★★★★★ social proof badges. Optional. */
+    social_proof: SocialProofSchema.optional(),
+
+    /** Directional SVG arrow connecting startPos → endPos. Optional. */
+    arrow: ArrowSchema.optional(),
+
+    /** Horizontal trust logo/text bar. Optional. */
+    trust_bar: TrustBarSchema.optional(),
+});
+
+export type LayoutConfig = z.infer<typeof LayoutConfigSchema>;
+export type SocialProof = z.infer<typeof SocialProofSchema>;
+export type ArrowConfig = z.infer<typeof ArrowSchema>;
+export type TrustBarConfig = z.infer<typeof TrustBarSchema>;
+
 export const RemotionPropsSchema = z.object({
     // --- Content Props ---
     headlineText: z.string().max(100, "Headline too long (max 100)"),
@@ -95,6 +204,9 @@ export const RemotionPropsSchema = z.object({
     }),
     elements: z.array(UIElementSchema).default([]),
 
+    // --- Dynamic Component Layout (Lego Architecture) ---
+    component_layout: z.array(AnyComponentSchema).optional(),
+
     /** Dominant light direction inferred by Gemini — aligns 3D light with the painted scene. */
     sceneLightDirection: z.string().optional(),
 
@@ -118,6 +230,14 @@ export const RemotionPropsSchema = z.object({
      * Falls back to [productImageUrl] when absent.
      */
     productImageUrls: z.array(z.string().url()).min(1).max(3).optional(),
+
+    /**
+     * Spatial Design System from Gemini's Director's Brain.
+     * Encodes product placement, negative space zone, and positions of all
+     * Remotion overlay elements (headline, social proof, arrow, trust bar).
+     * Stored verbatim in jobs.metadata for Lumina Studio readiness.
+     */
+    layout_config: LayoutConfigSchema.optional(),
 
     /**
      * When true, the Three.js HeroObject layer is suppressed entirely.

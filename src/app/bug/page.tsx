@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
 import { BugClient } from "./bug-client";
 
 export const metadata = {
@@ -7,13 +7,11 @@ export const metadata = {
 };
 
 export default async function BugPage() {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
+    const session = await auth();
     return (
         <BugClient
-            userId={user?.id || null}
-            userEmail={user?.email || ""}
+            userId={session?.user?.id || null}
+            userEmail={session?.user?.email || ""}
         />
     );
 }

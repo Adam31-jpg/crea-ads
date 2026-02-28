@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
 import { HelpClient } from "./help-client";
 
 export const metadata = {
@@ -7,8 +7,6 @@ export const metadata = {
 };
 
 export default async function HelpPage() {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    return <HelpClient isLoggedIn={!!user} />;
+    const session = await auth();
+    return <HelpClient isLoggedIn={!!session?.user} />;
 }

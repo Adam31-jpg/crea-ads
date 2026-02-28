@@ -116,6 +116,8 @@ export function resolveDesign(
         // Spread Computed Layout
         layout: layout,
         elements: [],
+        hideHeroObject: false,
+        compositionIntent: 'direct_response',
     };
 
     // 5. Apply Overrides (Deep Merge strategy might be better, but shallow for now is safer for exact control)

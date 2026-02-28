@@ -1,8 +1,8 @@
 export const GENERATION_CONFIG = {
     COST_PER_ASSET: 1, // 1 Spark = 1 Media
     TOTAL_MEDIA_PER_BATCH: 5,
-    IMAGE_COUNT: 4,
-    VIDEO_COUNT: 1,
+    IMAGE_COUNT: 5,
+    VIDEO_COUNT: 0,
     IMAGE_SPARK_COST: 1,
     VIDEO_SPARK_COST: 1,
     STRATEGY_SPARK_COST: 0, // Free strategy generation to match exactly 1 Spark per asset

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -41,10 +41,10 @@ import { useTranslations } from "next-intl";
 type Step = "product" | "style" | "strategy" | "output";
 
 const getSteps = (t: any): { key: Step; label: string; icon: string }[] => [
-    { key: "product",  label: t("steps.product"),  icon: "1"  },
-    { key: "style",    label: t("steps.style"),    icon: "2"  },
+    { key: "product", label: t("steps.product"), icon: "1" },
+    { key: "style", label: t("steps.style"), icon: "2" },
     { key: "strategy", label: t("steps.strategy"), icon: "✨" },
-    { key: "output",   label: t("steps.output"),   icon: "3"  },
+    { key: "output", label: t("steps.output"), icon: "3" },
 ];
 
 const getFormatOptions = (t: any) => [
@@ -97,13 +97,14 @@ export default function StudioPage() {
 
     const [currentStep, setCurrentStep] = useState<Step>("product");
     const [loading, setLoading] = useState(false);
-    const [userId, setUserId] = useState<string>("");
+    const { data: sessionData } = useSession();
+    const userId = sessionData?.user?.id || "";
     const [intakeOpen, setIntakeOpen] = useState(false);
     const [strategy, setStrategy] = useState<AdConcept[] | null>(null);
     const [isStrategyReused, setIsStrategyReused] = useState(false);
     const [marketingPrompt, setMarketingPrompt] = useState<{ productDescription: string; usps: string[]; targetAudience: string; } | null>(null);
     const router = useRouter();
-    const supabase = createClient();
+
 
     // Form state
     const [form, setForm] = useState({
@@ -121,11 +122,6 @@ export default function StudioPage() {
         targetLanguage: "Français",
     });
 
-    useEffect(() => {
-        supabase.auth.getUser().then(({ data }) => {
-            if (data.user) setUserId(data.user.id);
-        });
-    }, [supabase]);
 
     useEffect(() => {
         // Force completely clean slate if normal "New Project" flow
@@ -176,23 +172,19 @@ export default function StudioPage() {
             targetLanguage: form.targetLanguage,
         };
 
-        // 1. Create batch in Supabase
-        const { data: batch, error: batchError } = await supabase
-            .from("batches")
-            .insert([
-                {
-                    project_name: form.projectName || form.productName,
-                    input_data: inputData,
-                },
-            ])
-            .select("id")
-            .single();
-
-        if (batchError || !batch) {
-            toast.error(batchError?.message || t("toasts.batchFailed"));
+        // 1. Create batch via API
+        const batchRes = await fetch("/api/batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ projectName: form.projectName || form.productName, inputData }),
+        });
+        const batchData = await batchRes.json();
+        if (!batchRes.ok) {
+            toast.error(batchData.error || t("toasts.batchFailed"));
             setLoading(false);
             return;
         }
+        const batch = batchData;
 
         toast.success(t("toasts.batchSuccess", { total: GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH }));
 
@@ -231,10 +223,10 @@ export default function StudioPage() {
 
     // Validation — gates the "Next" button per step
     const canProceed: Record<Step, boolean> = {
-        product:  form.productName.length > 0 && form.tagline.length > 0,
-        style:    true, // theme always has a default; no blocking required
+        product: form.productName.length > 0 && form.tagline.length > 0,
+        style: true, // theme always has a default; no blocking required
         strategy: strategy !== null,
-        output:   true,
+        output: true,
     };
 
     return (

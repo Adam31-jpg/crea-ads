@@ -7,7 +7,7 @@ import { ArrowLeft, UploadCloud, File as FileIcon, X, Loader2 } from "lucide-rea
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/client";
+
 import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,6 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 export function BugClient({ userId, userEmail }: BugClientProps) {
     const t = useTranslations("bug");
     const router = useRouter();
-    const supabase = createClient();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [file, setFile] = useState<File | null>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -138,34 +137,25 @@ export function BugClient({ userId, userEmail }: BugClientProps) {
         let fileUrl = null;
 
         try {
-            // 1. Upload File if exists
+            // 1. Upload File via S3 presigned URL
             if (file) {
-                const fileExt = file.name.split('.').pop();
-                const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-                const filePath = `bug_reports/${fileName}`;
-
-                const { error: uploadError, data: uploadData } = await supabase.storage
-                    .from("bug_reports")
-                    .upload(filePath, file);
-
-                if (uploadError) {
-                    console.error("Upload error:", uploadError);
-                    toast.error(t("form.errors.uploadError"));
-                    setIsSubmitting(false);
-                    return;
-                }
-
-                const { data: { publicUrl } } = supabase.storage
-                    .from("bug_reports")
-                    .getPublicUrl(filePath);
-
+                const presignRes = await fetch("/api/upload", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ filename: file.name, contentType: file.type }),
+                });
+                if (!presignRes.ok) throw new Error("Failed to get upload URL");
+                const { presignedUrl, publicUrl } = await presignRes.json();
+                const uploadRes = await fetch(presignedUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+                if (!uploadRes.ok) throw new Error("S3 upload failed");
                 fileUrl = publicUrl;
             }
 
-            // 2. Insert into DB
-            const { error: insertError } = await supabase
-                .from("bug_submissions")
-                .insert({
+            // 2. Post bug report to API
+            const bugRes = await fetch("/api/bug", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
                     user_id: userId,
                     user_email: userEmail || "anonymous@example.com",
                     category: data.category,
@@ -179,14 +169,10 @@ export function BugClient({ userId, userEmail }: BugClientProps) {
                     browser_version: metadata.browser_version,
                     operating_system: metadata.operating_system,
                     current_url: metadata.current_url,
-                });
+                }),
+            });
 
-            if (insertError) {
-                console.error("Insert error:", insertError);
-                toast.error(t("form.errors.submitError"));
-                setIsSubmitting(false);
-                return;
-            }
+            if (!bugRes.ok) throw new Error("Bug submission failed");
 
             toast.success(t("form.success"));
             setTimeout(() => {

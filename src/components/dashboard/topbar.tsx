@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useTranslations } from "next-intl";
-import type { User } from "@supabase/supabase-js";
 import { Zap, Sparkles } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
 import { useRechargeModal } from "@/hooks/use-recharge-modal";
+import type { Session } from "next-auth";
 
 declare global {
     interface Window {
@@ -18,47 +18,52 @@ declare global {
     }
 }
 
-
 interface TopbarProps {
-    user: User;
+    user: Session["user"];
 }
 
 export function DashboardTopbar({ user }: TopbarProps) {
     const router = useRouter();
-    const supabase = createClient();
     const t = useTranslations("Dashboard.topbar");
     const { onOpen, onClose } = useRechargeModal();
-    const [credits, setCredits] = useState<number | null>(null);
+    const [credits, setCredits] = useState<number | null>(
+        (user as { credits?: number }).credits ?? null
+    );
 
+    // ── Server-Sent Events: real-time credit + job status updates ────────────
     useEffect(() => {
-        async function fetchCredits() {
-            const { data, error } = await supabase
-                .from("profiles")
-                .select("credits")
-                .eq("id", user.id)
-                .single();
+        if (!user?.id) return;
 
-            if (data) {
-                setCredits(data.credits);
-                if (data.credits === 0) {
-                    onOpen();
+        const eventSource = new EventSource("/api/events");
+
+        eventSource.onmessage = (event) => {
+            try {
+                const payload = JSON.parse(event.data);
+
+                if (payload.type === "credits_update") {
+                    setCredits(payload.credits);
+                    if (payload.credits === 0) {
+                        onOpen();
+                    }
                 }
-            } else if (error) {
-                console.warn("Could not fetch credits", error);
-                setCredits(0);
+                // job_update events are handled by batch-list component
+            } catch {
+                // ignore malformed events
             }
-        }
-        fetchCredits();
+        };
 
-        // Optional: Subscribe to profile changes for real-time credit updates
-        const channel = supabase
-            .channel('public:profiles')
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` }, (payload) => {
-                setCredits(payload.new.credits);
-            })
-            .subscribe();
+        eventSource.onerror = () => {
+            // Browser will auto-reconnect after a brief delay (SSE spec)
+            console.warn("[SSE] Connection error — browser will retry automatically.");
+        };
 
-        // Setup Lemon Squeezy overlay and events
+        return () => {
+            eventSource.close();
+        };
+    }, [user?.id, onOpen]);
+
+    // ── LemonSqueezy setup ────────────────────────────────────────────────────
+    useEffect(() => {
         if (typeof window !== "undefined" && window.LemonSqueezy) {
             window.LemonSqueezy.Setup({
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -70,16 +75,11 @@ export function DashboardTopbar({ user }: TopbarProps) {
                 }
             });
         }
+    }, [onClose]);
 
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [user.id, supabase]);
-
-    // Smart Purchase Flow: Auto-trigger LemonSqueezy if "buy" param is in URL
+    // ── Smart Purchase Flow (auto-trigger checkout from ?buy= param) ──────────
     useEffect(() => {
         if (typeof window !== "undefined") {
-            // Use native window.location to avoid Next.js useSearchParams suspense requirements
             const url = new URL(window.location.href);
             const buyVariant = url.searchParams.get("buy");
             const isSuccess = url.searchParams.get("success");
@@ -98,18 +98,16 @@ export function DashboardTopbar({ user }: TopbarProps) {
                 };
 
                 const checkoutUrl = checkoutUrls[buyVariant];
-                if (checkoutUrl) {
-                    // Small delay to ensure LemonSqueezy.js is fully initialized in the layout
+                if (checkoutUrl && user?.id) {
                     setTimeout(() => {
                         if (window.LemonSqueezy) {
                             try {
                                 const urlObj = new URL(checkoutUrl);
-                                urlObj.searchParams.set("checkout[custom][user_id]", user.id);
+                                urlObj.searchParams.set("checkout[custom][user_id]", user.id!);
                                 window.LemonSqueezy.Url.Open(urlObj.toString());
                             } catch (e) {
                                 console.error("Failed to auto-open checkout", e);
                             }
-                            // Clean up URL without reloading the page
                             url.searchParams.delete("buy");
                             window.history.replaceState({}, '', url.toString());
                         }
@@ -117,15 +115,11 @@ export function DashboardTopbar({ user }: TopbarProps) {
                 }
             }
         }
-    }, [user.id]);
+    }, [user?.id, t]);
 
     const handleLogout = async () => {
-        await supabase.auth.signOut();
-        router.push("/");
-        router.refresh();
+        await signOut({ callbackUrl: "/" });
     };
-
-
 
     return (
         <header className="flex items-center justify-between h-16 px-6 lg:px-8 border-b border-border bg-background">
@@ -156,11 +150,12 @@ export function DashboardTopbar({ user }: TopbarProps) {
                 <div className="h-4 w-px bg-border hidden sm:block" />
 
                 <span className="text-sm text-muted-foreground hidden lg:block">
-                    {user.email}
+                    {user?.email}
                 </span>
-                {user.user_metadata?.avatar_url ? (
+
+                {user?.image ? (
                     <Image
-                        src={user.user_metadata.avatar_url}
+                        src={user.image}
                         alt="User Avatar"
                         width={32}
                         height={32}
@@ -168,9 +163,10 @@ export function DashboardTopbar({ user }: TopbarProps) {
                     />
                 ) : (
                     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-brand/15 text-brand text-xs font-bold">
-                        {user.email?.charAt(0).toUpperCase() || "U"}
+                        {user?.email?.charAt(0).toUpperCase() || "U"}
                     </div>
                 )}
+
                 <Button variant="ghost" size="sm" onClick={handleLogout} className="hidden sm:inline-flex">
                     {t("logout")}
                 </Button>

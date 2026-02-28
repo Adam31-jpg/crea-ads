@@ -419,7 +419,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
                         <Loader2 className="h-4 w-4 animate-spin text-brand" />
                         <span className="text-[8px] text-muted-foreground font-medium leading-none text-center">
-                            {isVideo ? 'Vidéo' : 'Image'}
+                            {job.type === "video" ? 'Vidéo' : 'Image'}
                         </span>
                     </div>
                 )}
@@ -540,6 +540,9 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                     <>
                                         <Loader2 className="h-3 w-3 animate-spin mr-1" />
                                         Génération en cours... {doneCount}/{totalCount}
+                                        {totalCount > 0 && (
+                                            <span className="ml-1 opacity-70">· {Math.round((doneCount / totalCount) * 100)}%</span>
+                                        )}
                                     </>
                                 ) : isFailed ? (
                                     `Terminé : ${doneCount} Succès, ${failedCount} Échec(s)`
@@ -649,9 +652,9 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                             )}
                             {/* Download/Preview — only when done */}
                             {isDone && primaryJob?.result_url && (
-                                <div 
-                                    onClick={() => setPreviewAsset(primaryJob)} 
-                                    style={{ 
+                                <div
+                                    onClick={() => setPreviewAsset(primaryJob)}
+                                    style={{
                                         cursor: 'pointer',
                                         width: '100%',
                                         aspectRatio: ratioValue,
@@ -660,14 +663,14 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                         backgroundColor: '#f4f4f5'
                                     }}
                                 >
-                                    <img 
-                                        src={primaryJob.result_url} 
-                                        alt="Batch preview" 
-                                        style={{ 
-                                            width: '100%', 
-                                            height: '100%', 
-                                            objectFit: 'cover' 
-                                        }} 
+                                    <img
+                                        src={primaryJob.result_url}
+                                        alt="Batch preview"
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover'
+                                        }}
                                     />
                                 </div>
                             )}
@@ -716,7 +719,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                         </DialogDescription>
                     </DialogHeader>
                     {previewAsset?.result_url && previewAsset.type === "video" && (
-                        <div 
+                        <div
                             className="rounded-lg overflow-hidden bg-black w-full"
                             style={{ aspectRatio: ratioValue }}
                         >
@@ -730,7 +733,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                         </div>
                     )}
                     {previewAsset?.result_url && previewAsset.type === "image" && (
-                        <div 
+                        <div
                             className="rounded-lg overflow-hidden bg-black flex items-center justify-center w-full"
                             style={{ aspectRatio: ratioValue }}
                         >

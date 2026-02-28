@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 
-import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,10 +94,11 @@ export function MarketingIntake({
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
     const [uploadingLogo, setUploadingLogo] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [genProgress, setGenProgress] = useState(0);
+    const genProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [concepts, setConcepts] = useState<AdConcept[] | null>(null);
     const isSubmitting = useRef(false);
     const t = useTranslations("Dashboard.studio.intake");
-    const supabase = createClient();
 
     const canGenerate =
         productDescription.length > 10 &&
@@ -141,29 +141,37 @@ export function MarketingIntake({
             toast.error(t("form.logoError"));
             return;
         }
-
         if (file.size > 10 * 1024 * 1024) {
             toast.error("Le logo dépasse la taille maximum de 10Mo.");
             return;
         }
 
         setUploadingLogo(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        try {
+            const presignRes = await fetch("/api/upload", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename: file.name, contentType: file.type }),
+            });
+            if (!presignRes.ok) throw new Error("Failed to get upload URL");
+            const { presignedUrl, publicUrl } = await presignRes.json();
 
-        const path = `${user.id}/logos/${Date.now()}_${file.name}`;
-        const { error } = await supabase.storage
-            .from("product-assets")
-            .upload(path, file);
+            const uploadRes = await fetch(presignedUrl, {
+                method: "PUT",
+                headers: { "Content-Type": file.type },
+                body: file,
+            });
+            if (!uploadRes.ok) {
+                const errBody = await uploadRes.text().catch(() => "<unreadable>");
+                console.error(`[S3 Logo Upload] ${uploadRes.status} ${uploadRes.statusText}`, errBody);
+                throw new Error(`S3 ${uploadRes.status}: ${uploadRes.statusText}`);
+            }
 
-        if (error) {
-            toast.error(t("form.logoUploadFailed"));
-        } else {
-            const { data: { publicUrl } } = supabase.storage
-                .from("product-assets")
-                .getPublicUrl(path);
             setLogoUrl(publicUrl);
             toast.success(t("form.logoSuccess"));
+        } catch (err) {
+            console.error("[S3 Logo Upload] Unexpected error:", err);
+            toast.error(t("form.logoUploadFailed"));
         }
         setUploadingLogo(false);
     };
@@ -171,6 +179,19 @@ export function MarketingIntake({
     const handleGenerate = async () => {
         setLoading(true);
         setConcepts(null);
+        setGenProgress(0);
+
+        // Simulated progress: ramps 0 → 90% over ~60 s with easing.
+        // Each tick adds (90 - current) * fraction — progress slows near 90%.
+        const TICK_MS = 400;
+        const EASE_FACTOR = 0.012; // controls how fast it asymptotes to 90
+        genProgressRef.current = setInterval(() => {
+            setGenProgress(prev => {
+                const delta = (90 - prev) * EASE_FACTOR;
+                const next = prev + Math.max(delta, 0.05);
+                return Math.min(next, 90);
+            });
+        }, TICK_MS);
 
         try {
             const res = await fetch("/api/strategy", {
@@ -182,13 +203,14 @@ export function MarketingIntake({
                     targetAudience,
                     logoUrl,
                     targetLanguage,
-                    // Theme and accentColor are locked in Step 1 before this modal opens.
-                    // Passing them here ensures Gemini's system prompt is theme-aware
-                    // and background_prompts are written inside the correct aesthetic world.
-                    theme:       theme       ?? "luxe-sombre",
+                    theme: theme ?? "luxe-sombre",
                     accentColor: accentColor ?? "#F59E0B",
                 }),
             });
+
+            // Stop the simulation ticker and snap to 100%
+            if (genProgressRef.current) clearInterval(genProgressRef.current);
+            setGenProgress(100);
 
             const data = await res.json();
 
@@ -203,14 +225,19 @@ export function MarketingIntake({
                     toast.error(t("toasts.generateFailed"));
                 }
                 setLoading(false);
+                setGenProgress(0);
                 return;
             }
 
             setConcepts(data.concepts);
             toast.success(t("toasts.generateSuccess", { total: GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH }));
         } catch {
+            if (genProgressRef.current) clearInterval(genProgressRef.current);
             toast.error(t("toasts.connectFailed"));
         }
+
+        // Reset progress after a brief pause so the user sees 100% then it fades
+        setTimeout(() => setGenProgress(0), 600);
         setLoading(false);
     };
 
@@ -420,12 +447,26 @@ export function MarketingIntake({
                                         <Button
                                             onClick={handleGenerate}
                                             disabled={!canGenerate || loading}
-                                            className="w-full h-12 gap-2 text-base font-bold text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 border-none shadow-[0_0_20px_rgba(245,158,11,0.5)] hover:shadow-[0_0_30px_rgba(245,158,11,0.6)] transition-all disabled:opacity-50 disabled:shadow-none"
+                                            className="relative w-full h-12 gap-2 text-base font-bold text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 border-none shadow-[0_0_20px_rgba(245,158,11,0.5)] hover:shadow-[0_0_30px_rgba(245,158,11,0.6)] transition-all disabled:opacity-50 disabled:shadow-none overflow-hidden"
                                         >
+                                            {/* Animated fill bar behind the label */}
+                                            {loading && genProgress > 0 && (
+                                                <span
+                                                    className="pointer-events-none absolute inset-0 bg-white/10 origin-left transition-transform duration-300"
+                                                    style={{ transform: `scaleX(${genProgress / 100})` }}
+                                                />
+                                            )}
                                             {loading ? (
                                                 <>
-                                                    <Loader2 className="h-5 w-5 animate-spin" />
-                                                    {t("buttons.generating")}
+                                                    <Loader2 className="relative h-5 w-5 animate-spin shrink-0" />
+                                                    <span className="relative">
+                                                        {t("buttons.generating")}
+                                                        {genProgress > 0 && (
+                                                            <span className="ml-2 tabular-nums font-black">
+                                                                {Math.round(genProgress)}%
+                                                            </span>
+                                                        )}
+                                                    </span>
                                                 </>
                                             ) : (
                                                 <>

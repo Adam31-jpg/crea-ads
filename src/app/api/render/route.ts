@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { renderMediaOnLambda, renderStillOnLambda } from "@remotion/lambda-client";
 import { GENERATION_CONFIG } from "@/config/generation.config";
 import { uploadUrlToS3, uploadBase64ToS3 } from "@/lib/s3";
@@ -89,6 +91,18 @@ interface AdConcept {
      *               the scene prompt, enabling artistic re-imagining of the integration.
      */
     perspective_mode?: "structural" | "immersive";
+    /**
+     * Spatial Design System from Gemini's Director's Brain.
+     * Injected into inputProps and stored in jobs.metadata for Lumina Studio readiness.
+     */
+    layout_config?: {
+        spatial_strategy?: string;
+        negative_space_zone?: string;
+        headline?: { text: string; x: number; y: number; width: number; fontSize: number; textAlign: string; color: string };
+        social_proof?: { x: number; y: number; scale: number };
+        arrow?: { startPos: [number, number]; endPos: [number, number]; curvature: number };
+        trust_bar?: { y_position: number; opacity: number; label?: string };
+    };
 }
 
 /** Internal element shape fed to Remotion's MasterComposition. */
@@ -113,18 +127,18 @@ interface CompositionElement {
 function buildFallbackElements(concept: AdConcept): CompositionElement[] {
     const layoutType = concept.layoutType || "converter";
     const elements: CompositionElement[] = [];
-    const hl  = concept.headline    ?? null;
+    const hl = concept.headline ?? null;
     const shl = concept.subheadline ?? null;
-    const cta = concept.cta         ?? null;
+    const cta = concept.cta ?? null;
 
     if (layoutType === "converter") {
-        if (hl)  elements.push({ id: "hl",  type: "headline",    x: 5,  y: 18, width: 42, align: "left",   content: hl  });
-        if (shl) elements.push({ id: "shl", type: "subheadline", x: 5,  y: 38, width: 42, align: "left",   content: shl });
-        if (cta) elements.push({ id: "cta", type: "cta",         x: 5,  y: 60, width: 38, align: "left",   content: cta });
+        if (hl) elements.push({ id: "hl", type: "headline", x: 5, y: 18, width: 42, align: "left", content: hl });
+        if (shl) elements.push({ id: "shl", type: "subheadline", x: 5, y: 38, width: 42, align: "left", content: shl });
+        if (cta) elements.push({ id: "cta", type: "cta", x: 5, y: 60, width: 38, align: "left", content: cta });
     } else {
-        if (hl)  elements.push({ id: "hl",  type: "headline",    x: 50, y: 15, width: 85, align: "center", content: hl  });
+        if (hl) elements.push({ id: "hl", type: "headline", x: 50, y: 15, width: 85, align: "center", content: hl });
         if (shl) elements.push({ id: "shl", type: "subheadline", x: 50, y: 68, width: 80, align: "center", content: shl });
-        if (cta) elements.push({ id: "cta", type: "cta",         x: 50, y: 83, width: 55, align: "center", content: cta });
+        if (cta) elements.push({ id: "cta", type: "cta", x: 50, y: 83, width: 55, align: "center", content: cta });
     }
 
     return elements;
@@ -138,21 +152,23 @@ function buildFallbackElements(concept: AdConcept): CompositionElement[] {
  *   so Gemini never needs to repeat copy inside each element object.
  * - Falls back to buildFallbackElements() if the array is absent, empty, or
  *   structurally broken, ensuring the render always has something to display.
+ * - Syncs layout_config.headline x/y/width into the matching headline element
+ *   so the spatial design system is the single source of truth for positioning.
  */
 function buildElements(concept: AdConcept): CompositionElement[] {
-    const VALID_TYPES = ["headline", "subheadline", "cta"] as const;
-    const VALID_ALIGNS = ["left", "center", "right"] as const;
+    const VALID_TYPES = ['headline', 'subheadline', 'cta'] as const;
+    const VALID_ALIGNS = ['left', 'center', 'right'] as const;
 
     const contentMap: Record<string, string> = {
-        headline:    concept.headline    ?? "",
-        subheadline: concept.subheadline ?? "",
-        cta:         concept.cta        ?? "",
+        headline: concept.headline ?? '',
+        subheadline: concept.subheadline ?? '',
+        cta: concept.cta ?? '',
     };
 
     // editorial/cinematic intents intentionally produce sparse or empty element arrays.
     // Do NOT force-fill with the fallback in those cases.
-    const allowSparse = concept.composition_intent === "editorial" ||
-                        concept.composition_intent === "cinematic";
+    const allowSparse = concept.composition_intent === 'editorial' ||
+        concept.composition_intent === 'cinematic';
 
     if (!Array.isArray(concept.elements) || concept.elements.length === 0) {
         if (allowSparse) {
@@ -164,32 +180,32 @@ function buildElements(concept: AdConcept): CompositionElement[] {
     }
 
     try {
-        const VALID_TREATMENTS = ["none", "shadow", "glass", "outline", "hero_block"] as const;
-        const VALID_WEIGHTS    = ["thin", "regular", "bold", "black"] as const;
+        const VALID_TREATMENTS = ['none', 'shadow', 'glass', 'outline', 'hero_block'] as const;
+        const VALID_WEIGHTS = ['thin', 'regular', 'bold', 'black'] as const;
 
         const sanitized: CompositionElement[] = concept.elements
-            .filter((el) => el && typeof el === "object")
+            .filter((el) => el && typeof el === 'object')
             .map((el, i): CompositionElement => {
                 const type = VALID_TYPES.includes(el.type as typeof VALID_TYPES[number])
                     ? (el.type as typeof VALID_TYPES[number])
-                    : "headline";
+                    : 'headline';
                 const align = VALID_ALIGNS.includes(el.align as typeof VALID_ALIGNS[number])
                     ? (el.align as typeof VALID_ALIGNS[number])
-                    : "left";
+                    : 'left';
                 const text_treatment = VALID_TREATMENTS.includes(el.text_treatment as typeof VALID_TREATMENTS[number])
                     ? (el.text_treatment as typeof VALID_TREATMENTS[number])
-                    : "shadow";
+                    : 'shadow';
                 const font_weight = VALID_WEIGHTS.includes(el.font_weight as typeof VALID_WEIGHTS[number])
                     ? (el.font_weight as typeof VALID_WEIGHTS[number])
                     : undefined;
                 return {
-                    id:      String(el.id  || `el_${i}`),
+                    id: String(el.id || `el_${i}`),
                     type,
-                    x:       Math.min(95, Math.max(0,  Number(el.x)     || 5)),
-                    y:       Math.min(95, Math.max(0,  Number(el.y)     || 10 + i * 25)),
-                    width:   el.width != null ? Math.min(90, Math.max(10, Number(el.width))) : undefined,
+                    x: Math.min(95, Math.max(0, Number(el.x) || 5)),
+                    y: Math.min(95, Math.max(0, Number(el.y) || 10 + i * 25)),
+                    width: el.width != null ? Math.min(90, Math.max(10, Number(el.width))) : undefined,
                     align,
-                    content: contentMap[type] ?? "",
+                    content: contentMap[type] ?? '',
                     text_treatment,
                     font_weight,
                 };
@@ -205,13 +221,28 @@ function buildElements(concept: AdConcept): CompositionElement[] {
 
         // Strip elements that violate composition_intent constraints.
         let filtered = sanitized;
-        if (concept.composition_intent === "cinematic") {
-            filtered = sanitized.filter((el) => el.type === "headline");
-        } else if (concept.composition_intent === "editorial") {
-            filtered = sanitized.filter((el) => el.type !== "cta");
+        if (concept.composition_intent === 'cinematic') {
+            filtered = sanitized.filter((el) => el.type === 'headline');
+        } else if (concept.composition_intent === 'editorial') {
+            filtered = sanitized.filter((el) => el.type !== 'cta');
         }
 
-        console.log(`[Elements] Using ${filtered.length} element(s) (intent: ${concept.composition_intent ?? "direct_response"}).`);
+        // ── Sync layout_config.headline → headline element positioning ────────
+        // layout_config is the authoritative spatial source. If Gemini provided it,
+        // override the headline element's x/y/width with those exact coordinates.
+        const lc = concept.layout_config?.headline;
+        if (lc) {
+            for (const el of filtered) {
+                if (el.type === 'headline') {
+                    el.x = Math.min(95, Math.max(0, lc.x));
+                    el.y = Math.min(95, Math.max(0, lc.y));
+                    if (lc.width) el.width = Math.min(90, Math.max(10, lc.width));
+                }
+            }
+            console.log(`[Elements] layout_config.headline sync applied — x:${lc.x} y:${lc.y} w:${lc.width}`);
+        }
+
+        console.log(`[Elements] Using ${filtered.length} element(s) (intent: ${concept.composition_intent ?? 'direct_response'}).`);
         return filtered;
     } catch (err) {
         console.error(`[Elements] Sanitization error — falling back:`, err);
@@ -237,29 +268,42 @@ async function withRetry<T>(
     return { data: null as T, error: lastError };
 }
 
+// ─── Negative Space Zone → Phrase Map ────────────────────────────────────────
+// When Gemini picks a negative_space_zone, we append an explicit instruction
+// to leave that region visually empty. This is the key mechanism that makes the
+// generated background spatially aware of where Remotion will render the text.
+const NEGATIVE_SPACE_PHRASES: Record<string, string> = {
+    'top-left': 'with a clean, minimalist, out-of-focus empty area in the upper-left corner reserved for typography',
+    'top-right': 'with a clean, minimalist, out-of-focus empty area in the upper-right corner reserved for typography',
+    'bottom-left': 'with a clean, minimalist, out-of-focus empty area in the lower-left corner reserved for typography',
+    'bottom-right': 'with a clean, minimalist, out-of-focus empty area in the lower-right corner reserved for typography',
+    'top': 'with a clean, minimalist, out-of-focus empty band across the top third of the frame reserved for typography',
+    'bottom': 'with a clean, minimalist, out-of-focus empty band across the bottom third of the frame reserved for typography',
+    'left': 'with a clean, minimalist, out-of-focus empty zone on the left half of the frame reserved for typography',
+    'right': 'with a clean, minimalist, out-of-focus empty zone on the right half of the frame reserved for typography',
+    'center': 'with a clean, minimalist, out-of-focus empty central zone reserved for large headline typography',
+};
+
 /**
- * Assembles the final Fal.ai prompt from Gemini's already-themed output.
+ * Assembles the final fal.ai prompt from Gemini's already-themed output.
  *
- * The old COLOR_MOOD_STYLE_MAP approach prepended a hardcoded 12-word prefix
- * to every concept in the batch, causing uniform outputs regardless of what
- * Gemini generated.  That map has been removed.
+ * Appends two key phrases:
+ *  1. scene_interaction (contextual lifestyle element) if present.
+ *  2. negative_space_zone instruction — explicit "leave this area empty for text" mandate
+ *     injected into every prompt so the image model respects the spatial layout plan.
  *
- * Gemini now owns all aesthetic direction — it receives the userTheme as a
- * signal and generates a unique background_prompt per concept that already
- * encodes the correct surface, lighting, perspective, and materiality for
- * that theme.  This function simply assembles the final string:
- *
- *   [Gemini's background_prompt]. [scene_interaction if present].
- *
- * Nothing is prepended, nothing is overridden.  Gemini's output is trusted.
+ * Nothing is prepended, nothing is overridden. Gemini's output is trusted.
  */
 function buildFalPrompt(
     backgroundPrompt: string,
     sceneInteraction?: string | null,
+    negativeSpaceZone?: string | null,
 ): string {
-    return sceneInteraction
-        ? `${backgroundPrompt}. ${sceneInteraction}.`
-        : backgroundPrompt;
+    const parts: string[] = [backgroundPrompt];
+    if (sceneInteraction) parts.push(sceneInteraction);
+    const spacePhrase = negativeSpaceZone ? NEGATIVE_SPACE_PHRASES[negativeSpaceZone] : null;
+    if (spacePhrase) parts.push(spacePhrase);
+    return parts.join('. ');
 }
 
 /**
@@ -349,8 +393,146 @@ async function getVertexAccessToken(): Promise<string | null> {
     }
 }
 
-/** Generate a realistic background via Fal.ai and upload it to Supabase Storage */
-async function fetchFalAiBackground(prompt: string, supabase: any, format: string): Promise<string | null> {
+/** Generate a realistic background via fal.ai Nano Banana Pro (text-only, used for video/bundle paths) */
+async function fetchNanoBananaProBackground(prompt: string, format: string): Promise<string | null> {
+    const FAL_KEY = process.env.FAL_KEY;
+    if (!FAL_KEY) {
+        console.warn('[NanaBananaPro] Missing FAL_KEY in environment variables');
+        return null;
+    }
+
+    const FORMAT_TO_NBP_ASPECT: Record<string, string> = {
+        '1080x1920': '9:16',
+        '1080x1080': '1:1',
+        '1920x1080': '16:9',
+        '1080x1350': '4:5',
+    };
+    const aspect_ratio = FORMAT_TO_NBP_ASPECT[format] ?? '9:16';
+
+    try {
+        console.log(`[NanaBananaPro] Requesting background (aspect: ${aspect_ratio}): "${prompt.slice(0, 100)}..."`);
+        const response = await fetch('https://fal.run/fal-ai/nano-banana-pro', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Key ${FAL_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                prompt,
+                aspect_ratio,
+                num_images: 1,
+                output_format: 'jpeg',
+                resolution: '1K',
+                limit_generations: true,
+                safety_tolerance: '4',
+            }),
+        });
+
+        if (!response.ok) {
+            console.error(`[NanaBananaPro] API Error: ${response.statusText} — ${await response.text()}`);
+            return null;
+        }
+
+        const data = await response.json();
+        const imageUrl = data.images?.[0]?.url;
+        if (!imageUrl) return null;
+
+        console.log('[NanaBananaPro] Success. Uploading to S3...');
+        return uploadUrlToS3(imageUrl, 'nbpro');
+    } catch (e) {
+        console.error('[NanaBananaPro] Unexpected error:', e);
+        return null;
+    }
+}
+
+/**
+ * PRIMARY still-image T2I engine: Nano Banana Pro /edit
+ *
+ * Unlike the base model, the /edit endpoint accepts image_urls[] alongside
+ * the text prompt, so Fal.ai can SEE the actual product and recontextualize
+ * it inside the AI-generated scene.  This is the Lumina gold-standard for
+ * still-image product placement.
+ *
+ * Input schema (fal-ai/nano-banana-pro/edit):
+ *   prompt      — the themed background_prompt from Gemini
+ *   image_urls  — array of publicly accessible product image URLs
+ *   aspect_ratio— "9:16" | "1:1" | "16:9" | "4:5"
+ *   resolution  — "1K" (1024px on the shorter side)
+ *
+ * Returns: CloudFront URL of the result, or null on failure.
+ */
+async function fetchNanoBananaProEdit(
+    productImageUrls: string[],
+    prompt: string,
+    format: string,
+): Promise<string | null> {
+    const FAL_KEY = process.env.FAL_KEY;
+    if (!FAL_KEY) {
+        console.warn('[NBProEdit] Missing FAL_KEY — skipping.');
+        return null;
+    }
+    if (!productImageUrls.length) {
+        console.warn('[NBProEdit] No product image URLs provided — skipping.');
+        return null;
+    }
+
+    const FORMAT_TO_ASPECT: Record<string, string> = {
+        '1080x1920': '9:16',
+        '1080x1080': '1:1',
+        '1920x1080': '16:9',
+        '1080x1350': '4:5',
+    };
+    const aspect_ratio = FORMAT_TO_ASPECT[format] ?? '9:16';
+
+    try {
+        console.log(
+            `[NBProEdit] Product URLs: ${productImageUrls.length} image(s) | aspect: ${aspect_ratio}\n` +
+            `[NBProEdit] Prompt: "${prompt.slice(0, 120)}..."`
+        );
+
+        const response = await fetch('https://fal.run/fal-ai/nano-banana-pro/edit', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Key ${FAL_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                prompt,
+                image_urls: productImageUrls,
+                aspect_ratio,
+                resolution: '1K',
+                num_images: 1,
+                output_format: 'jpeg',
+                safety_tolerance: '4',
+            }),
+        });
+
+        if (!response.ok) {
+            const errBody = await response.text();
+            console.error(`[NBProEdit] API error ${response.status}: ${errBody.slice(0, 400)}`);
+            return null;
+        }
+
+        const data = await response.json();
+        const imageUrl: string | undefined = data.images?.[0]?.url;
+        if (!imageUrl) {
+            console.error('[NBProEdit] No image URL in response:', JSON.stringify(data).slice(0, 300));
+            return null;
+        }
+
+        console.log('[NBProEdit] Success. Uploading result to S3...');
+        return uploadUrlToS3(imageUrl, 'nbedit');
+    } catch (e) {
+        console.error('[NBProEdit] Unexpected error:', e);
+        return null;
+    }
+}
+
+
+
+
+/** Generate a realistic background via Fal.ai Flux (legacy fallback) and upload to S3 */
+async function fetchFalAiBackground(prompt: string, format: string): Promise<string | null> {
     const FAL_KEY = process.env.FAL_KEY;
     if (!FAL_KEY) {
         console.warn("[Fal.ai] Missing FAL_KEY in environment variables");
@@ -432,7 +614,6 @@ async function uploadFalResult(
 async function fetchProductShot(
     productImageUrl: string,
     scenePrompt: string,
-    supabase: any,
     format: string,
 ): Promise<string | null> {
     const FAL_KEY = process.env.FAL_KEY;
@@ -453,14 +634,14 @@ async function fetchProductShot(
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                image_url:         productImageUrl,   // ← required key (confirmed in live schema)
+                image_url: productImageUrl,   // ← required key (confirmed in live schema)
                 scene_description: fullPrompt,
                 // manual_placement + bottom_center grounds the product on the surface
                 // so BRIA computes contact shadows from the scene lighting direction.
                 // "original" preserves position but produces no contact shadow.
-                placement_type:               "manual_placement",
-                manual_placement_selection:   "bottom_center",
-                num_results:                  1,
+                placement_type: "manual_placement",
+                manual_placement_selection: "bottom_center",
+                num_results: 1,
                 // sync_mode: true is intentionally ABSENT.
                 // With sync_mode: true, BRIA returns a base64 data URI in images[0].url
                 // instead of a CDN URL. Node.js fetch() cannot fetch data: URIs, so
@@ -511,7 +692,6 @@ async function fetchProductShot(
 async function fetchFluxCannyControlNet(
     productImageUrl: string,
     scenePrompt: string,
-    supabase: any,
     format: string,
     perspectiveMode: "structural" | "immersive" = "structural",
     colorMood: string = "",
@@ -523,7 +703,7 @@ async function fetchFluxCannyControlNet(
     }
 
     const fullPrompt = `${PRODUCT_INTEGRITY_PREFIX} ${scenePrompt}`;
-    const image_size  = FORMAT_TO_DIMENSIONS[format] ?? { width: 1080, height: 1920 };
+    const image_size = FORMAT_TO_DIMENSIONS[format] ?? { width: 1080, height: 1920 };
 
     // Neon/cyberpunk scenes require higher guidance_scale so the model commits
     // to the electric atmosphere rather than defaulting to neutral tones.
@@ -547,14 +727,14 @@ async function fetchFluxCannyControlNet(
             body: JSON.stringify({
                 // Fal.ai extracts Canny edges from this URL automatically —
                 // no separate edge-detection step required.
-                control_image_url:    productImageUrl,
-                prompt:               fullPrompt,
+                control_image_url: productImageUrl,
+                prompt: fullPrompt,
                 image_size,
                 guidance_scale,
-                num_inference_steps:  28,
-                num_images:           1,
+                num_inference_steps: 28,
+                num_images: 1,
                 enable_safety_checker: true,
-                output_format:        "jpeg",
+                output_format: "jpeg",
                 // sync_mode intentionally absent — fal.run is already synchronous
                 // and sync_mode:true would return a base64 data URI, not a CDN URL.
             }),
@@ -599,7 +779,7 @@ const APPAREL_KEYWORDS = [
 
 function isApparelConcept(concept: AdConcept, productName: string): boolean {
     const archetype = (concept.product_archetype ?? "").toLowerCase();
-    const name      = (productName ?? "").toLowerCase();
+    const name = (productName ?? "").toLowerCase();
     return APPAREL_KEYWORDS.some((kw) => archetype.includes(kw) || name.includes(kw));
 }
 
@@ -634,7 +814,6 @@ const LOGO_PRESERVATION_NEGATIVE =
 async function fetchFluxNarrativeImg2Img(
     productImageUrl: string,
     scenePrompt: string,
-    supabase: any,
     format: string,
     strength: number = 0.55,
     guidanceScale: number = 3.5,
@@ -646,7 +825,7 @@ async function fetchFluxNarrativeImg2Img(
     }
 
     const fullPrompt = `${PRODUCT_INTEGRITY_PREFIX} ${scenePrompt}`;
-    const image_size  = FORMAT_TO_DIMENSIONS[format] ?? { width: 1080, height: 1920 };
+    const image_size = FORMAT_TO_DIMENSIONS[format] ?? { width: 1080, height: 1920 };
 
     console.log(`[NarrativeImg2Img] image_url      → "${productImageUrl.slice(0, 80)}..."`);
     console.log(`[NarrativeImg2Img] strength        → ${strength} | guidance_scale → ${guidanceScale}`);
@@ -660,16 +839,16 @@ async function fetchFluxNarrativeImg2Img(
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                image_url:             productImageUrl,
-                prompt:                fullPrompt,
-                negative_prompt:       LOGO_PRESERVATION_NEGATIVE,
+                image_url: productImageUrl,
+                prompt: fullPrompt,
+                negative_prompt: LOGO_PRESERVATION_NEGATIVE,
                 strength,
                 image_size,
-                guidance_scale:        guidanceScale,
-                num_inference_steps:   28,
-                num_images:            1,
+                guidance_scale: guidanceScale,
+                num_inference_steps: 28,
+                num_images: 1,
                 enable_safety_checker: true,
-                output_format:         "jpeg",
+                output_format: "jpeg",
             }),
         });
 
@@ -714,7 +893,7 @@ async function fetchVertexProductRecontext(
     scenePrompt: string,
 ): Promise<string | null> {
     const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT_ID ?? process.env.GCP_PROJECT_ID;
-    const LOCATION   = process.env.GOOGLE_CLOUD_LOCATION   ?? process.env.GCP_REGION ?? "us-central1";
+    const LOCATION = process.env.GOOGLE_CLOUD_LOCATION ?? process.env.GCP_REGION ?? "us-central1";
 
     if (!PROJECT_ID) {
         console.warn("[Vertex] GOOGLE_CLOUD_PROJECT_ID not set — skipping.");
@@ -778,9 +957,9 @@ async function fetchVertexProductRecontext(
                     productImages,
                 }],
                 parameters: {
-                    sampleCount:    1,
-                    addWatermark:   false,
-                    enhancePrompt:  true,
+                    sampleCount: 1,
+                    addWatermark: false,
+                    enhancePrompt: true,
                     outputOptions: { mimeType: "image/jpeg", compressionQuality: 92 },
                 },
             }),
@@ -821,13 +1000,11 @@ async function fetchVertexProductRecontext(
 
 export async function POST(req: NextRequest) {
     // 1. Auth
-    const supabase = await createClient();
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+    const session = await auth();
+    if (!session?.user?.id) {
         return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
+    const userId = session.user.id;
 
     // 2. Parse body
     const { batchId, inputData } = await req.json();
@@ -848,8 +1025,19 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    const concepts: AdConcept[] = inputData.strategy || [];
+    const rawConcepts: AdConcept[] = inputData.strategy || [];
     const product = inputData.products?.[0] || {};
+
+    // ── Re-stamp concept types from GENERATION_CONFIG (authoritative source) ──
+    // Gemini may return incorrect type fields — we enforce the configured split:
+    // first IMAGE_COUNT concepts → "image", remaining → "video".
+    const totalConcepts = Math.max(rawConcepts.length, GENERATION_CONFIG.IMAGE_COUNT + GENERATION_CONFIG.VIDEO_COUNT);
+    const concepts: AdConcept[] = rawConcepts.slice(0, totalConcepts).map((c, idx) => ({
+        ...c,
+        type: idx < GENERATION_CONFIG.IMAGE_COUNT ? "image" : "video",
+    }));
+    console.log(`[Render] Type split — ${GENERATION_CONFIG.IMAGE_COUNT} image(s), ${GENERATION_CONFIG.VIDEO_COUNT} video(s) — ${concepts.length} total concepts`);
+
 
     // ── PRE-FLIGHT: Product image validation ─────────────────────────────────
     // Resolve the hero URL here — before any credit is consumed — so we can
@@ -879,19 +1067,21 @@ export async function POST(req: NextRequest) {
     // DEBIT-BEFORE-RENDER LOGIC: Consume Sparks
     const cost = (GENERATION_CONFIG.IMAGE_COUNT * GENERATION_CONFIG.IMAGE_SPARK_COST) + (GENERATION_CONFIG.VIDEO_COUNT * GENERATION_CONFIG.VIDEO_SPARK_COST);
     if (cost > 0) {
-        const { error: debitError } = await supabase.rpc('decrement_credits', { p_user_id: user.id, p_amount: cost });
-
-        if (debitError) {
-            console.error("[Render API] Debit failed:", debitError);
+        const updatedUser = await prisma.user.updateMany({
+            where: { id: userId, credits: { gte: cost } },
+            data: { credits: { decrement: cost } },
+        });
+        if (updatedUser.count === 0) {
+            console.error("[Render API] Debit failed — insufficient credits");
             return NextResponse.json(
                 { error: "insufficient_funds" },
-                { status: 402 } // Payment Required
+                { status: 402 }
             );
         }
     }
 
     // === CHECKPOINT 1: Payload Intake ===
-    console.log(`[Render] Payload received — batchId: ${batchId}, concepts: ${concepts.length}, userId: ${user.id}`);
+    console.log(`[Render] Payload received — batchId: ${batchId}, concepts: ${concepts.length}, userId: ${userId}`);
 
     // Fallback: if no strategy, create single video concept (backward compat)
     if (concepts.length === 0) {
@@ -909,35 +1099,31 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    // 4. Create all job records in a SINGLE insert (1 DB round-trip)
-    const jobInserts = concepts.map((concept) => ({
-        batch_id: batchId,
-        user_id: user.id,
+    // 4. Create all job records via Prisma
+    const jobDataArray = concepts.map((concept) => ({
+        batchId,
+        userId,
         status: "rendering",
         type: concept.type,
-        template_id: formatToCompositionId(inputData.format),
-        metadata: {
+        templateId: formatToCompositionId(inputData.format),
+        metadata: JSON.parse(JSON.stringify({
             concept,
             inputData: { ...inputData, strategy: undefined },
-        },
+        })) as Prisma.InputJsonValue,
     }));
 
     // === CHECKPOINT 2: DB Jobs Creation ===
-    console.log(`[DB] Attempting to insert ${jobInserts.length} jobs for batch ${batchId}...`);
+    console.log(`[DB] Attempting to insert ${jobDataArray.length} jobs for batch ${batchId}...`);
 
-    let jobs: { id: string }[] | null = null;
-    let jobsError: { message: string } | null = null;
+    let jobs: { id: string }[];
     try {
-        const result = await withRetry(() =>
-            supabase.from("jobs").insert(jobInserts).select("id")
-        );
-        jobs = result.data as { id: string }[] | null;
-        jobsError = result.error;
-
-        if (jobsError) {
-            // Full RLS / schema error visibility
-            console.error("[DB][RLS ERROR] Full Supabase error object:", JSON.stringify(jobsError, null, 2));
-        }
+        await prisma.job.createMany({ data: jobDataArray });
+        jobs = await prisma.job.findMany({
+            where: { batchId },
+            select: { id: true },
+            orderBy: { createdAt: "asc" },
+            take: jobDataArray.length,
+        });
     } catch (insertErr) {
         console.error("[DB][CRITICAL] Exception during job insert:", insertErr);
         return NextResponse.json(
@@ -946,19 +1132,10 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    if (jobsError || !jobs) {
-        return NextResponse.json(
-            { error: `Failed to create jobs: ${jobsError?.message}` },
-            { status: 500 }
-        );
-    }
-
     console.log(`[DB] Jobs created successfully: [${jobs.map((j) => j.id).join(", ")}]`);
 
-    // 5. Update batch status (single write)
-    await withRetry(() =>
-        supabase.from("batches").update({ status: "processing" }).eq("id", batchId)
-    );
+    // 5. Update batch status
+    await prisma.batch.update({ where: { id: batchId }, data: { status: "processing" } });
 
     // 6. Build render tasks (pairs of concept + jobId)
     const renderTasks = concepts.map((concept, i) => ({
@@ -1010,16 +1187,19 @@ export async function POST(req: NextRequest) {
             if (concept.background_prompt) {
                 // Gemini owns all aesthetic direction — background_prompt already
                 // encodes the correct surface, lighting, and materiality for this
-                // concept.  buildFalPrompt only appends scene_interaction.
+                // concept.  buildFalPrompt appends scene_interaction AND the negative
+                // space zone phrase so the image model leaves room for typography.
                 const fusedPrompt = buildFalPrompt(
                     concept.background_prompt,
                     concept.scene_interaction,
+                    concept.layout_config?.negative_space_zone,
                 );
                 console.log(
                     `[Fal.ai] Prompt for JobID ${jobId}` +
                     ` (narrative: ${concept.narrative_concept ?? "none"}` +
                     `, theme: ${inputData.theme ?? "none"}` +
                     `, interaction: ${concept.scene_interaction ? "yes" : "no"}` +
+                    `, space_zone: ${concept.layout_config?.negative_space_zone ?? "none"}` +
                     `, type: ${concept.type}, bundle: ${isBundle}):` +
                     ` "${fusedPrompt}"`
                 );
@@ -1054,9 +1234,9 @@ export async function POST(req: NextRequest) {
                     // BRIA entirely and go straight to Tier 2 for faster testing.
                     // ─────────────────────────────────────────────────────────────
 
-                    const stillMode      = process.env.NEXT_PUBLIC_STILL_MODE ?? "bria";
+                    const stillMode = process.env.NEXT_PUBLIC_STILL_MODE ?? "bria";
                     const perspectiveMode = concept.perspective_mode ?? "structural";
-                    const productName     = inputData.products?.[0]?.productName ?? "";
+                    const productName = inputData.products?.[0]?.productName ?? "";
 
                     // Apparel bypass: soft goods need Mode B's high creative freedom.
                     // BRIA (placement-only) and Canny (edge cage) both prevent the model
@@ -1070,69 +1250,83 @@ export async function POST(req: NextRequest) {
                         backgroundImageUrl = await fetchFluxNarrativeImg2Img(
                             heroUrl,
                             fusedPrompt,
-                            supabase,
                             inputData.format as string,
-                            0.65,   // higher strength: fabric needs more creative freedom
-                            8.5,    // higher guidance: scene prompt must dominate for realism
+                            0.65,
+                            8.5,
                         );
                     } else {
-                        // ── 4-tier chain for hard goods (bottles, boxes, cans, etc.) ────
+                        // ── 3-tier chain for hard goods (bottles, boxes, cans, etc.) ────
                         //
-                        // Tier 0 — Vertex AI Imagen Product Recontext (preferred)
-                        //   Object embedding preserves label + logo + shape natively.
-                        //   Passes all available product views for best 3D fidelity.
-                        //   Skipped if GOOGLE_CLOUD_PROJECT_ID is not set.
+                        // Tier 0 — Nano Banana Pro /edit (GOLD STANDARD)
+                        //   Sends productImageUrls[] + scene prompt to /edit endpoint.
+                        //   Fal.ai sees the actual product and recontextualizes it in
+                        //   the AI-generated scene. Best quality for still-product ads.
                         //
-                        // Tier 1 — BRIA product-shot
-                        //   Good label preservation. Placement-only; no perspective shift.
-                        //   Skipped when NEXT_PUBLIC_STILL_MODE=narrative.
+                        // Tier 1 — BRIA product-shot (fallback)
+                        //   Classic placement model. Preserves label + shape. Less
+                        //   creative freedom than NBPro /edit.
                         //
                         // Tier 2 — Narrative Fusion img2img (Mode B)
-                        //   Scene integration quality > BRIA; label degrades ~35% at 0.55.
+                        //   Uses the product image as img2img seed. Scene integration
+                        //   quality > BRIA but label fidelity degrades ~35%.
                         //
                         // Tier 3 — Canny ControlNet (last resort)
-                        //   Silhouette only. Sticker effect probable. Avoids empty render.
+                        //   Silhouette-only structural anchor. Sticker effect probable.
                         // ─────────────────────────────────────────────────────────────────
 
-                        const vertexEnabled = !!process.env.GOOGLE_CLOUD_PROJECT_ID;
-
-                        if (vertexEnabled) {
-                            console.log(
-                                `[Still][0/4] Vertex AI Product Recontext ` +
-                                `(${productImageUrls.length} view${productImageUrls.length > 1 ? "s" : ""}) — JobID ${jobId}`
-                            );
-                            backgroundImageUrl = await fetchVertexProductRecontext(
-                                productImageUrls,
-                                fusedPrompt,
-                            );
-                        } else {
-                            console.log(`[Still][0/4] Vertex AI skipped — GOOGLE_CLOUD_PROJECT_ID not set — JobID ${jobId}`);
+                        // ⚠️  Product URL accessibility pre-flight ——————————————————————
+                        // NBPro /edit fetches productImageUrls[] server-side.
+                        // A 403 response means the S3 object is private — the model
+                        // cannot see the product and will output a black/wrong scene.
+                        let productUrlAccessible = true;
+                        try {
+                            const urlCheck = await fetch(heroUrl, { method: 'HEAD' });
+                            if (!urlCheck.ok) {
+                                console.error(
+                                    `[Still][PRE-FLIGHT] Product image returned ${urlCheck.status} — ` +
+                                    `NBPro /edit cannot access it. URL: ${heroUrl.slice(0, 100)}\n` +
+                                    `FIX: run 'node scripts/apply-s3-config.mjs' then re-upload the product image.`
+                                );
+                                productUrlAccessible = false;
+                            } else {
+                                console.log(`[Still][PRE-FLIGHT] Product URL OK (${urlCheck.status}) — proceeding.`);
+                            }
+                        } catch (e) {
+                            console.warn('[Still][PRE-FLIGHT] HEAD-check network error:', e);
                         }
 
-                        if (!backgroundImageUrl && stillMode !== "narrative") {
-                            // Tier 1 — BRIA
-                            console.warn(`[Still][1/4] Vertex failed/skipped — BRIA product-shot — JobID ${jobId}`);
+                        if (productUrlAccessible && stillMode !== 'narrative') {
+                            // Tier 0 — Nano Banana Pro /edit (gold standard)
+                            console.log(`[Still][0/3] NBPro /edit (product recontextualization) — JobID ${jobId}`);
+                            backgroundImageUrl = await fetchNanoBananaProEdit(
+                                productImageUrls,
+                                fusedPrompt,
+                                inputData.format as string,
+                            );
+                        } else if (!productUrlAccessible) {
+                            console.error(`[Still][0/3] SKIPPED — product URL inaccessible (403). Fix S3 policy first.`);
+                        } else {
+                            console.log(`[Still][OVERRIDE] NEXT_PUBLIC_STILL_MODE=narrative — skipping NBPro /edit — JobID ${jobId}`);
+                        }
+
+                        if (!backgroundImageUrl && stillMode !== 'narrative') {
+                            // Tier 1 — BRIA (fallback)
+                            console.warn(`[Still][1/3] NBPro /edit failed — BRIA product-shot fallback — JobID ${jobId}`);
                             backgroundImageUrl = await fetchProductShot(
                                 heroUrl,
                                 fusedPrompt,
-                                supabase,
                                 inputData.format as string,
                             );
-                        } else if (!backgroundImageUrl) {
-                            console.log(`[Still][OVERRIDE] NEXT_PUBLIC_STILL_MODE=narrative — skipping BRIA — JobID ${jobId}`);
                         }
 
                         if (!backgroundImageUrl) {
                             // Tier 2 — Narrative Fusion img2img (Mode B)
-                            const narrativeStrength = perspectiveMode === "immersive" ? 0.62 : 0.55;
-                            const tierLabel = stillMode === "narrative" ? "1/4 (Mode B override)" : "2/4";
-                            console.warn(
-                                `[Still][${tierLabel}] Narrative Fusion img2img (strength: ${narrativeStrength}, ${perspectiveMode}) — JobID ${jobId}`
-                            );
+                            const narrativeStrength = perspectiveMode === 'immersive' ? 0.62 : 0.55;
+                            const tierLabel = stillMode === 'narrative' ? '0/3 (Mode B override)' : '2/3';
+                            console.warn(`[Still][${tierLabel}] Narrative Fusion img2img (strength: ${narrativeStrength}) — JobID ${jobId}`);
                             backgroundImageUrl = await fetchFluxNarrativeImg2Img(
                                 heroUrl,
                                 fusedPrompt,
-                                supabase,
                                 inputData.format as string,
                                 narrativeStrength,
                                 3.5,
@@ -1141,16 +1335,13 @@ export async function POST(req: NextRequest) {
 
                         if (!backgroundImageUrl) {
                             // Tier 3 — Canny ControlNet (last resort)
-                            console.warn(
-                                `[Still][3/4] All paths failed — Canny ControlNet (${perspectiveMode}) — JobID ${jobId}`
-                            );
+                            console.warn(`[Still][3/3] All paths failed — Canny ControlNet (${perspectiveMode}) — JobID ${jobId}`);
                             backgroundImageUrl = await fetchFluxCannyControlNet(
                                 heroUrl,
                                 fusedPrompt,
-                                supabase,
                                 inputData.format as string,
                                 perspectiveMode,
-                                concept.colorMood ?? "",
+                                concept.colorMood ?? '',
                             );
                         }
                     }
@@ -1163,20 +1354,24 @@ export async function POST(req: NextRequest) {
                         console.error(`[Still] ALL paths failed — gradient background only — JobID ${jobId}`);
                     }
                 } else {
-                    // ── VIDEO / BUNDLE path — Flux text-to-image + HeroObject ──
+                    // ── VIDEO / BUNDLE path — Nano Banana Pro (primary) → Flux (fallback) + HeroObject ──
                     const reason = concept.type !== "image" ? "video" : "bundle shot";
-                    console.log(`[Fal.ai] ${reason} — Flux background + HeroObject — JobID ${jobId}`);
-                    backgroundImageUrl = await fetchFalAiBackground(fusedPrompt, supabase, inputData.format as string);
+                    console.log(`[NanaBananaPro] ${reason} — NBPro background + HeroObject — JobID ${jobId}`);
+                    backgroundImageUrl = await fetchNanoBananaProBackground(fusedPrompt, inputData.format as string);
+                    if (!backgroundImageUrl) {
+                        console.warn(`[NanaBanana2] Failed — falling back to Flux for ${reason} — JobID ${jobId}`);
+                        backgroundImageUrl = await fetchFalAiBackground(fusedPrompt, inputData.format as string);
+                    }
                 }
 
                 if (!backgroundImageUrl) {
                     console.log(`[Queue] Triggering atomic 1-Spark refund for failed background generation on JobID ${jobId}`);
-                    await supabase.rpc('increment_credits', { p_user_id: user.id, p_amount: 1 });
+                    await prisma.user.update({ where: { id: userId }, data: { credits: { increment: 1 } } });
                     hasRefunded = true;
                 }
             } else {
                 console.warn(`[Queue] No background_prompt generated for JobID ${jobId}, executing 1-Spark refund safety fallback`);
-                await supabase.rpc('increment_credits', { p_user_id: user.id, p_amount: 1 });
+                await prisma.user.update({ where: { id: userId }, data: { credits: { increment: 1 } } });
                 hasRefunded = true;
             }
 
@@ -1234,6 +1429,7 @@ export async function POST(req: NextRequest) {
                     contentScale: 1,
                 },
                 elements,
+                layout_config: concept.layout_config ?? undefined,
             };
 
             const webhookConfig = {
@@ -1258,23 +1454,22 @@ export async function POST(req: NextRequest) {
 
                     console.log(`[AWS] Lambda returned for JobID: ${jobId} — renderId: ${renderId}, bucket: ${bucketName}, url: ${url}`);
 
-                    await withRetry(() =>
-                        supabase
-                            .from("jobs")
-                            .update({
-                                status: "done",
-                                result_url: url,
-                                metadata: {
-                                    concept,
-                                    renderId,
-                                    bucketName,
-                                    region: REGION,
-                                    renderType: "still",
-                                    functionName: FUNCTION_NAME,
-                                },
-                            })
-                            .eq("id", jobId)
-                    );
+                    await prisma.job.update({
+                        where: { id: jobId },
+                        data: {
+                            status: "done",
+                            result_url: url,
+                            metadata: JSON.parse(JSON.stringify({
+                                concept,
+                                layout_config: concept.layout_config ?? null,
+                                renderId,
+                                bucketName,
+                                region: REGION,
+                                renderType: "still",
+                                functionName: FUNCTION_NAME,
+                            })) as Prisma.InputJsonValue,
+                        },
+                    });
                 } else {
                     console.log(`[AWS] Triggering Lambda securely for JobID: ${jobId} (Type: video/media)`);
 
@@ -1293,21 +1488,20 @@ export async function POST(req: NextRequest) {
 
                     console.log(`[AWS] Lambda returned for JobID: ${jobId} — renderId: ${renderId}, bucket: ${bucketName}`);
 
-                    await withRetry(() =>
-                        supabase
-                            .from("jobs")
-                            .update({
-                                metadata: {
-                                    concept,
-                                    renderId,
-                                    bucketName,
-                                    region: REGION,
-                                    renderType: "media",
-                                    functionName: FUNCTION_NAME,
-                                },
-                            })
-                            .eq("id", jobId)
-                    );
+                    await prisma.job.update({
+                        where: { id: jobId },
+                        data: {
+                            metadata: JSON.parse(JSON.stringify({
+                                concept,
+                                layout_config: concept.layout_config ?? null,
+                                renderId,
+                                bucketName,
+                                region: REGION,
+                                renderType: "media",
+                                functionName: FUNCTION_NAME,
+                            })) as Prisma.InputJsonValue,
+                        },
+                    });
                 }
             } catch (err: unknown) {
                 console.error(`[CRITICAL ERROR] JobID: ${jobId} (Type: ${concept.type})`, err);
@@ -1316,22 +1510,20 @@ export async function POST(req: NextRequest) {
                 if (!hasRefunded) {
                     console.warn(`[Queue] Remotion render failed for JobID ${jobId}, executing 1-Spark refund safety fallback`);
                     try {
-                        await supabase.rpc('increment_credits', { p_user_id: user.id, p_amount: 1 });
+                        await prisma.user.update({ where: { id: userId }, data: { credits: { increment: 1 } } });
                     } catch (refundErr) {
                         console.error(`[CRITICAL] Failed to process refund for JobID ${jobId}:`, refundErr);
                     }
                 }
 
                 const message = err instanceof Error ? err.message : "Unknown Lambda error";
-                await withRetry(() =>
-                    supabase
-                        .from("jobs")
-                        .update({
-                            status: "failed",
-                            error_message: friendlyError(message),
-                        })
-                        .eq("id", jobId)
-                );
+                await prisma.job.update({
+                    where: { id: jobId },
+                    data: {
+                        status: "failed",
+                        error_message: friendlyError(message),
+                    },
+                });
             }
         }
         console.log(`[Queue] All Lambda triggers dispatched for batch ${batchId}. Awaiting webhooks.`);

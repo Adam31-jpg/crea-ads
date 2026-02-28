@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -25,20 +25,20 @@ export default function LoginPage() {
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const router = useRouter();
-    const supabase = createClient();
     const t = useTranslations("Auth.login");
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
-        const { error } = await supabase.auth.signInWithPassword({
+        const result = await signIn("credentials", {
             email,
             password,
+            redirect: false,
         });
 
-        if (error) {
-            const msg = error.message === "Invalid login credentials"
+        if (result?.error) {
+            const msg = result.error === "CredentialsSignin"
                 ? t("errors.invalidCredentials")
                 : t("errors.generic");
             toast.error(msg);
@@ -50,16 +50,7 @@ export default function LoginPage() {
     };
 
     const handleGoogleLogin = async () => {
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider: "google",
-            options: {
-                redirectTo: `${location.origin}/auth/callback`,
-            },
-        });
-
-        if (error) {
-            toast.error(t("errors.generic"));
-        }
+        await signIn("google", { callbackUrl: "/dashboard" });
     };
 
     return (

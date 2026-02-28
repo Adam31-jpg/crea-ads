@@ -75,7 +75,9 @@ export function resolveDesign(
             safePadding: 100,
             contentScale: 1.0
         },
-        elements: []
+        elements: [],
+        hideHeroObject: false,
+        compositionIntent: 'direct_response',
     };
 
     // 4. Merge Overrides (The "Override Priority" Logic)

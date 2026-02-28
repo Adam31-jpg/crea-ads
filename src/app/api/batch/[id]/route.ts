@@ -1,167 +1,79 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { deleteRender } from "@remotion/lambda-client";
 
 /**
  * DELETE /api/batch/[id] — Comprehensive Clean Delete
- * 1. Parse image URLs from batch input_data
- * 2. Delete files from Supabase Storage (best-effort)
- * 3. Delete jobs + batch from DB
+ * 1. Verify ownership
+ * 2. Delete files from S3 via Remotion API (best-effort)
+ * 3. Cascade-delete jobs + batch via Prisma (schema has onDelete: Cascade)
  */
 export async function DELETE(
     _req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id } = await params;
-    const supabase = await createClient();
+    const session = await auth();
+    if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-    // Auth
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
+    // Verify ownership
+    const batch = await prisma.batch.findUnique({
+        where: { id, userId: session.user.id },
+        include: { jobs: { select: { id: true, metadata: true } } },
+    });
 
-    // Fetch batch (verify ownership)
-    const { data: batch, error: fetchError } = await supabase
-        .from("batches")
-        .select("id, input_data, user_id")
-        .eq("id", id)
-        .eq("user_id", user.id)
-        .single();
+    if (!batch) return NextResponse.json({ error: "batchNotFound" }, { status: 404 });
 
-    if (fetchError || !batch) {
-        return NextResponse.json({ error: "batchNotFound" }, { status: 404 });
-    }
-
-    // 1. Parse image URLs from input_data
-    const inputData = batch.input_data as Record<string, unknown>;
-    const products = (inputData?.products as Record<string, unknown>[]) ?? [];
-    const storagePaths: string[] = [];
-
-    for (const product of products) {
-        const images = (product?.images as string[]) ?? [];
-        for (const url of images) {
-            // Extract storage path from public URL
-            // URL format: .../storage/v1/object/public/product-assets/{userId}/draft/filename.ext
-            const match = url.match(/product-assets\/(.+)$/);
-            if (match) {
-                storagePaths.push(match[1]);
+    // Best-effort AWS S3 cleanup for each job's render artifacts
+    const awsCleanups = batch.jobs.map(async (job) => {
+        const meta = job.metadata as Record<string, unknown> | null;
+        const region = meta?.region as string | undefined;
+        const bucketName = meta?.bucketName as string | undefined;
+        const renderId = meta?.renderId as string | undefined;
+        if (region && bucketName && renderId) {
+            try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await deleteRender({ region: region as any, bucketName, renderId });
+                console.log(`[Clean Delete] Deleted S3 artifacts for renderId: ${renderId}`);
+            } catch (err) {
+                console.error(`[Clean Delete] Failed S3 cleanup for ${renderId}:`, err);
             }
         }
-    }
+    });
+    await Promise.all(awsCleanups);
 
-    // 2. Delete files from Supabase Storage (best-effort)
-    if (storagePaths.length > 0) {
-        const { error: storageError } = await supabase.storage
-            .from("product-assets")
-            .remove(storagePaths);
-
-        if (storageError) {
-            console.warn(
-                `[Clean Delete] Storage cleanup partial failure for batch ${id}:`,
-                storageError.message
-            );
-            // Continue anyway — pg_cron cleanup catches orphans
-        }
-    }
-
-    // 3. Cleanup AWS S3 generated videos via Remotion API
-    const { data: jobsToCleanup, error: fetchJobsErr } = await supabase
-        .from("jobs")
-        .select("id, metadata")
-        .eq("batch_id", id);
-
-    if (!fetchJobsErr && jobsToCleanup) {
-        // Map promises to softly bypass single failures
-        const awsCleanups = jobsToCleanup.map(async (job) => {
-            const region = (job.metadata as any)?.region;
-            const bucketName = (job.metadata as any)?.bucketName;
-            const renderId = (job.metadata as any)?.renderId;
-            if (region && bucketName && renderId) {
-                try {
-                    await deleteRender({ region, bucketName, renderId });
-                    console.log(`[Clean Delete] Deleted AWS S3 artifacts for renderId: ${renderId}`);
-                } catch (cleanupErr) {
-                    console.error(`[Clean Delete] Failed AWS S3 cleanup for renderId ${renderId}:`, cleanupErr);
-                }
-            }
-        });
-        await Promise.all(awsCleanups);
-    }
-
-    // 4. Delete jobs first, then batch
-    // Use .select() to verify rows were actually affected (RLS can silently block)
-    const { data: deletedJobs, error: jobsError } = await supabase
-        .from("jobs")
-        .delete()
-        .eq("batch_id", id)
-        .select("id");
-
-    if (jobsError) {
-        console.warn(`[Clean Delete] Jobs cleanup error for batch ${id}:`, jobsError.message);
-    }
-    console.log(`[Clean Delete] Deleted ${deletedJobs?.length ?? 0} jobs for batch ${id}`);
-
-    const { data: deletedBatch, error: deleteError } = await supabase
-        .from("batches")
-        .delete()
-        .eq("id", id)
-        .eq("user_id", user.id)
-        .select("id");
-
-    if (deleteError) {
-        return NextResponse.json(
-            { error: `Delete failed: ${deleteError.message}` },
-            { status: 500 }
-        );
-    }
-
-    if (!deletedBatch || deletedBatch.length === 0) {
-        return NextResponse.json(
-            { error: "deleteFailed" },
-            { status: 403 }
-        );
-    }
+    // Cascade delete: jobs are deleted first by Prisma FK cascade, then batch
+    await prisma.batch.delete({ where: { id } });
+    console.log(`[Clean Delete] Batch ${id} and its ${batch.jobs.length} jobs deleted`);
 
     return NextResponse.json({ success: true });
 }
 
 /**
  * PATCH /api/batch/[id] — Archive / Unarchive toggle
+ * Note: `is_archived` is stored in the `metadata` JSON field since the Prisma
+ * schema does not have a dedicated column. Alternatively add a Boolean column.
  */
 export async function PATCH(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id } = await params;
-    const supabase = await createClient();
-
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
+    const session = await auth();
+    if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const { is_archived } = body;
+    const is_archived = !!body.is_archived;
 
-    const { data, error } = await supabase
-        .from("batches")
-        .update({ is_archived: !!is_archived })
-        .eq("id", id)
-        .eq("user_id", user.id)
-        .select("id");
+    const batch = await prisma.batch.findUnique({ where: { id, userId: session.user.id } });
+    if (!batch) return NextResponse.json({ error: "archiveFailed" }, { status: 403 });
 
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    const existingMeta = (batch.metadata as Record<string, unknown>) ?? {};
+    await prisma.batch.update({
+        where: { id },
+        data: { metadata: { ...existingMeta, is_archived } },
+    });
 
-    if (!data || data.length === 0) {
-        return NextResponse.json({ error: "archiveFailed" }, { status: 403 });
-    }
-
-    return NextResponse.json({ success: true, is_archived: !!is_archived });
+    return NextResponse.json({ success: true, is_archived });
 }

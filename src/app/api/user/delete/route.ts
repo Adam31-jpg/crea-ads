@@ -1,76 +1,50 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { deleteRender } from '@remotion/lambda/client';
+import { auth, signOut } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { deleteRender } from '@remotion/lambda-client';
 
-export async function POST(req: Request) {
+export async function POST() {
     try {
-        const supabase = await createClient();
-
-        // Ensure the user is authenticated and requesting their own deletion
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) {
+        const session = await auth();
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+        const userId = session.user.id;
+        console.log(`[Account Deletion] Initiating deletion for user: ${userId}`);
 
-        console.log(`[Account Deletion] Initiating deletion for user: ${user.id}`);
+        // 1. Fetch all jobs to clean up S3 render artifacts
+        const jobs = await prisma.job.findMany({
+            where: { batch: { userId } },
+            select: { id: true, metadata: true },
+        });
 
-        // 1. Fetch all their jobs to delete Remotion S3 assets
-        const { data: jobs } = await supabase
-            .from('jobs')
-            .select(`
-            id,
-            render_id,
-            bucket_name,
-            aws_region,
-            batch_id,
-            batches!inner(user_id)
-        `)
-            .eq('batches.user_id', user.id);
-
-        if (jobs && jobs.length > 0) {
-            console.log(`[Account Deletion] Found ${jobs.length} jobs to clean from S3.`);
-
-            // We clean them up asynchronously in chunks to prevent timeout
-            // But for safety, we try to wait for them
-            const cleanupPromises = jobs.map(async (job: any) => {
-                if (job.render_id && job.bucket_name && job.aws_region) {
-                    try {
-                        await deleteRender({
-                            bucketName: job.bucket_name,
-                            region: job.aws_region as any,
-                            renderId: job.render_id,
-                        });
-                        console.log(`[Account Deletion] Deleted S3 artifact for render: ${job.render_id}`);
-                    } catch (s3Err) {
-                        console.error(`[Account Deletion] Failed to delete S3 artifact for ${job.render_id}:`, s3Err);
-                        // We don't throw here, we want to proceed with DB deletion anyway
+        if (jobs.length > 0) {
+            console.log(`[Account Deletion] Cleaning ${jobs.length} S3 artifacts...`);
+            await Promise.allSettled(
+                jobs.map(async (job) => {
+                    const meta = job.metadata as Record<string, unknown> | null;
+                    const renderId = meta?.renderId as string | undefined;
+                    const bucketName = meta?.bucketName as string | undefined;
+                    const region = meta?.region as string | undefined;
+                    if (renderId && bucketName && region) {
+                        try {
+                            await deleteRender({ bucketName, region: region as any, renderId });
+                            console.log(`[Account Deletion] Deleted S3 artifact: ${renderId}`);
+                        } catch (err) {
+                            console.error(`[Account Deletion] Failed S3 cleanup for ${renderId}:`, err);
+                        }
                     }
-                }
-            });
-
-            await Promise.allSettled(cleanupPromises);
+                })
+            );
         }
 
-        // 2. Delete the User from Supabase Auth
-        // We must use the Admin client to delete users
-        const supabaseAdmin = createAdminClient();
-
-        const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user.id);
-
-        if (deleteError) {
-            console.error(`[Account Deletion] Failed to delete auth user ${user.id}:`, deleteError);
-            return NextResponse.json({ error: "Echec de la suppression du compte." }, { status: 500 });
-        }
-
-        // Because of Postgres ON DELETE CASCADE constraints:
-        // Deleting the auth.user will automatically delete rows in 'profiles', 'batches', and consequently 'jobs'.
-
-        console.log(`[Account Deletion] Successfully deleted user ${user.id} and all associated data.`);
+        // 2. Delete the user from RDS — Prisma FK cascade deletes accounts, sessions, batches, jobs
+        await prisma.user.delete({ where: { id: userId } });
+        console.log(`[Account Deletion] User ${userId} and all associated data deleted.`);
 
         return NextResponse.json({ success: true });
     } catch (err: any) {
-        console.error(`[Account Deletion] Critical Error:`, err);
+        console.error('[Account Deletion] Critical Error:', err);
         return NextResponse.json({ error: err.message }, { status: 500 });
     }
 }

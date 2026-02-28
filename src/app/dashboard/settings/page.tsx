@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useSession, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,43 +31,33 @@ export default function SettingsPage() {
     const [deleteConfirmText, setDeleteConfirmText] = useState("");
     const isDeleteEnabled = deleteConfirmText === "SUPPRIMER";
 
-    const supabase = createClient();
+    const session = useSession();
     const router = useRouter();
     const { onOpen } = useRechargeModal();
     const t = useTranslations("Dashboard.settings");
 
+    // Set email and initial credits from session
     useEffect(() => {
-        let channel: ReturnType<typeof supabase.channel> | null = null;
-
-        async function loadProfile() {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                setUserEmail(user.email ?? "");
-                const { data: profile } = await supabase
-                    .from("profiles")
-                    .select("credits")
-                    .eq("id", user.id)
-                    .single();
-                if (profile) setCredits(profile.credits);
-
-                channel = supabase
-                    .channel('settings:profiles')
-                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` }, (payload) => {
-                        if (payload.new && typeof payload.new.credits === 'number') {
-                            setCredits(payload.new.credits);
-                        }
-                    })
-                    .subscribe();
-            }
+        if (session.data?.user?.email) setUserEmail(session.data.user.email);
+        if (typeof (session.data?.user as any)?.credits === 'number') {
+            setCredits((session.data!.user as any).credits);
         }
-        loadProfile();
+    }, [session.data]);
 
-        return () => {
-            if (channel) {
-                supabase.removeChannel(channel);
-            }
+    // Subscribe to SSE for real-time credits_update events
+    useEffect(() => {
+        const es = new EventSource('/api/events');
+        es.onmessage = (event) => {
+            try {
+                const payload = JSON.parse(event.data);
+                if (payload.type === 'credits_update' && typeof payload.credits === 'number') {
+                    setCredits(payload.credits);
+                }
+            } catch { /* ignore */ }
         };
-    }, [supabase]);
+        return () => es.close();
+    }, []);
+
 
     const handleLemonSqueezyPortal = async () => {
         try {
@@ -96,8 +86,7 @@ export default function SettingsPage() {
 
             if (res.ok && data.success) {
                 toast.success(t("toasts.delSuccess"));
-                await supabase.auth.signOut();
-                router.push("/");
+                await signOut({ callbackUrl: "/" });
             } else {
                 toast.error(data.error || t("toasts.delError"));
                 setIsDeleting(false);

@@ -1,32 +1,44 @@
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { BatchCard, type Batch } from "@/components/dashboard/batch-card";
 
 export default async function ArchivesPage() {
-    const supabase = await createClient();
+    const session = await auth();
+    const userId = session?.user?.id!;
 
-    const { data: rawBatches, error } = await supabase
-        .from("batches")
-        .select(
-            `
-      id, project_name, status, created_at, is_archived, input_data,
-      jobs (id, status, type, result_url, error_message, template_id, created_at)
-    `
-        )
-        .eq("is_archived", true)
-        .order("created_at", { ascending: false })
-        .limit(50);
+    const rawBatches = await prisma.batch.findMany({
+        where: {
+            userId,
+            metadata: { path: ["is_archived"], equals: true },
+        },
+        include: { jobs: { select: { id: true, status: true, result_url: true, metadata: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+    });
 
-    const batches: Batch[] = (rawBatches ?? []).map(
-        (b: Record<string, unknown>) => ({
-            id: b.id as string,
-            project_name: b.project_name as string,
-            status: b.status as string,
-            created_at: b.created_at as string,
-            is_archived: b.is_archived as boolean,
-            input_data: b.input_data as Record<string, unknown>,
-            jobs: (b.jobs as Batch["jobs"]) ?? [],
-        })
-    );
+    const batches: Batch[] = rawBatches.map((b) => {
+        const meta = (b.metadata as Record<string, unknown>) ?? {};
+        return {
+            id: b.id,
+            project_name: (meta.project_name as string) || "Untitled",
+            status: b.status,
+            created_at: b.createdAt.toISOString(),
+            is_archived: true,
+            input_data: meta,
+            jobs: b.jobs.map((j) => {
+                const jMeta = (j.metadata as Record<string, unknown>) ?? {};
+                return {
+                    id: j.id,
+                    status: j.status,
+                    type: (jMeta.renderType as string) || "video",
+                    result_url: j.result_url ?? null,
+                    error_message: null,
+                    template_id: (jMeta.template_id as string) || "",
+                    created_at: "",
+                };
+            }),
+        };
+    });
 
     return (
         <div>
@@ -34,29 +46,15 @@ export default async function ArchivesPage() {
             <p className="text-muted-foreground text-sm mb-8">
                 Archived batches. Use the menu to restore or permanently delete.
             </p>
-
-            {error && (
-                <p className="text-destructive text-sm">
-                    Error loading archives: {error.message}
-                </p>
-            )}
-
-            {batches.length === 0 && !error && (
+            {batches.length === 0 && (
                 <div className="text-center py-16 text-muted-foreground">
                     <p className="text-lg font-medium">No archived batches</p>
-                    <p className="text-sm mt-1">
-                        Archived batches will appear here.
-                    </p>
+                    <p className="text-sm mt-1">Archived batches will appear here.</p>
                 </div>
             )}
-
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                 {batches.map((batch) => (
-                    <BatchCard
-                        key={batch.id}
-                        batch={batch}
-                        showUnarchive
-                    />
+                    <BatchCard key={batch.id} batch={batch} showUnarchive />
                 ))}
             </div>
         </div>

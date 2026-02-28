@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
-import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,45 +20,51 @@ import {
 } from "@/components/ui/card";
 
 export default function SignupPage() {
+    const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [success, setSuccess] = useState(false);
     const [loading, setLoading] = useState(false);
-    const supabase = createClient();
+    const router = useRouter();
     const t = useTranslations("Auth.signup");
 
     const handleSignup = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
-        const { error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-                emailRedirectTo: `${window.location.origin}/auth/callback`,
-            },
+        const res = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, email, password }),
         });
 
-        if (error) {
-            toast.error(error.message); // Supabase usually returns French if configured, else fallback
+        const data = await res.json();
+
+        if (!res.ok) {
+            toast.error(data.error || t("errors.generic"));
             setLoading(false);
+            return;
+        }
+
+        // Auto-login after successful registration
+        const result = await signIn("credentials", {
+            email,
+            password,
+            redirect: false,
+        });
+
+        if (result?.ok) {
+            toast.success(t("toastSuccess"));
+            router.push("/dashboard");
+            router.refresh();
         } else {
             setSuccess(true);
             setLoading(false);
-            toast.success(t("toastSuccess"));
         }
     };
 
     const handleGoogleSignup = async () => {
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: `${window.location.origin}/auth/callback`,
-            },
-        });
-        if (error) {
-            toast.error(error.message);
-        }
+        await signIn("google", { callbackUrl: "/dashboard" });
     };
 
     if (success) {
@@ -104,6 +110,16 @@ export default function SignupPage() {
                 <form onSubmit={handleSignup}>
                     <CardContent className="flex flex-col gap-4">
                         <div className="flex flex-col gap-2">
+                            <Label htmlFor="name">Nom (optionnel)</Label>
+                            <Input
+                                id="name"
+                                type="text"
+                                placeholder="Votre nom"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-2">
                             <Label htmlFor="email">{t("email")}</Label>
                             <Input
                                 id="email"
@@ -123,7 +139,7 @@ export default function SignupPage() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
-                                minLength={6}
+                                minLength={8}
                             />
                         </div>
                     </CardContent>

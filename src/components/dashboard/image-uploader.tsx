@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { X, Upload, Star, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -20,12 +19,10 @@ export function ImageUploader({
     heroIndex,
     onImagesChange,
     onHeroChange,
-    userId,
 }: ImageUploaderProps) {
     const [uploading, setUploading] = useState(false);
     const [dragOver, setDragOver] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
-    const supabase = createClient();
     const t = useTranslations("Dashboard.studio.imageUploader");
 
     const uploadFiles = useCallback(
@@ -50,34 +47,50 @@ export function ImageUploader({
             const newUrls: string[] = [];
 
             for (const file of valid) {
-                const ext = file.name.split(".").pop();
-                const path = `${userId}/draft/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+                try {
+                    // 1. Get a presigned S3 URL
+                    const presignRes = await fetch("/api/upload", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ filename: file.name, contentType: file.type }),
+                    });
 
-                const { error } = await supabase.storage
-                    .from("product-assets")
-                    .upload(path, file, { cacheControl: "3600", upsert: false });
+                    if (!presignRes.ok) {
+                        toast.error(t("errorUpload", { message: "Failed to get upload URL" }));
+                        continue;
+                    }
 
-                if (error) {
-                    toast.error(t("errorUpload", { message: error.message }));
-                    continue;
+                    const { presignedUrl, publicUrl } = await presignRes.json();
+
+                    // 2. PUT directly to S3 — body must be raw File, NOT FormData
+                    const uploadRes = await fetch(presignedUrl, {
+                        method: "PUT",
+                        headers: { "Content-Type": file.type },
+                        body: file,
+                    });
+
+                    if (!uploadRes.ok) {
+                        // Log the exact S3 XML error (AccessDenied / SignatureDoesNotMatch etc.)
+                        const errBody = await uploadRes.text().catch(() => "<unreadable>");
+                        console.error(`[S3 Upload] ${uploadRes.status} ${uploadRes.statusText}`, errBody);
+                        toast.error(t("errorUpload", { message: `S3 ${uploadRes.status}: ${uploadRes.statusText}` }));
+                        continue;
+                    }
+
+                    newUrls.push(publicUrl);
+                } catch (err) {
+                    console.error("[S3 Upload] Unexpected error:", err);
+                    toast.error(t("errorUpload", { message: String(err) }));
                 }
-
-                const {
-                    data: { publicUrl },
-                } = supabase.storage.from("product-assets").getPublicUrl(path);
-
-                newUrls.push(publicUrl);
             }
 
             if (newUrls.length > 0) {
                 onImagesChange([...images, ...newUrls]);
-                toast.success(
-                    t("success", { count: newUrls.length })
-                );
+                toast.success(t("success", { count: newUrls.length }));
             }
             setUploading(false);
         },
-        [images, onImagesChange, supabase, userId, t]
+        [images, onImagesChange, t]
     );
 
     const handleDrop = useCallback(
@@ -100,10 +113,7 @@ export function ImageUploader({
         <div className="flex flex-col gap-3">
             {/* Drop Zone */}
             <div
-                onDragOver={(e) => {
-                    e.preventDefault();
-                    setDragOver(true);
-                }}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
                 onClick={() => inputRef.current?.click()}
@@ -114,27 +124,18 @@ export function ImageUploader({
                         : "border-input hover:border-muted-foreground/50 hover:bg-muted/30"
                 )}
             >
-                <Upload
-                    className={cn(
-                        "h-8 w-8 transition-colors",
-                        dragOver ? "text-brand" : "text-muted-foreground"
-                    )}
-                />
+                <Upload className={cn("h-8 w-8 transition-colors", dragOver ? "text-brand" : "text-muted-foreground")} />
                 <p className="text-sm text-muted-foreground">
                     {uploading ? (
                         t("uploading")
                     ) : (
                         <>
-                            <span className="font-medium text-foreground">
-                                {t("clickToUpload")}
-                            </span>{" "}
+                            <span className="font-medium text-foreground">{t("clickToUpload")}</span>{" "}
                             {t("dragDrop")}
                         </>
                     )}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                    {t("files")}
-                </p>
+                <p className="text-xs text-muted-foreground">{t("files")}</p>
                 <input
                     ref={inputRef}
                     type="file"
@@ -167,39 +168,22 @@ export function ImageUploader({
                             )}
                             onClick={() => onHeroChange(i)}
                         >
-                            <img
-                                src={url}
-                                alt={`Product ${i + 1}`}
-                                className="h-full w-full object-cover"
-                            />
-
-                            {/* Hero badge */}
+                            <img src={url} alt={`Product ${i + 1}`} className="h-full w-full object-cover" />
                             {heroIndex === i && (
                                 <div className="absolute top-1 left-1 flex items-center gap-1 rounded-md bg-brand px-1.5 py-0.5">
                                     <Star className="h-3 w-3 fill-brand-foreground text-brand-foreground" />
-                                    <span className="text-[10px] font-bold text-brand-foreground">
-                                        {t("hero")}
-                                    </span>
+                                    <span className="text-[10px] font-bold text-brand-foreground">{t("hero")}</span>
                                 </div>
                             )}
-
-                            {/* Remove button */}
                             <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    removeImage(i);
-                                }}
+                                onClick={(e) => { e.stopPropagation(); removeImage(i); }}
                                 className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive/90 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                             >
                                 <X className="h-3 w-3" />
                             </button>
-
-                            {/* Click-to-set-hero hint */}
                             {heroIndex !== i && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <span className="text-[10px] font-medium text-white">
-                                        {t("setHero")}
-                                    </span>
+                                    <span className="text-[10px] font-medium text-white">{t("setHero")}</span>
                                 </div>
                             )}
                         </div>

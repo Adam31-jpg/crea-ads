@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { GoogleGenAI } from "@google/genai";
 import { GENERATION_CONFIG } from "@/config/generation.config";
 
@@ -101,6 +102,15 @@ Generate exactly ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} concepts: ${GENERATI
 Each object MUST strictly follow this schema:
 - "index": number (0-${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH - 1})
 - "type": "image" (0-${GENERATION_CONFIG.IMAGE_COUNT - 1}) or "video" (${GENERATION_CONFIG.IMAGE_COUNT}-${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH - 1})
+
+### ⚠️ ABSOLUTE COUNT RULE — CRITICAL: NO EXCEPTIONS
+You MUST output EXACTLY:
+- ${GENERATION_CONFIG.IMAGE_COUNT} object(s) with "type": "image" — at index positions 0 through ${Math.max(0, GENERATION_CONFIG.IMAGE_COUNT - 1)}
+- ${GENERATION_CONFIG.VIDEO_COUNT} object(s) with "type": "video" — at index positions ${GENERATION_CONFIG.IMAGE_COUNT} through ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH - 1}
+${Number(GENERATION_CONFIG.VIDEO_COUNT) === 0 ? '- VIDEO_COUNT IS ZERO. Do NOT output ANY object with "type": "video". Every single object MUST have "type": "image". Outputting even one video object is a CRITICAL FAILURE.' : ''}
+${Number(GENERATION_CONFIG.IMAGE_COUNT) === 0 ? '- IMAGE_COUNT IS ZERO. Do NOT output ANY object with "type": "image". Every single object MUST have "type": "video".' : ''}
+Any array that does not contain exactly ${GENERATION_CONFIG.IMAGE_COUNT} image(s) and ${GENERATION_CONFIG.VIDEO_COUNT} video(s) is INVALID and will be rejected.
+
 - "framework": string (The specific angle used)
 - "narrative_concept": string — A poetic 3-to-5-word story title unique per concept. MANDATORY.
 - "headline": string | null (MAX 50 chars. Set null ONLY for "cinematic" composition_intent with no copy needed.)
@@ -139,6 +149,20 @@ Each object MUST strictly follow this schema:
   - "editorial": hl required + shl optional. Do NOT include cta. 1–2 elements max.
   - "cinematic": hl ONLY (or empty array for a pure product shot with zero copy). Do NOT include shl or cta.
   Do NOT add a "content" field — content comes from "headline"/"subheadline"/"cta" above.
+- "layout_config": object — MANDATORY SPATIAL DESIGN SYSTEM. This is the contract between the background image and the Remotion text overlays:
+  • "spatial_strategy"    : string — 1 sentence describing where the product sits and where text goes.
+    MANDATORY. Example: "Product anchored bottom-right, clean negative space top-left for headline."
+  • "negative_space_zone" : enum — MANDATORY. Where the image model MUST leave empty space for text.
+    Values: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "top" | "bottom" | "left" | "right" | "center"
+    CRITICAL: This value MUST match where the background_prompt says empty space is. They are the same region.
+  • "headline"            : object — MUST mirror the "hl" element x/y/width. MANDATORY.
+    { "text": string, "x": 0–100, "y": 0–100, "width": 10–90, "fontSize": 20–120, "textAlign": "left"|"center"|"right", "color": "#hex" }
+  • "social_proof"        : object — optional star rating badges. { "x": 0–100, "y": 0–100, "scale": 0.5–2 }
+  • "arrow"               : object — optional directional arrow pointing user attention.
+    { "startPos": [x, y], "endPos": [x, y], "curvature": -1..1 }  (curvature: 0=straight, 1=convex arc, -1=concave)
+    USE the arrow to connect a star rating to the product, or the CTA to the headline. Required for "direct_response" hard-sell ads.
+  • "trust_bar"           : object — optional horizontal trust strip at the bottom.
+    { "y_position": 0–100, "opacity": 0–1, "label": string (optional, e.g. "AS SEEN ON FORBES") }
 
 ### NARRATIVE INTERACTION PROMPT — THE MOST IMPORTANT CREATIVE RULE
 The background_prompt does NOT describe an empty studio with a product sitting on a shelf. It describes the PRODUCT as an ACTOR inside a living scene.
@@ -205,6 +229,36 @@ Each concept MUST use a DIFFERENT vertical composition. FORBIDDEN: identical y v
 - PATTERN C "Bottom Push": hl y=35–45, shl y=58–65, cta y=78–88
 Use PATTERN A for concept 0 and PATTERN B for concept 1.
 
+**layout_config → elements SYNC RULE:**
+The "headline" object inside "layout_config" MUST have the same x/y/width as the "hl" entry in "elements".
+These two coordinate sets are shared — one is the spatial space plan, one is the Remotion rendering instruction.
+They are ONE design decision. Make them identical.
+
+### SPATIAL LAYOUT MANDATE — CRITICAL
+Every concept MUST include a "layout_config" object. Missing this object is a critical failure identical to missing headline.
+
+**1. PRODUCT PLACEMENT VARIETY** — Never place the product in the center of every concept. Use at least 3 distinct spatial strategies across the 4 concepts:
+  - **Rule-of-thirds bottom-right**: Product fills bottom-right quadrant 60%. Headline top-left. negative_space_zone: "top-left".
+  - **Side-profile left**: Product anchors left 45%. Headline right 50%. negative_space_zone: "right".
+  - **Top-down flat lay**: Product centered in frame top 65%. Short headline bottom center. negative_space_zone: "bottom".
+  - **Bottom anchor center**: Product lower-center 70%. Bold oversized headline top. negative_space_zone: "top".
+  - **Edge crop right**: Product half-cropped right edge 50%. Copy occupies left 45%. negative_space_zone: "left".
+  Each concept's background_prompt MUST describe the product's position to match the spatial_strategy.
+
+**2. NEGATIVE SPACE INTEGRATION — CRITICAL MECHANICAL RULE:**
+  The negative_space_zone you choose MUST be reflected in the background_prompt with this exact type of phrase:
+  "…with a clean, minimalist, out-of-focus, empty area in the [zone] for typography"
+  Example: if negative_space_zone is "top-left", the background_prompt MUST explicitly say:
+  "…with a clean, minimalist, out-of-focus empty area in the upper-left corner for typography".
+  This is NOT optional. The image generation model needs this explicit instruction to actually
+  leave the space empty. Without it, the model will fill every corner with texture.
+  DO NOT just pick the zone — you MUST WRITE IT INTO the background_prompt too.
+
+**3. ARROW DIRECTIVE:**
+  For "direct_response" concepts, include an "arrow" in layout_config that points from the CTA
+  or star rating toward the product area. This creates the gaze-flow pattern that improves CTR.
+  Use curvature: 0.3 to 0.6 for a natural arc. For editorial/cinematic, arrow is optional.
+
 ### FRAMEWORKS & STRATEGY
 - "THE HOOK-POINT": Stop the scroll. Focus on a massive problem or shocking benefit.
 - "EMOTIONAL DESIRE": Identity & Status. Connect the product to the ego.
@@ -265,52 +319,55 @@ Example (nature): "A serum bottle shattering through a frozen wave of dew-covere
 17. PERSPECTIVE MODE: "perspective_mode" is MANDATORY for all image concepts. Set "immersive" for top-down, macro, and tilted (≥30°) perspectives; set "structural" for all others. At least 1 concept per batch must be "immersive".
 18. THEME LOCK ENFORCEMENT: If the selected theme is "neon", ALL 4 background_prompts MUST contain at least one token from the neon Surfaces, Lighting, or Action verbs list. Obsidian, marble, wood, and botanical references are BANNED in neon batches. Violation = failed batch.
 19. NARRATIVE INTEGRATION: Every background_prompt MUST contain a product-scene interaction verb (radiating, shattering, submersed, enveloped, dissolving, bleeding, emerging, catching, cradled, floating). A prompt with no interaction verb is a critical failure.
+20. NO TEXT IN SCENES: background_prompt MUST NEVER include advertising headlines, slogans, product claims, CTAs, brand names, or any typographic instruction. ALL text is rendered by Remotion using layout_config coordinates. Text in background_prompt creates doubled AI-rendered artifacts. Critical failure.
+21. LAYOUT CONFIG: Every concept MUST include a "layout_config" object with spatial_strategy, negative_space_zone, and headline fields. Missing layout_config is equivalent to missing headline — a critical failure. The negative_space_zone MUST also appear as an explicit empty-space instruction in the background_prompt.
 `;
 
 export async function POST(req: NextRequest) {
-    // Auth
-    const supabase = await createClient();
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // Auth
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  if (!GEMINI_API_KEY) {
+    return NextResponse.json({ error: "noApiKey" }, { status: 500 });
+  }
+
+  const {
+    productDescription,
+    productName,
+    usps,
+    targetAudience,
+    logoUrl,
+    targetLanguage = "Français",
+    aspectRatio = "9:16",
+    theme,
+    accentColor,
+    productCount = 1,
+  } = await req.json();
+
+  if (!productDescription || !usps || !targetAudience) {
+    return NextResponse.json({ error: "missingFields" }, { status: 400 });
+  }
+
+  const has_logo = !!logoUrl;
+
+  // DEBIT-BEFORE-GEN LOGIC: Consume Sparks
+  const cost = GENERATION_CONFIG.STRATEGY_SPARK_COST;
+  if (cost > 0) {
+    try {
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: { credits: { decrement: cost } },
+      });
+    } catch (debitErr) {
+      console.error("[Strategy API] Debit failed:", debitErr);
+      return NextResponse.json({ error: "insufficient_funds" }, { status: 402 });
     }
+  }
 
-    if (!GEMINI_API_KEY) {
-        return NextResponse.json({ error: "noApiKey" }, { status: 500 });
-    }
-
-    const {
-        productDescription,
-        productName,
-        usps,
-        targetAudience,
-        logoUrl,
-        targetLanguage = "Français",
-        aspectRatio = "9:16",
-        theme,
-        accentColor,
-        productCount = 1,
-    } = await req.json();
-
-    if (!productDescription || !usps || !targetAudience) {
-        return NextResponse.json({ error: "missingFields" }, { status: 400 });
-    }
-
-    const has_logo = !!logoUrl;
-
-    // DEBIT-BEFORE-GEN LOGIC: Consume Sparks
-    const cost = GENERATION_CONFIG.STRATEGY_SPARK_COST;
-    if (cost > 0) {
-        const { error: debitError } = await supabase.rpc('decrement_credits', { p_user_id: user.id, p_amount: cost });
-        if (debitError) {
-            console.error("[Strategy API] Debit failed:", debitError);
-            return NextResponse.json({ error: "insufficient_funds" }, { status: 402 });
-        }
-    }
-
-    const userPrompt = `
+  const userPrompt = `
 **Product Name:** ${productName || "N/A"}
 
 **Product Description:** ${productDescription}
@@ -332,71 +389,71 @@ export async function POST(req: NextRequest) {
 
 Generate ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} ad concepts as a JSON array.`;
 
+  try {
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+    let text = "";
+
+    // 1. The Brain (Strategic Intelligence)
     try {
-        const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-
-        let text = "";
-
-        // 1. The Brain (Strategic Intelligence)
-        try {
-            const response = await ai.models.generateContent({
-                model: GENERATION_CONFIG.AI_MODELS.STRATEGY,
-                contents: userPrompt,
-                config: {
-                    systemInstruction: getSystemPrompt(targetLanguage, aspectRatio, theme ?? "luxe-sombre"),
-                    temperature: 0.8,
-                    maxOutputTokens: 8192,
-                },
-            });
-            text = response.text ?? "";
-            if (!text) throw new Error("Empty response from Pro model");
-        } catch (proErr) {
-            console.warn("[Strategy API] Pro model failed, falling back to Flash", proErr);
-            const fallbackResponse = await ai.models.generateContent({
-                model: "gemini-3-flash-preview",
-                contents: userPrompt,
-                config: {
-                    systemInstruction: getSystemPrompt(targetLanguage, aspectRatio, theme ?? "luxe-sombre"),
-                    temperature: 0.8,
-                    maxOutputTokens: 8192,
-                },
-            });
-            text = fallbackResponse.text ?? "";
-        }
-
-        console.log("[Strategy API] Raw Gemini response:", text);
-
-        // Clean any potential markdown from the response
-        let cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-        let concepts;
-
-        try {
-            concepts = JSON.parse(cleaned);
-        } catch {
-            console.warn("[Strategy API] JSON parsing failed from Brain, kicking in Flash Muscle to format.");
-            // 2. The Muscles (Technical Formatting)
-            const formatterResponse = await ai.models.generateContent({
-                model: "gemini-3-flash-preview",
-                contents: `Extract and format the following text into a perfectly valid JSON array of ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} objects following the strict schema. Do not include markdown fences, just the raw JSON array.\n\nTEXT:\n${text}`,
-                config: {
-                    systemInstruction: "You are a strict JSON formatter. Your only job is to output a raw, perfectly valid JSON array. Fix any structural issues in the provided text.",
-                    temperature: 0.1,
-                    maxOutputTokens: 8192,
-                }
-            });
-
-            text = formatterResponse.text ?? "";
-            cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-            concepts = JSON.parse(cleaned);
-        }
-
-        if (!Array.isArray(concepts) || concepts.length !== GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH) {
-            return NextResponse.json({ error: "invalidFormat" }, { status: 500 });
-        }
-
-        return NextResponse.json({ concepts });
-    } catch (err: unknown) {
-        console.error("[Strategy API]", err);
-        return NextResponse.json({ error: "connectFailed" }, { status: 500 });
+      const response = await ai.models.generateContent({
+        model: GENERATION_CONFIG.AI_MODELS.STRATEGY,
+        contents: userPrompt,
+        config: {
+          systemInstruction: getSystemPrompt(targetLanguage, aspectRatio, theme ?? "luxe-sombre"),
+          temperature: 0.8,
+          maxOutputTokens: 8192,
+        },
+      });
+      text = response.text ?? "";
+      if (!text) throw new Error("Empty response from Pro model");
+    } catch (proErr) {
+      console.warn("[Strategy API] Pro model failed, falling back to Flash", proErr);
+      const fallbackResponse = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: userPrompt,
+        config: {
+          systemInstruction: getSystemPrompt(targetLanguage, aspectRatio, theme ?? "luxe-sombre"),
+          temperature: 0.8,
+          maxOutputTokens: 8192,
+        },
+      });
+      text = fallbackResponse.text ?? "";
     }
+
+    console.log("[Strategy API] Raw Gemini response:", text);
+
+    // Clean any potential markdown from the response
+    let cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    let concepts;
+
+    try {
+      concepts = JSON.parse(cleaned);
+    } catch {
+      console.warn("[Strategy API] JSON parsing failed from Brain, kicking in Flash Muscle to format.");
+      // 2. The Muscles (Technical Formatting)
+      const formatterResponse = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Extract and format the following text into a perfectly valid JSON array of ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} objects following the strict schema. Do not include markdown fences, just the raw JSON array.\n\nTEXT:\n${text}`,
+        config: {
+          systemInstruction: "You are a strict JSON formatter. Your only job is to output a raw, perfectly valid JSON array. Fix any structural issues in the provided text.",
+          temperature: 0.1,
+          maxOutputTokens: 8192,
+        }
+      });
+
+      text = formatterResponse.text ?? "";
+      cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      concepts = JSON.parse(cleaned);
+    }
+
+    if (!Array.isArray(concepts) || concepts.length !== GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH) {
+      return NextResponse.json({ error: "invalidFormat" }, { status: 500 });
+    }
+
+    return NextResponse.json({ concepts });
+  } catch (err: unknown) {
+    console.error("[Strategy API]", err);
+    return NextResponse.json({ error: "connectFailed" }, { status: 500 });
+  }
 }

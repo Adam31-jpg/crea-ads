@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { renderMediaOnLambda, renderStillOnLambda } from "@remotion/lambda-client";
 
 const REGION = (process.env.REMOTION_AWS_REGION || "us-east-1") as "us-east-1";
@@ -19,33 +21,19 @@ interface AdConcept {
 }
 
 /**
- * POST /api/render/single — Render a single job (used by per-job retry)
- *
+ * POST /api/render/single — Re-render a single job (used by per-job retry)
  * Checks retry_generation before writing results to prevent stale overwrites.
  */
 export async function POST(req: NextRequest) {
-    const supabase = await createClient();
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
+    const session = await auth();
+    if (!session?.user?.id) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
     const { jobId, concept, inputData, retryGeneration } = await req.json();
-
     if (!jobId || !concept || !inputData) {
-        return NextResponse.json(
-            { error: "missingJobData" },
-            { status: 400 }
-        );
+        return NextResponse.json({ error: "missingJobData" }, { status: 400 });
     }
-
     if (!SERVE_URL || !FUNCTION_NAME) {
-        return NextResponse.json(
-            { error: "lambdaNotConfigured" },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: "lambdaNotConfigured" }, { status: 500 });
     }
 
     const product = inputData.products?.[0] || {};
@@ -107,78 +95,49 @@ export async function POST(req: NextRequest) {
             renderType = "media";
         }
 
-        // GENERATION CHECK: only update if generation matches
-        // This prevents a late Lambda from overwriting a newer retry
-        const { data: currentJob } = await supabase
-            .from("jobs")
-            .select("metadata")
-            .eq("id", jobId)
-            .single();
+        // Race-condition guard: only update if generation still matches
+        const currentJob = await prisma.job.findUnique({
+            where: { id: jobId },
+            select: { metadata: true },
+        });
 
-        const currentGen =
-            ((currentJob?.metadata as Record<string, unknown>)?.retry_generation as number) || 0;
+        const currentMeta = (currentJob?.metadata as Record<string, unknown>) ?? {};
+        const currentGen = (currentMeta.retry_generation as number) || 0;
 
         if (currentGen !== retryGeneration) {
-            // A newer retry has already been triggered — discard this one
-            return NextResponse.json({
-                success: false,
-                skipped: true,
-                reason: "Generation mismatch — newer retry in progress",
-            });
+            return NextResponse.json({ success: false, skipped: true, reason: "Generation mismatch — newer retry in progress" });
         }
 
-        await supabase
-            .from("jobs")
-            .update({
+        await prisma.job.update({
+            where: { id: jobId },
+            data: {
                 metadata: {
-                    concept: typedConcept,
+                    concept: typedConcept as unknown as Prisma.InputJsonValue,
                     renderId,
                     bucketName,
                     region: REGION,
                     renderType,
                     retry_generation: retryGeneration,
-                },
-            })
-            .eq("id", jobId);
+                } as Prisma.InputJsonValue,
+            },
+        });
 
         return NextResponse.json({ success: true, renderId });
     } catch (err: unknown) {
-        const message =
-            err instanceof Error ? err.message : "Unknown Lambda error";
-
-        await supabase
-            .from("jobs")
-            .update({
-                status: "failed",
-                error_message: friendlyError(message),
-            })
-            .eq("id", jobId);
-
+        const message = err instanceof Error ? err.message : "Unknown Lambda error";
+        await prisma.job.update({
+            where: { id: jobId },
+            data: { status: "failed" },
+        });
         return NextResponse.json({ error: message }, { status: 500 });
     }
 }
 
 function formatToAspect(format: string): "1:1" | "9:16" | "16:9" | "4:5" {
     switch (format) {
-        case "1080x1920":
-            return "9:16";
-        case "1080x1080":
-            return "1:1";
-        case "1920x1080":
-            return "16:9";
-        default:
-            return "9:16";
+        case "1080x1920": return "9:16";
+        case "1080x1080": return "1:1";
+        case "1920x1080": return "16:9";
+        default: return "9:16";
     }
-}
-
-function friendlyError(raw: string): string {
-    if (raw.includes("timeout") || raw.includes("Timeout"))
-        return "Render timed out. Try a shorter duration.";
-    if (raw.includes("ENOMEM") || raw.includes("memory"))
-        return "Ran out of memory. Try reducing resolution.";
-    if (raw.includes("NetworkError") || raw.includes("ECONNREFUSED"))
-        return "Network error. Please try again.";
-    if (raw.includes("AccessDenied"))
-        return "AWS permission denied. Check Lambda config.";
-    return `Render failed: ${raw.slice(0, 200)}`;
 }

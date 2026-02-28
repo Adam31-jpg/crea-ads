@@ -8,6 +8,7 @@ import { getLocale, getMessages } from "next-intl/server";
 import Script from "next/script";
 import { RechargeModal } from "@/components/modals/recharge-modal";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { SessionProvider } from "next-auth/react";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -51,13 +52,15 @@ export default async function RootLayout({
           defaultTheme="dark"
           disableTransitionOnChange
         >
-          <NextIntlClientProvider messages={messages}>
-            <TooltipProvider>
-              {children}
-            </TooltipProvider>
-            <Toaster />
-            <RechargeModal />
-          </NextIntlClientProvider>
+          <SessionProvider>
+            <NextIntlClientProvider messages={messages}>
+              <TooltipProvider>
+                {children}
+              </TooltipProvider>
+              <Toaster />
+              <RechargeModal />
+            </NextIntlClientProvider>
+          </SessionProvider>
         </ThemeProvider>
         <Script src="https://app.lemonsqueezy.com/js/lemon.js" strategy="afterInteractive" />
       </body>
