@@ -1,5 +1,6 @@
 import React from 'react';
 import { AbsoluteFill, useVideoConfig } from 'remotion';
+import { GlassContainer } from './GlassContainer';
 
 export const PointerBenefit: React.FC<{
     label: string;
@@ -14,54 +15,51 @@ export const PointerBenefit: React.FC<{
 
     return (
         <AbsoluteFill style={{ pointerEvents: 'none' }}>
-            {/* The Dot */}
-            <div
-                style={{
-                    position: 'absolute',
-                    left: left - 8, // Center dot
-                    top: top - 8,
-                    width: 16,
-                    height: 16,
-                    backgroundColor: dotColor,
-                    borderRadius: '50%',
-                    boxShadow: `0 0 10px ${dotColor}`,
-                }}
-            />
-
-            {/* The Connecting Line (simulated as a simple line to the right) */}
-            <div
-                style={{
-                    position: 'absolute',
-                    left: left + 16,
-                    top: top - 1,
-                    width: 40,
-                    height: 2,
-                    backgroundColor: dotColor,
-                    opacity: 0.8,
-                }}
-            />
+            {/* The SVG Line & Dot Canvas */}
+            <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible' }}>
+                <circle
+                    cx={left}
+                    cy={top}
+                    r={3.5}
+                    fill="transparent"
+                    stroke={dotColor}
+                    strokeWidth={1.5}
+                />
+                <circle
+                    cx={left}
+                    cy={top}
+                    r={1}
+                    fill={dotColor}
+                />
+                <path
+                    d={`M ${left + 4} ${top} L ${left + 44} ${top}`}
+                    stroke={dotColor}
+                    strokeWidth={1}
+                    strokeDasharray="2 3"
+                    strokeOpacity={0.8}
+                />
+            </svg>
 
             {/* The Text Box */}
-            <div
+            <GlassContainer
+                intensity="heavy"
+                padding="6px 14px"
+                borderRadius={4}
                 style={{
                     position: 'absolute',
-                    left: left + 66,
-                    top: top - 20, // Center text vertically with dot
-                    padding: '8px 16px',
-                    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-                    backdropFilter: 'blur(8px)',
-                    border: `1px solid rgba(255, 255, 255, 0.2)`,
-                    borderRadius: 8,
+                    left: left + 52,
+                    top: top - 15, // Center text vertically with dot
                     color: '#ffffff',
                     fontFamily: 'Inter, sans-serif',
-                    fontSize: 24,
-                    fontWeight: 600,
+                    fontSize: 20,
+                    fontWeight: 500,
+                    letterSpacing: '0.02em',
                     whiteSpace: 'nowrap',
-                    textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.3)',
                 }}
             >
                 {label}
-            </div>
+            </GlassContainer>
         </AbsoluteFill>
     );
 };

@@ -35,7 +35,7 @@
     "@remotion/lambda-client": "4.0.425",
     "@remotion/motion-blur": "4.0.425",
     "@remotion/player": "4.0.425",
-    "@remotion/preload": "^4.0.429",
+    "@remotion/preload": "4.0.425",
     "@remotion/renderer": "4.0.425",
     "@remotion/three": "4.0.425",
     "@stripe/stripe-js": "^8.8.0",

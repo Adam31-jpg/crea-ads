@@ -65,6 +65,8 @@ interface AdConcept {
     background_prompt: string;
     /** AI-generated element positions. */
     elements?: RawElement[];
+    /** Dynamic Lego components mapped by the LLM (Epic 5). */
+    component_layout?: any[];
     /** Curated headline text color (HSL-adjusted from user's accentColor for scene legibility). */
     adaptive_text_color?: string;
     /** Dominant light direction inferred from the background scene. */
@@ -1429,6 +1431,7 @@ export async function POST(req: NextRequest) {
                     contentScale: 1,
                 },
                 elements,
+                component_layout: concept.component_layout ?? [],
                 layout_config: concept.layout_config ?? undefined,
             };
 

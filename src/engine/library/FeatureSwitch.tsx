@@ -1,5 +1,6 @@
 import React from 'react';
 import { AbsoluteFill, useVideoConfig } from 'remotion';
+import { GlassContainer } from './GlassContainer';
 
 export const FeatureSwitch: React.FC<{
     label: string;
@@ -15,7 +16,10 @@ export const FeatureSwitch: React.FC<{
 
     return (
         <AbsoluteFill style={{ pointerEvents: 'none' }}>
-            <div
+            <GlassContainer
+                intensity="medium"
+                padding="10px 20px"
+                borderRadius={32}
                 style={{
                     position: 'absolute',
                     left,
@@ -23,35 +27,31 @@ export const FeatureSwitch: React.FC<{
                     display: 'flex',
                     alignItems: 'center',
                     gap: 16,
-                    padding: '12px 24px',
-                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: 32,
                 }}
             >
-                {/* The "Switch" */}
+                {/* The "Switch" (iOS Style) */}
                 <div
                     style={{
-                        width: 48,
-                        height: 24,
-                        backgroundColor: isActive ? activeColor : 'rgba(255,255,255,0.2)',
-                        borderRadius: 12,
+                        width: 51,
+                        height: 31,
+                        backgroundColor: isActive ? activeColor : 'rgba(255,255,255,0.15)',
+                        borderRadius: 16,
                         position: 'relative',
                         transition: 'background-color 0.3s ease',
+                        border: isActive ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
                     }}
                 >
                     <div
                         style={{
-                            width: 20,
-                            height: 20,
+                            width: 27,
+                            height: 27,
                             backgroundColor: '#ffffff',
                             borderRadius: '50%',
                             position: 'absolute',
-                            top: 2,
-                            left: isActive ? 26 : 2,
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                            transition: 'left 0.3s ease',
+                            top: isActive ? 2 : 1, // Slight 1px offset when border is present
+                            left: isActive ? 22 : 1,
+                            boxShadow: '0 3px 8px rgba(0,0,0,0.15), 0 3px 1px rgba(0,0,0,0.06)',
+                            transition: 'left 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
                         }}
                     />
                 </div>
@@ -59,17 +59,18 @@ export const FeatureSwitch: React.FC<{
                 {/* The Text */}
                 <div
                     style={{
-                        color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+                        color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
                         fontFamily: 'Inter, sans-serif',
-                        fontSize: 26,
-                        fontWeight: 600,
+                        fontSize: 20,
+                        fontWeight: 500,
                         textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
+                        letterSpacing: '0.06em',
+                        textShadow: '0 1px 2px rgba(0,0,0,0.5)',
                     }}
                 >
                     {label}
                 </div>
-            </div>
+            </GlassContainer>
         </AbsoluteFill>
     );
 };

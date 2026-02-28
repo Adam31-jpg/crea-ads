@@ -39,7 +39,7 @@ export function DuplicateBatchModal({ open, onOpenChange, sourceBatch }: Duplica
     const [form, setForm] = useState({
         projectName: "",
         theme: "luxe-sombre",
-        accentColor: "#F59E0B",
+        colors: THEMES[0].palette,
         format: "1080x1920",
         durationSec: 6,
     });
@@ -51,7 +51,7 @@ export function DuplicateBatchModal({ open, onOpenChange, sourceBatch }: Duplica
             setForm({
                 projectName: `${sourceBatch.project_name} (copie)`,
                 theme: (sourceBatch.input_data.theme as string) || "luxe-sombre",
-                accentColor: (sourceBatch.input_data.accentColor as string) || "#F59E0B",
+                colors: (sourceBatch.input_data.colors as any) || THEMES[0].palette,
                 format: (sourceBatch.input_data.format as string) || "1080x1920",
                 durationSec: (sourceBatch.input_data.durationSec as number) || 6,
             });
@@ -72,7 +72,7 @@ export function DuplicateBatchModal({ open, onOpenChange, sourceBatch }: Duplica
         const inputData = {
             ...sourceBatch.input_data,
             theme: form.theme,
-            accentColor: form.accentColor,
+            colors: form.colors,
             format: form.format,
             durationSec: form.durationSec,
         };
@@ -172,7 +172,7 @@ export function DuplicateBatchModal({ open, onOpenChange, sourceBatch }: Duplica
 
                             <ThemeSelector
                                 theme={form.theme}
-                                accentColor={form.accentColor}
+                                colors={form.colors}
                                 update={update}
                                 THEMES={THEMES}
                                 ThemePreviewSVG={ThemePreviewSVG}

@@ -93,11 +93,112 @@ export const BackgroundPatternSchema = z.object({
     }),
 });
 
+export const SocialBadgeSchema = z.object({
+    component: z.literal('SocialBadge'),
+    props: z.object({
+        label: z.string(),
+        x: z.number().min(0).max(100),
+        y: z.number().min(0).max(100),
+        starColor: z.string().regex(/^#/, "Must be hex code").optional(),
+    }),
+});
+
+export const BenefitGridSchema = z.object({
+    component: z.literal('BenefitGrid'),
+    props: z.object({
+        benefits: z.array(z.string()).max(4),
+        x: z.number().min(0).max(100),
+        y: z.number().min(0).max(100),
+        accentColor: z.string().regex(/^#/, "Must be hex code").optional(),
+    }),
+});
+
+export const ComparisonSliderSchema = z.object({
+    component: z.literal('ComparisonSlider'),
+    props: z.object({
+        beforeText: z.string().optional(),
+        afterText: z.string().optional(),
+        x: z.number().min(0).max(100),
+        y: z.number().min(0).max(100),
+    }),
+});
+
+export const CleanIngredientSchema = z.object({
+    component: z.literal('CleanIngredient'),
+    props: z.object({
+        ingredient: z.string(),
+        subtext: z.string().optional(),
+        x: z.number().min(0).max(100),
+        y: z.number().min(0).max(100),
+        accentColor: z.string().regex(/^#/, "Must be hex code").optional(),
+    }),
+});
+
+export const ShapeOverlaySchema = z.object({
+    component: z.literal('ShapeOverlay'),
+    props: z.object({
+        x: z.number().min(0).max(100),
+        y: z.number().min(0).max(100),
+        color: z.string().regex(/^#/, "Must be hex code").optional(),
+        opacity: z.number().min(0).max(1).optional(),
+    }),
+});
+
+export const ScrollingRibbonSchema = z.object({
+    component: z.literal('ScrollingRibbon'),
+    props: z.object({
+        text: z.string(),
+        position: z.enum(['top', 'bottom']).default('bottom'),
+        color: z.string().regex(/^#/, "Must be hex code").optional(),
+        bgColor: z.string().regex(/^#/, "Must be hex code").optional(),
+    }),
+});
+
+export const OutlineTextSchema = z.object({
+    component: z.literal('OutlineText'),
+    props: z.object({
+        text: z.string(),
+        x: z.number().min(0).max(100),
+        y: z.number().min(0).max(100),
+        fontSize: z.number().min(10).max(500).optional(),
+        color: z.string().regex(/^#/, "Must be hex code").optional(),
+    }),
+});
+
+export const BrandHeaderSchema = z.object({
+    component: z.literal('BrandHeader'),
+    props: z.object({
+        brandName: z.string(),
+        x: z.number().min(0).max(100).optional(),
+        y: z.number().min(0).max(100).optional(),
+    }),
+});
+
+export const FeatureCardSchema = z.object({
+    component: z.literal('FeatureCard'),
+    props: z.object({
+        features: z.array(z.string()).min(1).max(5),
+        x: z.number().min(0).max(100),
+        y: z.number().min(0).max(100),
+        activeColor: z.string().regex(/^#/, "Must be hex code").optional(),
+    }),
+});
+
 export const AnyComponentSchema = z.discriminatedUnion('component', [
     PointerBenefitSchema,
     FeatureSwitchSchema,
     BackgroundPatternSchema,
+    SocialBadgeSchema,
+    BenefitGridSchema,
+    ComparisonSliderSchema,
+    CleanIngredientSchema,
+    ShapeOverlaySchema,
+    ScrollingRibbonSchema,
+    OutlineTextSchema,
+    BrandHeaderSchema,
+    FeatureCardSchema,
 ]);
+
 
 export type AnyComponentConfig = z.infer<typeof AnyComponentSchema>;
 

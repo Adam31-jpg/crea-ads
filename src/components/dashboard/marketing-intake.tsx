@@ -15,10 +15,19 @@ import {
     DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Loader2, Image, Video, Check, UploadCloud, Globe } from "lucide-react";
+import { Sparkles, Loader2, Image, Video, Check, UploadCloud, Globe, ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { motion, AnimatePresence } from "framer-motion";
 import { GENERATION_CONFIG } from "@/config/generation.config";
+import { BrandNameBrick } from "./form-bricks/BrandNameBrick";
+import { ProductDescBrick } from "./form-bricks/ProductDescBrick";
+import { UspsBrick } from "./form-bricks/UspsBrick";
+import { AudienceBrick } from "./form-bricks/AudienceBrick";
+import { OfferBrick } from "./form-bricks/OfferBrick";
+import { SocialProofBrick } from "./form-bricks/SocialProofBrick";
+import { IngredientBrick } from "./form-bricks/IngredientBrick";
+import { CtaBrick } from "./form-bricks/CtaBrick";
+import { MarketingData } from "./form-bricks/types";
 import {
     Tooltip,
     TooltipContent,
@@ -29,8 +38,6 @@ import {
     Select,
     SelectContent,
     SelectItem,
-    SelectTrigger,
-    SelectValue,
 } from "@/components/ui/select";
 
 const containerVariants = {
@@ -71,9 +78,9 @@ interface MarketingIntakeProps {
     /** Selected theme from Step 1 — forwarded to strategy API so Gemini writes
      *  prompts inside the correct aesthetic world from the very first call. */
     theme?: string;
-    /** Brand accent color from Step 1 — forwarded so Gemini can curate it
+    /** Brand colors from Step 1 — forwarded so Gemini can curate them
      *  for adaptive_text_color before the user even sees the strategy. */
-    accentColor?: string;
+    colors?: { primary: string; secondary: string; tertiary: string };
     onStrategyReady: (concepts: AdConcept[], logoUrl: string | null, targetLanguage: string, marketingPrompt: { productDescription: string; usps: string[]; targetAudience: string; }, isStrategyReused: boolean) => void;
 }
 
@@ -84,44 +91,57 @@ export function MarketingIntake({
     initialStrategy,
     initialTargetLanguage,
     theme,
-    accentColor,
+    colors,
     onStrategyReady,
 }: MarketingIntakeProps) {
-    const [productDescription, setProductDescription] = useState(initialMarketingPrompt?.productDescription || "");
-    const [usps, setUsps] = useState(initialMarketingPrompt?.usps || ["", "", ""]);
-    const [targetAudience, setTargetAudience] = useState(initialMarketingPrompt?.targetAudience || "");
-    const [targetLanguage, setTargetLanguage] = useState(initialTargetLanguage || "Français");
+    const [data, setData] = useState<MarketingData>({
+        brandName: "",
+        productDescription: initialMarketingPrompt?.productDescription || "",
+        usps: initialMarketingPrompt?.usps || ["", "", ""],
+        targetAudience: initialMarketingPrompt?.targetAudience || "",
+        targetLanguage: initialTargetLanguage || "Français",
+        offerText: "",
+        socialProof: "",
+        keyIngredient: "",
+        customCta: "",
+    });
+
+    const handleChange = (partial: Partial<MarketingData>) => {
+        setData(prev => ({ ...prev, ...partial }));
+    };
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
     const [uploadingLogo, setUploadingLogo] = useState(false);
     const [loading, setLoading] = useState(false);
     const [genProgress, setGenProgress] = useState(0);
+    const [isBoostsOpen, setIsBoostsOpen] = useState(false);
     const genProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [concepts, setConcepts] = useState<AdConcept[] | null>(null);
     const isSubmitting = useRef(false);
     const t = useTranslations("Dashboard.studio.intake");
 
     const canGenerate =
-        productDescription.length > 10 &&
-        usps[0].length > 0 &&
-        targetAudience.length > 0;
+        data.productDescription.length > 10 &&
+        data.usps[0].length > 0 &&
+        data.targetAudience.length > 0;
 
     const isUnchanged = initialMarketingPrompt &&
-        productDescription === initialMarketingPrompt.productDescription &&
-        targetAudience === initialMarketingPrompt.targetAudience &&
-        targetLanguage === (initialTargetLanguage || "Français") &&
-        JSON.stringify(usps) === JSON.stringify(initialMarketingPrompt.usps);
+        data.productDescription === initialMarketingPrompt.productDescription &&
+        data.targetAudience === initialMarketingPrompt.targetAudience &&
+        data.targetLanguage === (initialTargetLanguage || "Français") &&
+        JSON.stringify(data.usps) === JSON.stringify(initialMarketingPrompt.usps);
 
     // Deep State Hydration on Modal Open
     useEffect(() => {
         if (open) {
             console.log("Modal received initialData:", initialMarketingPrompt);
             if (initialMarketingPrompt) {
-                setProductDescription(initialMarketingPrompt.productDescription);
-                setUsps(initialMarketingPrompt.usps);
-                setTargetAudience(initialMarketingPrompt.targetAudience);
-            }
-            if (initialTargetLanguage) {
-                setTargetLanguage(initialTargetLanguage);
+                setData(prev => ({
+                    ...prev,
+                    productDescription: initialMarketingPrompt.productDescription,
+                    usps: initialMarketingPrompt.usps,
+                    targetAudience: initialMarketingPrompt.targetAudience,
+                    targetLanguage: initialTargetLanguage || "Français"
+                }));
             }
             // Clear concepts state if user opens modal again (to force them to see the form or the strategy grid natively)
             if (initialStrategy && isUnchanged) {
@@ -198,13 +218,18 @@ export function MarketingIntake({
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    productDescription,
-                    usps,
-                    targetAudience,
+                    productDescription: data.productDescription,
+                    usps: data.usps,
+                    targetAudience: data.targetAudience,
                     logoUrl,
-                    targetLanguage,
+                    targetLanguage: data.targetLanguage,
                     theme: theme ?? "luxe-sombre",
-                    accentColor: accentColor ?? "#F59E0B",
+                    colors: colors ?? { primary: "#FFFFFF", secondary: "#888888", tertiary: "#000000" },
+                    offerText: data.offerText,
+                    socialProof: data.socialProof,
+                    keyIngredient: data.keyIngredient,
+                    customCta: data.customCta,
+                    brandName: data.brandName,
                 }),
             });
 
@@ -212,12 +237,12 @@ export function MarketingIntake({
             if (genProgressRef.current) clearInterval(genProgressRef.current);
             setGenProgress(100);
 
-            const data = await res.json();
+            const responseData = await res.json();
 
             if (!res.ok) {
                 const knownErrors = ["unauthorized", "noApiKey", "missingFields", "invalidFormat", "insufficient_funds"];
-                if (data.error && knownErrors.includes(data.error)) {
-                    toast.error(t(`errors.${data.error}` as any, {
+                if (responseData.error && knownErrors.includes(responseData.error)) {
+                    toast.error(t(`errors.${responseData.error}` as any, {
                         total: GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH,
                         cost: GENERATION_CONFIG.STRATEGY_SPARK_COST
                     }));
@@ -229,7 +254,7 @@ export function MarketingIntake({
                 return;
             }
 
-            setConcepts(data.concepts);
+            setConcepts(responseData.concepts);
             toast.success(t("toasts.generateSuccess", { total: GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH }));
         } catch {
             if (genProgressRef.current) clearInterval(genProgressRef.current);
@@ -243,7 +268,11 @@ export function MarketingIntake({
 
     const handleConfirm = () => {
         if (concepts) {
-            onStrategyReady(concepts, logoUrl, targetLanguage, { productDescription, usps, targetAudience }, false);
+            onStrategyReady(concepts, logoUrl, data.targetLanguage, {
+                productDescription: data.productDescription,
+                usps: data.usps,
+                targetAudience: data.targetAudience
+            }, false);
             onOpenChange(false);
         }
     };
@@ -251,7 +280,7 @@ export function MarketingIntake({
     const handleReuseStrategy = () => {
         if (initialStrategy && initialMarketingPrompt) {
             // Instantly bypass generation and use the imported strategy
-            onStrategyReady(initialStrategy, logoUrl, targetLanguage, initialMarketingPrompt, true);
+            onStrategyReady(initialStrategy, logoUrl, data.targetLanguage, initialMarketingPrompt, true);
             onOpenChange(false);
         }
     };
@@ -297,90 +326,20 @@ export function MarketingIntake({
                         animate="show"
                         className="space-y-6 mt-4"
                     >
-                        {/* Section A: L'Essence du Produit */}
-                        <motion.div variants={itemVariants} className="space-y-3 bg-zinc-900/50 p-4 border border-zinc-800 rounded-xl relative overflow-hidden group">
-                            <Label className="text-amber-500/90 font-medium tracking-wide flex items-center gap-2">
-                                <span className="bg-amber-500/10 text-amber-500 px-2 flex items-center justify-center rounded-md font-bold text-xs h-5">1</span>
-                                {t("sections.a")}
-                            </Label>
-                            <Textarea
-                                placeholder={t("form.productDescPlaceholder")}
-                                value={productDescription}
-                                onChange={(e) => setProductDescription(e.target.value)}
-                                rows={4}
-                                className="bg-zinc-950/50 border-zinc-800 focus-visible:ring-1 focus-visible:ring-amber-500/50 focus-visible:shadow-[inset_0_0_15px_rgba(245,158,11,0.1)] transition-all resize-none text-base text-zinc-200 placeholder:text-zinc-600"
-                            />
+                        <motion.div variants={itemVariants} className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3 text-orange-400 font-medium text-sm flex items-start gap-3">
+                            <Sparkles className="h-5 w-5 shrink-0 mt-0.5" />
+                            <p dangerouslySetInnerHTML={{ __html: t("expertTip") }} />
                         </motion.div>
 
-                        {/* Section B: Les Piliers de Vente (USPs) */}
-                        <motion.div variants={itemVariants} className="space-y-3 bg-zinc-900/50 p-4 border border-zinc-800 rounded-xl">
-                            <Label className="text-amber-500/90 font-medium tracking-wide flex items-center gap-2">
-                                <span className="bg-amber-500/10 text-amber-500 px-2 flex items-center justify-center rounded-md font-bold text-xs h-5">2</span>
-                                {t("sections.b")}
-                            </Label>
-                            <div className="space-y-2">
-                                {usps.map((usp, i) => (
-                                    <div key={i} className="relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 font-medium text-sm">
-                                            {i + 1}.
-                                        </div>
-                                        <Input
-                                            placeholder={t("form.uspPlaceholder", { num: i + 1 })}
-                                            value={usp}
-                                            onChange={(e) => {
-                                                const next = [...usps];
-                                                next[i] = e.target.value;
-                                                setUsps(next);
-                                            }}
-                                            className="pl-8 bg-zinc-950/50 border-zinc-800 focus-visible:ring-1 focus-visible:ring-amber-500/50 text-zinc-200 placeholder:text-zinc-600 transition-all"
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        </motion.div>
+                        <BrandNameBrick data={data} onChange={handleChange} t={t} />
+                        <ProductDescBrick data={data} onChange={handleChange} t={t} />
+                        <UspsBrick data={data} onChange={handleChange} t={t} />
 
-                        {/* Section C: Audience & Identité */}
+                        {/* Section C: Audience, Identité & Logo */}
                         <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* Audience */}
-                            <div className="space-y-4">
-                                <div className="space-y-4 bg-zinc-900/50 p-4 border border-zinc-800 rounded-xl">
-                                    <Label className="text-amber-500/90 font-medium tracking-wide flex items-center gap-2">
-                                        <span className="bg-amber-500/10 text-amber-500 px-2 flex items-center justify-center rounded-md font-bold text-xs h-5">3</span>
-                                        {t("sections.c")}
-                                    </Label>
+                            <AudienceBrick data={data} onChange={handleChange} t={t} />
 
-                                    <div className="space-y-2 pt-1">
-                                        <Input
-                                            placeholder={t("form.audiencePlaceholder")}
-                                            value={targetAudience}
-                                            onChange={(e) => setTargetAudience(e.target.value)}
-                                            className="bg-zinc-950/50 border-zinc-800 focus-visible:ring-1 focus-visible:ring-amber-500/50 text-zinc-200 placeholder:text-zinc-600 transition-all"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-4 bg-zinc-900/50 p-4 border border-zinc-800 rounded-xl">
-                                    <div className="space-y-2">
-                                        <Label className="text-amber-500/90 font-medium tracking-wide flex items-center gap-2">
-                                            <span className="bg-amber-500/10 text-amber-500 px-2 flex items-center justify-center rounded-md font-bold text-xs h-5">4</span>
-                                            {t("form.langue")}
-                                        </Label>
-                                        <Select value={targetLanguage} onValueChange={setTargetLanguage}>
-                                            <SelectTrigger className="bg-zinc-950/50 border-zinc-800 focus:ring-1 focus:ring-amber-500/50 text-zinc-200">
-                                                <SelectValue placeholder={t("form.languePlaceholder")} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {Object.keys(t.raw("form.languages")).map((lang) => (
-                                                    <SelectItem key={lang} value={lang}>
-                                                        {t(`form.languages.${lang as any}`)}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-
-                            </div>
-                            {/* Brand Logo */}
+                            {/* Brand Logo Upload */}
                             <div className="space-y-3 bg-zinc-900/50 p-4 border border-zinc-800 rounded-xl flex flex-col justify-between">
                                 <div className="space-y-1">
                                     <Label className="text-zinc-300 font-medium tracking-wide flex items-center gap-2">
@@ -413,6 +372,49 @@ export function MarketingIntake({
                                         </div>
                                     )}
                                 </div>
+                            </div>
+                        </motion.div>
+
+                        {/* Optional High-Impact Bricks */}
+                        <motion.div variants={itemVariants} className="pt-4 border-t border-zinc-800/50">
+                            <div className="w-full">
+                                <button
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setIsBoostsOpen(!isBoostsOpen);
+                                    }}
+                                    className="flex w-full items-center justify-between py-2 mb-2 outline-none group"
+                                >
+                                    <Label className="text-zinc-400 font-medium tracking-wide flex items-center cursor-pointer group-hover:text-zinc-300 transition-colors">
+                                        <Sparkles className="h-4 w-4 mr-2 text-zinc-500 group-hover:text-amber-500 transition-colors" />
+                                        {t("optionalBoosts")}
+                                    </Label>
+                                    <motion.div
+                                        animate={{ rotate: isBoostsOpen ? 180 : 0 }}
+                                        transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                                    >
+                                        <ChevronDown className="h-4 w-4 text-zinc-500 group-hover:text-zinc-400 transition-colors" />
+                                    </motion.div>
+                                </button>
+
+                                <AnimatePresence initial={false}>
+                                    {isBoostsOpen && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: "auto", opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                                            className="overflow-hidden"
+                                        >
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 pt-2">
+                                                <OfferBrick data={data} onChange={handleChange} t={t} />
+                                                <SocialProofBrick data={data} onChange={handleChange} t={t} />
+                                                <IngredientBrick data={data} onChange={handleChange} t={t} />
+                                                <CtaBrick data={data} onChange={handleChange} t={t} />
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                             </div>
                         </motion.div>
 

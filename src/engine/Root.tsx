@@ -26,7 +26,17 @@ const luxuryProps = resolveDesign(luxuryIntent, {
 });
 
 const verticalOverrides = {
-    layout: { layoutType: 'converter' as const, aspectRatio: '9:16' as const, safePadding: 140, contentScale: 0.85 }
+    layout: { layoutType: 'converter' as const, aspectRatio: '9:16' as const, safePadding: 140, contentScale: 0.85 },
+    component_layout: [
+        {
+            component: "PointerBenefit",
+            props: { label: "Hydration Lock", x: 75, y: 40 }
+        },
+        {
+            component: "SocialBadge",
+            props: { label: "DERMATOLOGIST APPROVED", x: 10, y: 15 }
+        }
+    ]
 };
 
 const verticalProps = resolveDesign(luxuryIntent, {

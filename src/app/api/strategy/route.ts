@@ -119,12 +119,13 @@ Any array that does not contain exactly ${GENERATION_CONFIG.IMAGE_COUNT} image(s
 - "visualDirection": string (2 sentences: specific lighting, camera angle, and composition)
 - "colorMood": "sunset" | "midnight" | "studio_white" | "electric_neon"
 - "emphasis": "product_detail" | "typography_heavy" | "balanced"
-- "composition_intent": "direct_response" | "editorial" | "cinematic" — Text density control. "direct_response" = full HL+SHL+CTA stack (conversion-first). "editorial" = HL+SHL, no CTA (visual-first, brand-building). "cinematic" = headline ONLY, very large, maximum visual impact (or null if pure product shot). MANDATORY.
+- "composition_intent": "direct_response" | "editorial" | "cinematic" — Text density control. "direct_response" = full HL+SHL+CTA stack (conversion-first). "editorial" = HL+SHL, no CTA. "cinematic" = array must be empty (null) for pure product shot.
+  CRITICAL 20/80 HYBRID RATIO: Exactly 20% of images in the batch MUST be "cinematic" (Textless/UI-less, pure product in a high-end luxury studio setting). The remaining 80% MUST be "direct_response" or "editorial" (Ad Layouts using the Component Registry). MANDATORY.
 - "layoutType": "converter" | "minimalist" (converter = text left, product right. minimalist = centered, minimal text)
 - "logo_position": string | null
-- "background_prompt": string (REQUIRED. Follow the NARRATIVE INTERACTION PROMPT rule below. Open with the product + interaction verb. Min 2 sentences, max 3.)
+- "background_prompt": string (REQUIRED. Studio Backgrounds ONLY. Ban Landscapes: NO scenery, NO mountains, NO oceans, NO forests. Backgrounds MUST be "Professional Studio" such as abstract textures, minimalist color planes, soft drop shadows, luxury materials like marble/silk. Open with the product + interaction verb. Min 2 sentences, max 3.)
 - "scene_interaction": string | null — Contextual lifestyle element in the background. See SCENE INTERACTION section. null is valid.
-- "adaptive_text_color": string (hex) — Curated from user's accentColor. Adjust L and S (keep Hue ±10°) for legibility. Dark scenes → L 85–95%. Bright scenes → L 15–35%. MANDATORY.
+- "adaptive_text_color": string (hex) — Curated from user's Reference Palette. Adjust L and S (keep Hue ±10°) for legibility. Dark scenes → L 85–95%. Bright scenes → L 15–35%. MANDATORY.
 - "scene_light_direction": "top-left" | "top-right" | "overhead" | "side-left" | "side-right" — MUST match background_prompt. MANDATORY.
 - "contact_surface": "volcanic" | "marble" | "wood" | "glass" | "stone" | "rubber" | "sand" | "ceramic" — MANDATORY.
 - "lighting_intent": "harsh_sunlight" | "soft_spa" | "dramatic_window" | "rim_glow" | "clinical_bright" | "golden_hour" — The 3D lighting preset applied to the product. MUST be consistent with the scene mood. Guide: harsh_sunlight for pop/sport, soft_spa for skincare/wellness, dramatic_window for perfume/fashion, rim_glow for luxury/night, clinical_bright for supplement/tech, golden_hour for warm/sunset. MANDATORY.
@@ -134,7 +135,24 @@ Any array that does not contain exactly ${GENERATION_CONFIG.IMAGE_COUNT} image(s
   - "structural" = eye-level, slight high/low angle (≤20°), straight-on. The product silhouette is locked exactly as-is. Use for 4 out of every 4 concepts.
   - "immersive" = top-down flat lay, extreme macro, dramatic Dutch tilt (≥30°). ControlNet uses the product outline as a loose anchor while the scene prompt has maximum creative weight. Use for concepts where the AESTHETIC VOCABULARY specifies a top-down or macro perspective.
   Rule: At least 1 concept per batch MUST be "immersive" to ensure visual variety. No more than 2 "immersive" in one batch.
-- "elements": array — THE VISUAL COMPOSITION. See ELEMENTS RULES below.
+- "component_layout": array — THE VISUAL COMPOSITION USING THE COMPONENT REGISTRY.
+  Exactly 20% of batches are "cinematic" (this array MUST be empty).
+  For the remaining 80%, you MUST build the ad using 2 to 4 of these components:
+  1. PointerBenefit (label, x, y): Use for "organic-luxury" or pinpointing details.
+  2. FeatureSwitch (label, x, y, isActive): Use for "tech-skincare" or technical claims.
+  3. CleanIngredient (ingredient, subtext, x, y): Circular badge for active ingredients. Place in gutters (corners).
+  4. SocialBadge (label, x, y): "Verified Result", stars. Place in gutters.
+  5. BenefitGrid (benefits array, x, y): 2x2 grid.
+  6. ComparisonSlider (beforeText, afterText, x, y): "tech-skincare" before/after.
+  7. ShapeOverlay (x, y, opacity): Geometric shape behind text.
+  8. ScrollingRibbon (text, position): "high-energy" alert banner at top/bottom.
+  9. OutlineText (text, x, y, fontSize): Huge stroke-only background typography.
+  
+  VISUAL HIERARCHY RULES:
+  - High-contrast headlines/text must be at least 2x the size of subheadlines.
+  - SocialBadges and CleanIngredients MUST be placed in "Gutters" (corners, e.g., x: 15, y: 15 or x: 85, y: 85) to avoid cluttering the product.
+
+- "elements": array — THE VISUAL COMPOSITION FOR TYPOGRAPHY.
   Each element MUST contain:
   • "id"            : "hl" | "shl" | "cta"
   • "type"          : "headline" | "subheadline" | "cta"
@@ -149,6 +167,17 @@ Any array that does not contain exactly ${GENERATION_CONFIG.IMAGE_COUNT} image(s
   - "editorial": hl required + shl optional. Do NOT include cta. 1–2 elements max.
   - "cinematic": hl ONLY (or empty array for a pure product shot with zero copy). Do NOT include shl or cta.
   Do NOT add a "content" field — content comes from "headline"/"subheadline"/"cta" above.
+- "component_layout": array — THE NEW COMPONENT REGISTRY (Lego Architecture).
+  Output an array of 1 to 3 dynamic components to enhance the composition.
+  CRITICAL GRID LOGIC: Instead of random X/Y coordinates, align components to a 3-column grid (Left Gutter, Center, Right Gutter). If the product is centered, components MUST be anchored in the Left or Right gutters to avoid overlap.
+  Available components:
+  1. { "component": "PointerBenefit", "props": { "label": string, "x": 0-100, "y": 0-100, "dotColor": "#hex" } }
+     Usage: Point to a specific feature on the product. Use 1-2 per concept maximum.
+  2. { "component": "FeatureSwitch", "props": { "label": string, "x": 0-100, "y": 0-100, "isActive": boolean, "activeColor": "#hex" } }
+     Usage: Modern UI toggle overlay (e.g. "BIO-TECH [ON]"). Use 1 per concept maximum.
+  3. { "component": "BackgroundPattern", "props": { "text": string, "opacity": 0-1, "color": "#hex", "rotation": number } }
+     Usage: Repeating text pattern for empty space. Good for high-energy/sport/cyber themes.
+  Color Instruction (Soft Constraint): The user's brand Reference Palette is provided below (Primary, Secondary, Tertiary). Use these as a base for your UI components, but feel free to shift them to harmonious accents (e.g. Olive or Sage for dark green) if it improves the visual harmony. Output exact hex codes.
 - "layout_config": object — MANDATORY SPATIAL DESIGN SYSTEM. This is the contract between the background image and the Remotion text overlays:
   • "spatial_strategy"    : string — 1 sentence describing where the product sits and where text goes.
     MANDATORY. Example: "Product anchored bottom-right, clean negative space top-left for headline."
@@ -185,9 +214,10 @@ Write the product INTO the scene using interaction verbs. The image generation m
 **Structure:** Write 2–3 sentences. Open with the product and its interaction verb. Second sentence: describe the environment/surface and its materiality. Third sentence (optional): describe the lighting quality and atmosphere in cinematic terms.
 
 ### ADAPTIVE BRAND COLOR — MANDATORY
-You receive the user's accentColor (brand hex). Curate it — do not use raw:
+You receive the user's Reference Palette (Primary, Secondary, Tertiary). Curate ONE of them for typography/UI accents:
 - Dark/moody scenes: push Lightness to 80–95%, reduce Saturation 10–20%.
 - Bright/natural scenes: push Lightness to 15–35%, increase Saturation 10–20%.
+- SMART COLOR FALLBACK: Ensure the Soft Constraint logic always maintains a high contrast ratio. If a user-selected color results in unreadable text, you MUST override it with the "Tertiary" color or a neutral high-contrast color.
 - Output curated hex in "adaptive_text_color".
 
 ### LAYOUT GEOMETRY — Coordinate System (Format: ${aspectRatio})
@@ -337,14 +367,19 @@ export async function POST(req: NextRequest) {
   const {
     productDescription,
     productName,
+    brandName,
     usps,
     targetAudience,
     logoUrl,
     targetLanguage = "Français",
     aspectRatio = "9:16",
     theme,
-    accentColor,
+    colors,
     productCount = 1,
+    offerText,
+    socialProof,
+    keyIngredient,
+    customCta,
   } = await req.json();
 
   if (!productDescription || !usps || !targetAudience) {
@@ -381,11 +416,28 @@ export async function POST(req: NextRequest) {
 
 **User's Selected Theme:** ${theme || "luxe-sombre"}
 
-**User's Brand Accent Color (hex):** ${accentColor || "#D4AF37"}
+**User's Brand Reference Palette:**
+- Primary: ${colors?.primary || "#FFFFFF"}
+- Secondary: ${colors?.secondary || "#888888"}
+- Tertiary: ${colors?.tertiary || "#000000"}
 
 **Number of Products in Shot:** ${productCount} (1 = single product, 2–3 = group/bundle shot — widen product area accordingly)
 
 **has_logo:** ${has_logo}
+
+${offerText ? `**PROMO OFFER:** ${offerText}\n(CRITICAL MANDATE: You MUST use the ScrollingRibbon or OutlineText component in your component_layout to highlight this offer.)` : ""}
+${socialProof ? `**SOCIAL PROOF:** ${socialProof}\n(CRITICAL MANDATE: You MUST use the SocialBadge component in your component_layout to highlight this trust metric. Place it in a gutter.)` : ""}
+${keyIngredient ? `**KEY INGREDIENT:** ${keyIngredient}\n(CRITICAL MANDATE: You MUST use the CleanIngredient component in your component_layout to highlight this ingredient. Place it in a gutter.)` : ""}
+${customCta ? `**CUSTOM CTA OVERRIDE:** ${customCta}\n(CRITICAL MANDATE: For any 'direct_response' composition, your 'cta' element text must be EXACTLY this custom CTA.)` : ""}
+${brandName ? `**BRAND NAME EXPERT TEMPLATE TRIGGERED:** The user provided a Brand Name ("${brandName}").
+CRITICAL MANDATE: For ALL concepts where BrandName is present:
+1. BAN scenic elements in the background_prompt. Enforce a minimalist studio background (solid color, soft radial gradient, paper texture) using the primary color.
+2. Enforce a Left/Right split structure using the Component Registry:
+   - Left Column: HeroObject (the product, by setting negative_space_zone to "right").
+   - Right Column: You MUST output a component_layout array containing EXACTLY these elements:
+     a) BrandHeader (props: { brandName: "${brandName}", x: 75, y: 15 })
+     b) GlassCard (props: { features: [${usps.map((u: string) => `"${u}"`).join(', ')}], x: 75, y: 50 })
+3. Element positioning: Headline "hl" element must be anchored x: 75, y: 25. The CTA "cta" element must be anchored x: 75, y: 80.` : ""}
 
 Generate ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} ad concepts as a JSON array.`;
 

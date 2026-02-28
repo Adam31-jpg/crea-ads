@@ -69,12 +69,12 @@ const getFormatOptions = (t: any) => [
 ] as const;
 
 export const THEMES = [
-    { id: "luxe-sombre", image: "/images/themes/luxe-sombre.jpg", text: "text-zinc-200" },
-    { id: "studio-white", image: "/images/themes/studio-white.jpg", text: "text-zinc-800" },
-    { id: "neon", image: "/images/themes/neon.jpg", text: "text-zinc-100" },
-    { id: "nature", image: "/images/themes/nature.jpg", text: "text-zinc-900" },
-    { id: "pop", image: "/images/themes/pop.jpg", text: "text-zinc-800" },
-    { id: "sunset", image: "/images/themes/sunset.jpg", text: "text-zinc-100" },
+    { id: "luxe-sombre", image: "/images/themes/luxe-sombre.jpg", text: "text-zinc-200", palette: { primary: "#D4AF37", secondary: "#1A1A1A", tertiary: "#4A4A4A" } },
+    { id: "studio-white", image: "/images/themes/studio-white.jpg", text: "text-zinc-800", palette: { primary: "#000000", secondary: "#F5F5F5", tertiary: "#E0E0E0" } },
+    { id: "neon", image: "/images/themes/neon.jpg", text: "text-zinc-100", palette: { primary: "#FF00FF", secondary: "#00FFFF", tertiary: "#09090B" } },
+    { id: "nature", image: "/images/themes/nature.jpg", text: "text-zinc-900", palette: { primary: "#2E8B57", secondary: "#F5DEB3", tertiary: "#8FBC8F" } },
+    { id: "pop", image: "/images/themes/pop.jpg", text: "text-zinc-800", palette: { primary: "#FF4500", secondary: "#FFD700", tertiary: "#1E90FF" } },
+    { id: "sunset", image: "/images/themes/sunset.jpg", text: "text-zinc-100", palette: { primary: "#FF7F50", secondary: "#8A2BE2", tertiary: "#FFDAB9" } },
 ];
 
 export const ThemePreviewSVG = () => (
@@ -115,7 +115,7 @@ export default function StudioPage() {
         heroImageIndex: 0,
         logoUrl: null as string | null,
         theme: "luxe-sombre",
-        accentColor: "#F59E0B",
+        colors: THEMES[0].palette,
         format: "1080x1920",
         fps: 30,
         durationSec: 6,
@@ -133,7 +133,7 @@ export default function StudioPage() {
             heroImageIndex: 0,
             logoUrl: null,
             theme: "luxe-sombre",
-            accentColor: "#F59E0B",
+            colors: THEMES[0].palette,
             format: "1080x1920",
             fps: 30,
             durationSec: 6,
@@ -165,7 +165,7 @@ export default function StudioPage() {
             marketingPrompt: marketingPrompt,
             isStrategyReused: isStrategyReused,
             theme: form.theme,
-            accentColor: form.accentColor,
+            colors: form.colors,
             format: form.format,
             fps: form.fps, // Always 30
             durationSec: form.durationSec,
@@ -318,12 +318,12 @@ export default function StudioPage() {
                     {/* ── Step 2: Style & Thème ────────────────────────────────
                          Theme is locked HERE before any Gemini call.
                          The "Next" button on this step opens MarketingIntake
-                         immediately, passing form.theme + form.accentColor so
+                         immediately, passing form.theme + form.colors so
                          the strategy API receives the correct activeTheme.      */}
                     {currentStep === "style" && (
                         <ThemeSelector
                             theme={form.theme}
-                            accentColor={form.accentColor}
+                            colors={form.colors}
                             update={update}
                             THEMES={THEMES}
                             ThemePreviewSVG={ThemePreviewSVG}
@@ -472,7 +472,7 @@ export default function StudioPage() {
                 initialStrategy={strategy}
                 initialTargetLanguage={form.targetLanguage}
                 theme={form.theme}
-                accentColor={form.accentColor}
+                colors={form.colors}
                 onStrategyReady={(
                     concepts: AdConcept[],
                     logoUrl: string | null,

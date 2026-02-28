@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { subscribe, broadcast } from "@/lib/sse";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/events
  *

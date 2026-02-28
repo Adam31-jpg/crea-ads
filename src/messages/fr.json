@@ -413,6 +413,18 @@
                     "generateSuccess": "🧠 Stratégie IA générée ! Consultez vos {total} concepts.",
                     "connectFailed": "Échec de la connexion à l'IA"
                 },
+                "tooltips": {
+                    "cta": "Remplace le bouton généré par défaut par l'IA pour imposer un texte axé sur la conversion.",
+                    "productDesc": "Décrivez le produit physique, son utilité et son ton. Ceci forme le socle de la stratégie.",
+                    "usps": "Arguments de vente uniques. Se transforment directement en sous-titres et composants clés.",
+                    "audience": "Influence le ton de voix et la sélection esthétique de la stratégie.",
+                    "offer": "Ajouter une offre active automatiquement la bannière défilante ou le texte souligné.",
+                    "socialProof": "Active le composant de preuve sociale (ex: badge 5 étoiles).",
+                    "ingredient": "Active le badge circulaire Ingrédient Pur pour mettre en valeur les éléments.",
+                    "brandName": "Le nom de votre marque. S'affiche dans certains cas"
+                },
+                "expertTip": "💡 Conseil d'expert : Plus vos descriptions et USPs sont précis, plus Lumina sera capable de générer une stratégie publicitaire percutante et visuellement cohérente.",
+                "optionalBoosts": "Boosts Créatifs Optionnels (Epic 6)",
                 "errors": {
                     "unauthorized": "Non autorisé",
                     "noApiKey": "Clé API non configurée",
