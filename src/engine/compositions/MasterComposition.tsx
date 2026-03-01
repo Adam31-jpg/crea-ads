@@ -14,6 +14,8 @@ import { LogoBar } from '../components/LogoBar';
 import { ScrimLayer } from '../components/ScrimLayer';
 import { ComponentRegistry } from '../library/index';
 import { TemplateLuxeLoly } from '../library/TemplateLuxeLoly';
+import { TemplateOverheadMinimal } from '../library/TemplateOverheadMinimal';
+import { TemplateCircleCenter } from '../library/TemplateCircleCenter';
 
 type Props = z.infer<typeof RemotionPropsSchema>;
 
@@ -248,7 +250,7 @@ export const MasterComposition: React.FC<Props> = (props) => {
                         {/* ── Layer 1: 3D product (Bypassed if using a declarative Template Engine) ── */}
                         {/* Suppressed for still images where BRIA has already baked the product */}
                         {/* into the background — rendering both would create a double-layer artifact. */}
-                        {!hideHeroObject && props.template_id !== 'AD_LUXE_LOLY' && (
+                        {!hideHeroObject && props.template_id !== 'AD_LUXE_LOLY' && props.template_id !== 'AD_OVERHEAD_MINIMAL' && props.template_id !== 'AD_CIRCLE_CENTER' && (
                             <AbsoluteFill style={{ transform: `scale(${beatScale})`, zIndex: 10 }}>
                                 <HeroObject
                                     imageUrl={productImageUrl}
@@ -275,6 +277,17 @@ export const MasterComposition: React.FC<Props> = (props) => {
                                                 resolvedImageUrls={resolvedImageUrls}
                                                 beatScale={beatScale}
                                             />
+                                        );
+                                    case 'AD_OVERHEAD_MINIMAL':
+                                        return (
+                                            <TemplateOverheadMinimal
+                                                {...props}
+                                                component_layout={componentLayout}
+                                            />
+                                        );
+                                    case 'AD_CIRCLE_CENTER':
+                                        return (
+                                            <TemplateCircleCenter props={props} />
                                         );
                                     case 'AD_LUXE_DARK':
                                         // Future template placeholder

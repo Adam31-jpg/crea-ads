@@ -351,6 +351,8 @@ Example (nature): "A serum bottle shattering through a frozen wave of dew-covere
 19. NARRATIVE INTEGRATION: Every background_prompt MUST contain a product-scene interaction verb (radiating, shattering, submersed, enveloped, dissolving, bleeding, emerging, catching, cradled, floating). A prompt with no interaction verb is a critical failure.
 20. NO TEXT IN SCENES: background_prompt MUST NEVER include advertising headlines, slogans, product claims, CTAs, brand names, or any typographic instruction. ALL text is rendered by Remotion using layout_config coordinates. Text in background_prompt creates doubled AI-rendered artifacts. Critical failure.
 21. LAYOUT CONFIG: Every concept MUST include a "layout_config" object with spatial_strategy, negative_space_zone, and headline fields. Missing layout_config is equivalent to missing headline — a critical failure. The negative_space_zone MUST also appear as an explicit empty-space instruction in the background_prompt.
+22. FALLBACK DATA HALLUCINATION (CRITICAL): If you must select a template to fulfill the TOTAL_MEDIA_PER_BATCH quota, but the user didn't provide required data (like a brandName), you must creatively hallucinate plausible fallback data based on the product description instead of failing.
+23. DIVERSITY MANDATE: You must maximize visual variety. Do NOT output the same template_id more than once in a single batch unless you have exhausted all eligible templates. If the user requests 3 images and provides all necessary contact/brand data, you MUST select 3 completely different templates.
 `;
 
 export async function POST(req: NextRequest) {
@@ -380,6 +382,8 @@ export async function POST(req: NextRequest) {
     socialProof,
     keyIngredient,
     customCta,
+    websiteUrl,
+    phoneNumber,
   } = await req.json();
 
   if (!productDescription || !usps || !targetAudience) {
@@ -433,12 +437,25 @@ ${brandName ? `**BRAND NAME EXPERT TEMPLATE TRIGGERED:** The user provided a Bra
 CRITICAL MANDATE: For ALL concepts where BrandName is present:
 1. BAN scenic realistic elements in the background_prompt.
 2. Enforce a minimalist studio background with "viscous liquid interaction flowing over the bottle" and soft lighting.
-3. Output \`template_id: "AD_LUXE_LOLY"\` in the root of the JSON concept object.
+3. Asymmetrical composition rule: The background_prompt MUST state "asymmetrical composition, product is positioned closely in the bottom-right quadrant, macro shot, leaving clear negative space on the left."
+4. Output \`template_id: "AD_LUXE_LOLY"\` in the root of the JSON concept object.
 4. When using a Template ID, DO NOT return any data in the \`elements\` or \`layout_config\` fields. All UI components must be strictly contained within \`component_layout\`.
 5. You MUST output a component_layout array containing EXACTLY these elements:
    - BrandHeader (props: { brandName: "${brandName}" })
    - FeatureCard (props: { features: [${usps.map((u: string) => `"${u}"`).join(', ')}] })
    (Do NOT provide x/y coordinates; the responsive template handles positioning.)` : ""}
+${logoUrl ? `**LOGO PRESENT EXPERT TEMPLATE TRIGGERED:** The user provided a Logo URL.
+CRITICAL MANDATE: For ONE of the concepts, you MUST prioritize the Overhead Minimal template.
+1. Output \`template_id: "AD_OVERHEAD_MINIMAL"\` in the root of the JSON concept object.
+2. The \`background_prompt\` MUST be EXACTLY: "Top-down flat lay shot of the product on a solid color background. Dramatic lighting with a deep, dark shadow cast over the top-right quadrant of the image."
+3. When using this template, you MUST provide a short, punchy \`headlineText\` (2-3 words max).
+4. Do NOT populate \`component_layout\` or \`elements\` arrays for this template.` : ""}
+${(websiteUrl || phoneNumber) ? `**CONTACT DATA PRESENT EXPERT TEMPLATE TRIGGERED:** The user provided contact data (Website or Phone).
+CRITICAL MANDATE: For ONE of the concepts, you MUST prioritize the AD_CIRCLE_CENTER template.
+1. Output \`template_id: "AD_CIRCLE_CENTER"\` in the root of the JSON concept object.
+2. The \`background_prompt\` MUST be EXACTLY: "Minimalist background featuring a large, solid geometric circle right in the center. The circle must be in a vibrant color that contrasts with the main background color. Top-down or straight-on shot of the product placed perfectly in the center, overlapping the circle."
+3. When using this template, you MUST provide BOTH \`headline\` and \`subheadline\` texts (which will be rendered in dual colors).
+4. Do NOT populate \`component_layout\` or \`elements\` arrays for this template.` : ""}
 
 Generate ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} ad concepts as a JSON array.`;
 
@@ -520,6 +537,11 @@ Generate ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} ad concepts as a JSON array.
 
         // Zero creative freedom for background
         concept.background_prompt = `High-end product photography, pure minimalist ${baseColor} paper-texture background, soft 45-degree key light, NO shadows, thick translucent serum dripping onto the bottle.`;
+      } else if (concept.template_id === 'AD_OVERHEAD_MINIMAL') {
+        // Ensure the spatial instruction is strictly maintained
+        concept.background_prompt = "Top-down flat lay shot of the product on a solid color background. Dramatic lighting with a deep, dark shadow cast over the top-right quadrant of the image.";
+      } else if (concept.template_id === 'AD_CIRCLE_CENTER') {
+        concept.background_prompt = "Minimalist background featuring a large, solid geometric circle right in the center. The circle must be in a vibrant color that contrasts with the main background color. Top-down or straight-on shot of the product placed perfectly in the center, overlapping the circle.";
       }
       return concept;
     });

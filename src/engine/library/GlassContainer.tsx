@@ -27,7 +27,6 @@ export const GlassContainer: React.FC<GlassContainerProps> = ({
     return (
         <div
             style={{
-                ...style,
                 padding,
                 backgroundColor: `rgba(20, 20, 20, ${bgOpacity})`,
                 backdropFilter: 'blur(12px)',
@@ -38,6 +37,7 @@ export const GlassContainer: React.FC<GlassContainerProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                ...style,
             }}
         >
             {children}

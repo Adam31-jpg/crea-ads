@@ -8,6 +8,8 @@ export interface MarketingData {
     socialProof?: string;
     keyIngredient?: string;
     customCta?: string;
+    websiteUrl?: string;
+    phoneNumber?: string;
 }
 
 export interface BrickProps {

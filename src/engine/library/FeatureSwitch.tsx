@@ -18,7 +18,7 @@ export const FeatureSwitch: React.FC<{
     const content = (
         <GlassContainer
             intensity="medium"
-            padding="10px 20px"
+            padding="12px 24px"
             borderRadius={32}
             style={{
                 position: isRelative ? 'relative' : 'absolute',
@@ -26,10 +26,27 @@ export const FeatureSwitch: React.FC<{
                 top: isRelative ? undefined : top,
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
                 gap: 16,
             }}
         >
-            {/* The "Switch" (iOS Style) */}
+            {/* The Text (Pinned Left) */}
+            <div
+                style={{
+                    color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: 18,
+                    fontWeight: 600,
+                    letterSpacing: '0.04em',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                    textAlign: 'left'
+                }}
+            >
+                {label}
+            </div>
+
+            {/* The "Switch" (Pinned Right) */}
             <div
                 style={{
                     width: 51,
@@ -39,6 +56,7 @@ export const FeatureSwitch: React.FC<{
                     position: 'relative',
                     transition: 'background-color 0.3s ease',
                     border: isActive ? 'none' : '1px solid rgba(255, 255, 255, 0.1)',
+                    flexShrink: 0,
                 }}
             >
                 <div
@@ -54,21 +72,6 @@ export const FeatureSwitch: React.FC<{
                         transition: 'left 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
                     }}
                 />
-            </div>
-
-            {/* The Text */}
-            <div
-                style={{
-                    color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
-                    fontFamily: 'Inter, sans-serif',
-                    fontSize: 20,
-                    fontWeight: 500,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    textShadow: '0 1px 2px rgba(0,0,0,0.5)',
-                }}
-            >
-                {label}
             </div>
         </GlassContainer>
     );

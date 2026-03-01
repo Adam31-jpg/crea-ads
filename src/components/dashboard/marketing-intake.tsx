@@ -27,6 +27,7 @@ import { OfferBrick } from "./form-bricks/OfferBrick";
 import { SocialProofBrick } from "./form-bricks/SocialProofBrick";
 import { IngredientBrick } from "./form-bricks/IngredientBrick";
 import { CtaBrick } from "./form-bricks/CtaBrick";
+import { ContactBrick } from "./form-bricks/ContactBrick";
 import { MarketingData } from "./form-bricks/types";
 import {
     Tooltip,
@@ -102,8 +103,11 @@ export function MarketingIntake({
         targetLanguage: initialTargetLanguage || "Français",
         offerText: "",
         socialProof: "",
+        socialProof: "",
         keyIngredient: "",
         customCta: "",
+        websiteUrl: "",
+        phoneNumber: "",
     });
 
     const handleChange = (partial: Partial<MarketingData>) => {
@@ -227,8 +231,11 @@ export function MarketingIntake({
                     colors: colors ?? { primary: "#FFFFFF", secondary: "#888888", tertiary: "#000000" },
                     offerText: data.offerText,
                     socialProof: data.socialProof,
+                    socialProof: data.socialProof,
                     keyIngredient: data.keyIngredient,
                     customCta: data.customCta,
+                    websiteUrl: data.websiteUrl,
+                    phoneNumber: data.phoneNumber,
                     brandName: data.brandName,
                 }),
             });
@@ -409,8 +416,10 @@ export function MarketingIntake({
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 pt-2">
                                                 <OfferBrick data={data} onChange={handleChange} t={t} />
                                                 <SocialProofBrick data={data} onChange={handleChange} t={t} />
+                                                <SocialProofBrick data={data} onChange={handleChange} t={t} />
                                                 <IngredientBrick data={data} onChange={handleChange} t={t} />
                                                 <CtaBrick data={data} onChange={handleChange} t={t} />
+                                                <ContactBrick data={data} onChange={handleChange} t={t} />
                                             </div>
                                         </motion.div>
                                     )}

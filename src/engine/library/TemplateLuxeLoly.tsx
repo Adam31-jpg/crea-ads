@@ -55,101 +55,108 @@ export const TemplateLuxeLoly: React.FC<any> = ({
     if (features.length === 0) features = ['FREINE LA CHUTE DE CHEVEUX', 'BOOSTE LA CROISSANCE', 'RENFORCE LA FIBRE'];
 
     return (
-        <AbsoluteFill style={{ display: 'flex', flexDirection, zIndex: 20 }}>
-            {/* Left/Top Column: Product Area */}
-            <div style={{ width: isPortrait ? '100%' : split1, height: isPortrait ? split1 : '100%', position: 'relative' }}>
-                <AbsoluteFill style={{ transform: `scale(${beatScale})`, zIndex: 10 }}>
-                    {!props.backgroundImageUrl && (
-                        <HeroObject
-                            imageUrl={cdnImageUrl}
-                            productImageUrls={cdnResolvedUrls}
-                            zoom={props.camera.zoomStart}
-                            color={props.colors.accent}
-                            layoutType={props.layout.layoutType}
-                            aspectRatio={props.layout.aspectRatio}
-                            sceneLightDirection={props.sceneLightDirection}
-                            contactSurface={props.contactSurface}
-                            lightingIntent={props.lightingIntent}
-                        />
-                    )}
-                </AbsoluteFill>
-            </div>
+        <AbsoluteFill style={{ backgroundColor: props.colors.background }}>
 
-            {/* Right/Bottom Column: Typography & USPs */}
-            <div style={{
-                width: isPortrait ? '100%' : split2,
-                height: isPortrait ? split2 : '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: isPortrait ? '20px 40px' : '40px 60px',
-                gap: '40px',
-                zIndex: 20
-            }}>
-                <BrandHeader brandName={brandName} isRelative={true} />
+            {/* Background Layer: Product Area */}
+            <AbsoluteFill style={{ transform: `scale(${beatScale})`, zIndex: 10 }}>
+                {!props.backgroundImageUrl && (
+                    <HeroObject
+                        imageUrl={cdnImageUrl}
+                        productImageUrls={cdnResolvedUrls}
+                        zoom={props.camera.zoomStart}
+                        color={props.colors.accent}
+                        layoutType={props.layout.layoutType}
+                        aspectRatio={props.layout.aspectRatio}
+                        sceneLightDirection={props.sceneLightDirection}
+                        contactSurface={props.contactSurface}
+                        lightingIntent={props.lightingIntent}
+                    />
+                )}
+            </AbsoluteFill>
 
-                <GlassCard style={{ width: '100%', maxWidth: '440px' }}>
-                    {features.map((feature, i) => (
-                        <FeatureSwitch
-                            key={i}
-                            label={feature}
-                            isActive={true}
-                            activeColor={props.colors.primary}
-                            isRelative={true}
-                        />
-                    ))}
-                </GlassCard>
-
-                {/* Dynamically render any other strict components injected by Gemini */}
-                {props.component_layout?.map((c: any, i: number) => {
-                    if (c.component === 'CleanIngredient') return <CleanIngredient key={`extra-${i}`} {...c.props} isRelative={true} />;
-                    if (c.component === 'PointerBenefit') return <PointerBenefit key={`extra-${i}`} {...c.props} isRelative={true} />;
-                    return null;
-                })}
-
-                {/* Internal Social Proof perfectly aligned under the card */}
+            {/* Spatial Placeholder: Red Cube simulating Nano Banana product placement */}
+            {props.isSandboxMock && (
                 <div style={{
-                    color: props.colors.accent,
-                    fontSize: 24,
+                    position: 'absolute',
+                    bottom: '10%',
+                    right: '5%',
+                    width: '45%',
+                    height: '60%',
+                    border: '4px dashed #ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    zIndex: 15,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ef4444',
+                    fontWeight: 'bold',
+                    fontSize: isPortrait ? '2rem' : '3rem',
+                    textAlign: 'center',
+                    backdropFilter: 'blur(2px)',
+                    borderRadius: '24px'
+                }}>
+                    AI PRODUCT <br /> COMPOSITE AREA
+                </div>
+            )}
+
+            {/* Master Overlay Layer (Typography & UI) */}
+            <div style={{ width: '100%', height: '100%', zIndex: 20, position: 'absolute', top: 0, left: 0 }}>
+
+                {/* 1. BLOC DE GAUCHE : Titre + Switchs */}
+                <div style={{
+                    position: 'absolute',
+                    left: '5%',
+                    // LA MAGIE : En portrait c'est ancré en bas. En paysage/carré c'est centré verticalement.
+                    bottom: isPortrait ? '45%' : 'auto',
+                    top: isPortrait ? 'auto' : '50%',
+                    transform: isPortrait ? 'none' : 'translateY(-50%)',
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 8,
-                    filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))',
-                    marginTop: 10,
+                    gap: '16px',
+                    width: isPortrait ? '90%' : '45%',
+                    maxWidth: '500px'
                 }}>
-                    <div style={{
-                        display: 'flex',
-                        gap: 4,
-                        fontSize: 28
+                    <h1 style={{
+                        fontFamily: props.fontFamily || 'Poppins',
+                        fontSize: isPortrait ? '72px' : '64px',
+                        fontWeight: 800,
+                        lineHeight: 1.05,
+                        color: props.colors.textRef || '#FFFFFF',
+                        textAlign: 'left',
+                        textTransform: 'uppercase',
+                        filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.4))',
+                        letterSpacing: '-0.02em',
+                        margin: 0
                     }}>
-                        ★★★★★
-                    </div>
-                    <span style={{
-                        fontSize: 14,
-                        fontWeight: 600,
-                        letterSpacing: '0.1em',
-                        textTransform: 'uppercase'
-                    }}>
-                        N°1 DES SOINS TEXTURÉS
-                    </span>
+                        {props.headlineText || brandName}
+                    </h1>
+
+                    <GlassCard style={{ width: '100%' }}>
+                        {features.map((feature, i) => (
+                            <FeatureSwitch
+                                key={i}
+                                label={feature}
+                                isActive={true}
+                                activeColor={props.colors.primary}
+                                isRelative={true}
+                            />
+                        ))}
+                    </GlassCard>
                 </div>
 
-                {/* Responsive directional arrow pointing from Card to Product */}
-                {!isPortrait && (
-                    <div style={{
-                        position: 'absolute',
-                        left: '-40px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        zIndex: 30,
-                    }}>
-                        <svg width="60" height="24" viewBox="0 0 60 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M58 12L2 12M2 12L12 2M2 12L12 22" stroke={props.colors.accent} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </div>
-                )}
+                {/* 2. BLOC DE DROITE : Nom de la marque */}
+                <div style={{
+                    position: 'absolute',
+                    right: isPortrait ? '30%' : '10%',
+                    // LA MAGIE : Plus haut en paysage pour survoler le carré rouge
+                    bottom: isPortrait ? '80%' : '75%',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    zIndex: 22
+                }}>
+                    <BrandHeader brandName={brandName} isRelative={true} />
+                </div>
+
             </div>
         </AbsoluteFill>
     );

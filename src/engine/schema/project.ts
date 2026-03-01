@@ -253,6 +253,8 @@ export const RemotionPropsSchema = z.object({
     backgroundImageUrl: z.string().url().optional(),
     logoUrl: z.string().url().optional().nullable(),
     logoPosition: z.enum(['top-left', 'top-right', 'bottom-left', 'bottom-right']).optional().nullable(),
+    websiteUrl: z.string().optional(),
+    phoneNumber: z.string().optional(),
 
     // --- Color Harmony (The Logic Layer output) ---
     colors: z.object({
@@ -313,6 +315,9 @@ export const RemotionPropsSchema = z.object({
 
     /** Surface material the product rests on — drives shadow opacity and tint. */
     contactSurface: z.string().optional(),
+
+    /** Sandbox development UI flag — triggers bounding box rendering for spatial simulation. */
+    isSandboxMock: z.boolean().optional(),
 
     /**
      * Controls text density for the composition.
