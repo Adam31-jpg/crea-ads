@@ -1,6 +1,5 @@
 import React from 'react';
 import { AbsoluteFill, useVideoConfig } from 'remotion';
-import { HeroObject } from '../compositions/HeroObject';
 import { BrandHeader } from './BrandHeader';
 import { GlassCard } from './GlassCard';
 import { FeatureSwitch } from './FeatureSwitch';
@@ -12,21 +11,16 @@ export const TemplateLuxeLoly: React.FC<any> = ({
     resolvedImageUrls,
     beatScale
 }) => {
+    console.log("[TemplateLuxeLoly] BG URL:", props.backgroundImageUrl);
     const { width, height } = useVideoConfig();
     const isPortrait = width < height;
 
-    // Force all S3 assets to use CloudFront to bypass bucket read permissions
-    const AWS_CLOUDFRONT_URL = "https://d1zfhdugugdhgw.cloudfront.net";
-    const applyCDN = (url?: string) => {
-        if (!url) return url;
-        if (url.includes('lumina-assets-prod.s3.us-east-1.amazonaws.com')) {
-            return url.replace('https://lumina-assets-prod.s3.us-east-1.amazonaws.com', AWS_CLOUDFRONT_URL);
-        }
-        return url;
-    };
-
-    const cdnImageUrl = applyCDN(props.productImageUrl);
-    const cdnResolvedUrls = resolvedImageUrls?.map(applyCDN) || [];
+    // Reconstruct URLs just like in OverheadMinimal just in case we hit an s3:// URL
+    const bucketUrl = "https://lumina-remotion-projects.s3.us-east-1.amazonaws.com";
+    let bgImageUrl = props.backgroundImageUrl;
+    if (bgImageUrl && bgImageUrl.startsWith('s3://')) {
+        bgImageUrl = bgImageUrl.replace('s3://lumina-remotion-projects/', bucketUrl + '/');
+    }
 
     // Responsive split: Portrait = top/bottom (40/60). Landscape = left/right (45/55).
     const flexDirection = isPortrait ? 'column' : 'row';
@@ -57,25 +51,17 @@ export const TemplateLuxeLoly: React.FC<any> = ({
     return (
         <AbsoluteFill style={{ backgroundColor: props.colors.background }}>
 
-            {/* Background Layer: Product Area */}
+            {/* Background Layer: 2D Pre-Baked AI Canvas */}
             <AbsoluteFill style={{ transform: `scale(${beatScale})`, zIndex: 0 }}>
-                {props.backgroundImageUrl ? (
+                {bgImageUrl ? (
                     <img
-                        src={cdnImageUrl}
+                        src={bgImageUrl}
                         style={{ position: 'absolute', width: '100%', height: '100%', objectFit: 'cover' }}
                     />
                 ) : (
-                    <HeroObject
-                        imageUrl={cdnImageUrl}
-                        productImageUrls={cdnResolvedUrls}
-                        zoom={props.camera.zoomStart}
-                        color={props.colors.accent}
-                        layoutType={props.layout.layoutType}
-                        aspectRatio={props.layout.aspectRatio}
-                        sceneLightDirection={props.sceneLightDirection}
-                        contactSurface={props.contactSurface}
-                        lightingIntent={props.lightingIntent}
-                    />
+                    <div style={{ position: 'absolute', width: '100%', height: '100%', backgroundColor: 'black', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'red' }}>
+                        MISSING BACKGROUND_IMAGE_URL PAYLOAD
+                    </div>
                 )}
             </AbsoluteFill>
 
