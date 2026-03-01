@@ -31,7 +31,7 @@ import {
 
 // --- Configuration ---
 const REGION = (process.env.REMOTION_AWS_REGION || 'us-east-1') as 'us-east-1';
-const MEMORY_SIZE = 2048;
+const MEMORY_SIZE = 8192; // Epic 9: 8GB RAM provides SwiftShader enough CPU power to emulate GPU for WebGL without deadlocking
 const TIMEOUT = 600;
 const DISK_SIZE = 2048;
 const ROLE_NAME = 'remotion-lambda-role';
@@ -236,7 +236,7 @@ const deploy = async () => {
         entryPoint,
         bucketName,
         region: REGION,
-        siteName: 'crea-ads-engine',
+        siteName: 'crea-ads-engine-v2', // Forced rename to burst S3/CloudFront caching
     });
     console.log(`   ✅ Site deployed: ${serveUrl}`);
 

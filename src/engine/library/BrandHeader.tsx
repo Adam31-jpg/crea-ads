@@ -5,47 +5,54 @@ export const BrandHeader: React.FC<{
     brandName: string;
     x?: number;
     y?: number;
-}> = ({ brandName, x = 50, y = 10 }) => {
+    isRelative?: boolean;
+}> = ({ brandName, x = 50, y = 10, isRelative = false }) => {
     const { width, height } = useVideoConfig();
 
     const left = (x / 100) * width;
     const top = (y / 100) * height;
 
-    return (
-        <AbsoluteFill style={{ pointerEvents: 'none' }}>
-            <div
+    const content = (
+        <div
+            style={{
+                position: isRelative ? 'relative' : 'absolute',
+                left: isRelative ? undefined : left,
+                top: isRelative ? undefined : top,
+                transform: isRelative ? 'none' : 'translateX(-50%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column',
+                gap: 4,
+            }}
+        >
+            {/* Minimalist 1px SVG Line */}
+            <div style={{ width: 40, height: 1, backgroundColor: 'rgba(255,255,255,0.8)', marginBottom: 2 }} />
+
+            <h1
                 style={{
-                    position: 'absolute',
-                    left,
-                    top,
-                    transform: 'translateX(-50%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexDirection: 'column',
-                    gap: 4,
+                    fontFamily: 'Inter, sans-serif',
+                    fontWeight: 300,
+                    fontSize: 22,
+                    letterSpacing: '0.25em',
+                    color: '#FFFFFF',
+                    textTransform: 'uppercase',
+                    margin: 0,
+                    textShadow: '0 2px 10px rgba(0,0,0,0.2)',
                 }}
             >
-                {/* Minimalist 1px SVG Line */}
-                <div style={{ width: 40, height: 1, backgroundColor: 'rgba(255,255,255,0.5)', marginBottom: 2 }} />
+                {brandName}
+            </h1>
 
-                <h1
-                    style={{
-                        fontFamily: 'Inter, sans-serif',
-                        fontWeight: 300,
-                        fontSize: 22,
-                        letterSpacing: '0.25em',
-                        color: '#FFFFFF',
-                        textTransform: 'uppercase',
-                        margin: 0,
-                        textShadow: '0 2px 10px rgba(0,0,0,0.5)',
-                    }}
-                >
-                    {brandName}
-                </h1>
+            <div style={{ width: 40, height: 1, backgroundColor: 'rgba(255,255,255,0.8)', marginTop: 2 }} />
+        </div>
+    );
 
-                <div style={{ width: 40, height: 1, backgroundColor: 'rgba(255,255,255,0.5)', marginTop: 2 }} />
-            </div>
+    if (isRelative) return content;
+
+    return (
+        <AbsoluteFill style={{ pointerEvents: 'none' }}>
+            {content}
         </AbsoluteFill>
     );
 };

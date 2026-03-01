@@ -4,14 +4,37 @@ import { GlassContainer } from './GlassContainer';
 
 export const PointerBenefit: React.FC<{
     label: string;
-    x: number;
-    y: number;
+    x?: number;
+    y?: number;
     dotColor?: string;
-}> = ({ label, x, y, dotColor = '#ffffff' }) => {
+    isRelative?: boolean;
+}> = ({ label, x = 50, y = 50, dotColor = '#ffffff', isRelative = false }) => {
     const { width, height } = useVideoConfig();
 
     const left = (x / 100) * width;
     const top = (y / 100) * height;
+
+    if (isRelative) {
+        return (
+            <GlassContainer
+                intensity="heavy"
+                padding="8px 16px"
+                borderRadius={6}
+                style={{
+                    color: '#ffffff',
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: 20,
+                    fontWeight: 500,
+                    margin: '8px 0',
+                    borderLeft: `4px solid ${dotColor}`,
+                    display: 'flex',
+                    alignItems: 'center'
+                }}
+            >
+                {label}
+            </GlassContainer>
+        );
+    }
 
     return (
         <AbsoluteFill style={{ pointerEvents: 'none' }}>

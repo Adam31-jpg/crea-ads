@@ -23,12 +23,12 @@ export const GlassCard: React.FC<GlassCardProps> = ({
             style={{
                 ...style,
                 padding,
-                backgroundColor: 'rgba(15, 15, 15, 0.65)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.05)',
-                borderRadius,
+                backgroundColor: 'rgba(255, 255, 255, 0.45)', // Loly pink is bright, use light glass
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                border: '1px solid rgba(255, 255, 255, 0.4)',
+                boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255,255,255,0.2)',
+                borderRadius: borderRadius === 24 ? 32 : borderRadius,
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '16px',

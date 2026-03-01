@@ -178,8 +178,8 @@ export const FeatureCardSchema = z.object({
     component: z.literal('FeatureCard'),
     props: z.object({
         features: z.array(z.string()).min(1).max(5),
-        x: z.number().min(0).max(100),
-        y: z.number().min(0).max(100),
+        x: z.number().min(0).max(100).optional(),
+        y: z.number().min(0).max(100).optional(),
         activeColor: z.string().regex(/^#/, "Must be hex code").optional(),
     }),
 });
@@ -348,6 +348,9 @@ export const RemotionPropsSchema = z.object({
      * Videos always receive false (default) to keep the 3D pipeline alive.
      */
     hideHeroObject: z.boolean().default(false),
+
+    /** Explicit responsive template logic override via Director's Brain */
+    template_id: z.string().optional(),
 });
 
 export type RemotionProps = z.infer<typeof RemotionPropsSchema>;

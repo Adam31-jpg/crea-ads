@@ -1370,6 +1370,17 @@ export async function POST(req: NextRequest) {
                     console.log(`[Queue] Triggering atomic 1-Spark refund for failed background generation on JobID ${jobId}`);
                     await prisma.user.update({ where: { id: userId }, data: { credits: { increment: 1 } } });
                     hasRefunded = true;
+
+                    // Epic 9: Abort the Lambda render so we don't waste time on a broken background
+                    await prisma.job.update({
+                        where: { id: jobId },
+                        data: {
+                            status: "failed",
+                            error_message: "Background Asset Generation Failed (API Exhaustion).",
+                        },
+                    });
+                    console.error(`[Queue] Aborting Lambda render for JobID ${jobId} due to missing background.`);
+                    continue;
                 }
             } else {
                 console.warn(`[Queue] No background_prompt generated for JobID ${jobId}, executing 1-Spark refund safety fallback`);
@@ -1452,6 +1463,7 @@ export async function POST(req: NextRequest) {
                             composition: formatToCompositionId(inputData.format),
                             inputProps,
                             imageFormat: "png",
+                            logLevel: "verbose", // Epic 9: Dump exact Chrome Network logs
                             privacy: "public",
                         });
 
@@ -1485,6 +1497,8 @@ export async function POST(req: NextRequest) {
                             inputProps,
                             codec: "h264",
                             framesPerLambda: 20,
+                            concurrencyPerLambda: 1, // Epic 9: Force single WebGL context
+                            logLevel: "verbose", // Epic 9: Dump exact Chrome Network logs
                             webhook: webhookConfig,
                             timeoutInMilliseconds: 600000,
                         });

@@ -17,7 +17,7 @@ import path from 'path';
 import { deploySite, getOrCreateBucket } from '@remotion/lambda';
 
 const REGION = (process.env.REMOTION_AWS_REGION || 'us-east-1') as 'us-east-1';
-const SITE_NAME = 'crea-ads-engine';
+const SITE_NAME = 'crea-ads-engine-v2';
 
 const main = async () => {
     console.log('📤 Deploying site bundle to S3...');

@@ -43,7 +43,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, Play, AlertTriangle, Loader2, MoreVertical, RotateCcw, Archive, ArchiveRestore, Trash2, Image, Video, Check, X, RefreshCw, Clock, Film, CheckCircle2, HeartPulse, Palette, Copy } from "lucide-react";
+import { Download, Play, AlertTriangle, Loader2, MoreVertical, RotateCcw, Archive, ArchiveRestore, Trash2, Image, Video, Check, X, RefreshCw, Clock, Film, CheckCircle2, HeartPulse, Palette, Copy, Wand2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { DuplicateBatchModal } from "@/components/modals/DuplicateBatchModal";
 
@@ -57,6 +57,7 @@ export interface Job {
     error_message: string | null;
     template_id: string;
     created_at?: string;
+    metadata?: any;
 }
 
 export interface Batch {
@@ -270,6 +271,87 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
 
     const handleDuplicate = () => {
         setDuplicateOpen(true);
+    };
+
+    const handleTestRerun = async () => {
+        setResyncing(true);
+        try {
+            toast.loading("Test : Génération de la stratégie...", { id: "test-rerun" });
+            let inputData = batch.input_data as any;
+            if (typeof inputData === "string") {
+                try {
+                    inputData = JSON.parse(inputData);
+                } catch (e) {
+                    console.error("Failed to parse inputData:", e);
+                }
+            }
+
+            const heroUrl = inputData.product_image_url || primaryJob?.metadata?.productImageUrl || null;
+
+            // 1. Re-run Strategy
+            const defaultUsps = ["Bénéfice 1", "Bénéfice 2", "Bénéfice 3"];
+            const strategyPayload = {
+                productName: inputData.productName || "Produit Par Défaut",
+                productDescription: inputData.productDescription || "Description automatique pour les anciens batchs.",
+                usps: inputData.usps && inputData.usps.length >= 3 ? inputData.usps : defaultUsps,
+                targetAudience: inputData.targetAudience || "Général",
+                logoUrl: inputData.logoUrl,
+                targetLanguage: inputData.targetLanguage || "Français",
+                theme: inputData.theme,
+                colors: inputData.colors,
+                offerText: inputData.offerText,
+                socialProof: inputData.socialProof,
+                keyIngredient: inputData.keyIngredient,
+                customCta: inputData.customCta,
+                brandName: inputData.brandName || "Marque Par Défaut",
+                format: inputData.format,
+                heroUrl: heroUrl, // Re-using existing S3 link as user requested
+            };
+
+            console.log("[Re-run] Strategy Payload:", strategyPayload);
+
+            const resStrategy = await fetch("/api/strategy", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(strategyPayload),
+            });
+            const strategyData = await resStrategy.json();
+            if (!resStrategy.ok) throw new Error(strategyData.error || "Erreur api/strategy");
+
+            // 2. Create Batch
+            toast.loading("Test : Création du batch et rendu...", { id: "test-rerun" });
+            const newInputData = {
+                ...inputData,
+                strategy_payload: strategyData.concepts,
+                product_image_url: heroUrl,
+            };
+
+            const resBatch = await fetch("/api/batch", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    projectName: `${batch.project_name} (Epic 7 Re-run)`,
+                    inputData: newInputData,
+                })
+            });
+            const batchRecord = await resBatch.json();
+            if (!resBatch.ok) throw new Error("Erreur api/batch");
+
+            // 3. Render
+            const resRender = await fetch("/api/render", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ batchId: batchRecord.id, inputData: newInputData }),
+            });
+            if (!resRender.ok) throw new Error("Erreur api/render");
+
+            toast.success("Batch cloné et lancé avec succès", { id: "test-rerun" });
+            router.refresh();
+        } catch (error: any) {
+            toast.error(error.message || "Erreur lors du clone", { id: "test-rerun" });
+        } finally {
+            setResyncing(false);
+        }
     };
 
     const handleSyncAndRetry = async () => {
@@ -606,6 +688,19 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                         )}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
+                                    {process.env.NODE_ENV === "development" && (
+                                        <>
+                                            <DropdownMenuItem
+                                                onClick={handleTestRerun}
+                                                className="text-amber-500 font-medium focus:text-amber-500"
+                                                disabled={resyncing}
+                                            >
+                                                <Wand2 className="h-4 w-4 mr-2" />
+                                                Test: Re-run Batch
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                        </>
+                                    )}
                                     <DropdownMenuItem
                                         onClick={() => setDeleteOpen(true)}
                                         className="text-destructive focus:text-destructive"

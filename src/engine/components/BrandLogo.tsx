@@ -47,5 +47,8 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({ src, position }) => {
             return null; // Should not hit if typed correctly, but safety fallback.
     }
 
-    return <Img src={src} style={style} />;
+    // Epic 9: Chromium Taint Cache Buster
+    const cacheBustedSrc = src.includes('?') ? `${src}&v=${Date.now()}` : `${src}?v=${Date.now()}`;
+
+    return <Img crossOrigin="anonymous" src={cacheBustedSrc} style={style} />;
 };

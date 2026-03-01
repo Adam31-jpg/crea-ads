@@ -36,26 +36,26 @@ const FLOAT_CYCLES = 3;
 // ─── Light Rig Lookup ─────────────────────────────────────────────────────────
 const LIGHT_RIGS: Record<string, {
     primary: [number, number, number];
-    fill:    [number, number, number];
+    fill: [number, number, number];
 }> = {
-    'top-left':   { primary: [-5, 10, 5],  fill: [4,  5, 2]  },
-    'top-right':  { primary: [5,  10, 5],  fill: [-4, 5, 2]  },
-    'overhead':   { primary: [0,  12, 3],  fill: [0,  5, -2] },
-    'side-left':  { primary: [-10, 5, 3],  fill: [4,  8, 2]  },
-    'side-right': { primary: [10,  5, 3],  fill: [-4, 8, 2]  },
+    'top-left': { primary: [-5, 10, 5], fill: [4, 5, 2] },
+    'top-right': { primary: [5, 10, 5], fill: [-4, 5, 2] },
+    'overhead': { primary: [0, 12, 3], fill: [0, 5, -2] },
+    'side-left': { primary: [-10, 5, 3], fill: [4, 8, 2] },
+    'side-right': { primary: [10, 5, 3], fill: [-4, 8, 2] },
 };
 const DEFAULT_RIG = LIGHT_RIGS['top-right'];
 
 // ─── Surface Shadow Lookup ────────────────────────────────────────────────────
 const SURFACE_SHADOWS: Record<string, { opacity: number; color: string }> = {
     volcanic: { opacity: 0.75, color: '#1a0f0a' },
-    marble:   { opacity: 0.55, color: '#0f1420' },
-    wood:     { opacity: 0.60, color: '#1f1208' },
-    glass:    { opacity: 0.25, color: '#0a0a15' },
-    stone:    { opacity: 0.70, color: '#0f1a0f' },
-    rubber:   { opacity: 0.75, color: '#0a0a0a' },
-    sand:     { opacity: 0.55, color: '#1a1508' },
-    ceramic:  { opacity: 0.50, color: '#141414' },
+    marble: { opacity: 0.55, color: '#0f1420' },
+    wood: { opacity: 0.60, color: '#1f1208' },
+    glass: { opacity: 0.25, color: '#0a0a15' },
+    stone: { opacity: 0.70, color: '#0f1a0f' },
+    rubber: { opacity: 0.75, color: '#0a0a0a' },
+    sand: { opacity: 0.55, color: '#1a1508' },
+    ceramic: { opacity: 0.50, color: '#141414' },
 };
 const DEFAULT_SHADOW = SURFACE_SHADOWS['marble'];
 
@@ -66,20 +66,20 @@ const DEFAULT_SHADOW = SURFACE_SHADOWS['marble'];
 interface LightingConfig {
     ambientIntensity: number;
     primaryIntensity: number;
-    fillIntensity:    number;
-    rimIntensity:     number;
-    rimColor:         string;
-    roughness:        number;
-    metalness:        number;
+    fillIntensity: number;
+    rimIntensity: number;
+    rimColor: string;
+    roughness: number;
+    metalness: number;
 }
 
 const LIGHTING_CONFIGS: Record<string, LightingConfig> = {
-    harsh_sunlight:  { ambientIntensity: 1.0, primaryIntensity: 8.0, fillIntensity: 0.5, rimIntensity: 0,   rimColor: '#ffffff', roughness: 0.10, metalness: 0.05 },
-    soft_spa:        { ambientIntensity: 3.5, primaryIntensity: 2.5, fillIntensity: 3.0, rimIntensity: 1.5, rimColor: '#fff8f0', roughness: 0.70, metalness: 0.00 },
+    harsh_sunlight: { ambientIntensity: 1.0, primaryIntensity: 8.0, fillIntensity: 0.5, rimIntensity: 0, rimColor: '#ffffff', roughness: 0.10, metalness: 0.05 },
+    soft_spa: { ambientIntensity: 3.5, primaryIntensity: 2.5, fillIntensity: 3.0, rimIntensity: 1.5, rimColor: '#fff8f0', roughness: 0.70, metalness: 0.00 },
     dramatic_window: { ambientIntensity: 0.8, primaryIntensity: 6.0, fillIntensity: 0.8, rimIntensity: 0.5, rimColor: '#f5e6d0', roughness: 0.15, metalness: 0.10 },
-    rim_glow:        { ambientIntensity: 1.5, primaryIntensity: 3.0, fillIntensity: 1.0, rimIntensity: 5.0, rimColor: '#d4af37', roughness: 0.05, metalness: 0.30 },
-    clinical_bright: { ambientIntensity: 4.0, primaryIntensity: 3.0, fillIntensity: 4.0, rimIntensity: 0,   rimColor: '#ffffff', roughness: 0.50, metalness: 0.00 },
-    golden_hour:     { ambientIntensity: 1.2, primaryIntensity: 5.0, fillIntensity: 1.5, rimIntensity: 3.0, rimColor: '#ffb347', roughness: 0.20, metalness: 0.15 },
+    rim_glow: { ambientIntensity: 1.5, primaryIntensity: 3.0, fillIntensity: 1.0, rimIntensity: 5.0, rimColor: '#d4af37', roughness: 0.05, metalness: 0.30 },
+    clinical_bright: { ambientIntensity: 4.0, primaryIntensity: 3.0, fillIntensity: 4.0, rimIntensity: 0, rimColor: '#ffffff', roughness: 0.50, metalness: 0.00 },
+    golden_hour: { ambientIntensity: 1.2, primaryIntensity: 5.0, fillIntensity: 1.5, rimIntensity: 3.0, rimColor: '#ffb347', roughness: 0.20, metalness: 0.15 },
 };
 const DEFAULT_LIGHTING = LIGHTING_CONFIGS['rim_glow'];
 
@@ -89,9 +89,9 @@ const DEFAULT_LIGHTING = LIGHTING_CONFIGS['rim_glow'];
 // depth scaling without any CSS tricks — products appear naturally smaller
 // at distance with the fov:50 perspective camera.
 interface ProductSlot {
-    xOffset:    number;
-    zDepth:     number;
-    scale:      number;
+    xOffset: number;
+    zDepth: number;
+    scale: number;
     floatPhase: number; // phase offset so products don't bob in sync
 }
 
@@ -106,15 +106,15 @@ function buildGroupLayout(
     }
     if (count === 2) {
         return [
-            { xOffset: isConverter ? 1   : -1.5, zDepth: 0,    scale: 1.00, floatPhase: 0    },
-            { xOffset: isConverter ? 3.5 :  1.5, zDepth: -1.5, scale: 0.75, floatPhase: 0.33 },
+            { xOffset: isConverter ? 1 : -1.5, zDepth: 0, scale: 1.00, floatPhase: 0 },
+            { xOffset: isConverter ? 3.5 : 1.5, zDepth: -1.5, scale: 0.75, floatPhase: 0.33 },
         ];
     }
     // count >= 3: left large, center medium, right small — classic "group shot"
     return [
-        { xOffset: -2, zDepth:  0,    scale: 1.00, floatPhase: 0    },
-        { xOffset:  0, zDepth: -1.0,  scale: 0.80, floatPhase: 0.25 },
-        { xOffset:  2, zDepth: -2.5,  scale: 0.60, floatPhase: 0.50 },
+        { xOffset: -2, zDepth: 0, scale: 1.00, floatPhase: 0 },
+        { xOffset: 0, zDepth: -1.0, scale: 0.80, floatPhase: 0.25 },
+        { xOffset: 2, zDepth: -2.5, scale: 0.60, floatPhase: 0.50 },
     ];
 }
 
@@ -169,28 +169,62 @@ const ProductMesh: React.FC<ProductMeshProps> = ({
     roughness,
     metalness,
 }) => {
-    const texture = useLoader(THREE.TextureLoader, imageUrl, (loader) => {
-        (loader as THREE.TextureLoader).setCrossOrigin('anonymous');
-    }) as THREE.Texture;
-
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-
-    const img = texture.image as HTMLImageElement;
-    const imageAspect = img?.width && img?.height ? img.width / img.height : 1;
-    const planeWidth  = 5 * imageAspect;
-    const planeHeight = 5;
-
-    const effectiveZoom = zoom * slot.scale;
-    const phaseOffset   = slot.floatPhase * Math.PI * 2;
-    const slotFloatY    = floatY + Math.sin(phaseOffset) * 0.05; // tiny extra phase per slot
-
+    const [texture, setTexture] = React.useState<THREE.Texture | null>(null);
     const { advance } = useThree();
 
     useEffect(() => {
-        advance(performance.now());
-        onReady();
-    }, [onReady, advance]);
+        let isMounted = true;
+        const loader = new THREE.TextureLoader();
+        // Epic 9: Critical CORS enforcement prior to load to bypass 28s WebGL taint hang
+        loader.setCrossOrigin('anonymous');
+
+        // Epic 9: Chromium Taint Cache Buster
+        const cacheBustedUrl = imageUrl.includes('?')
+            ? `${imageUrl}&v=${Date.now()}`
+            : `${imageUrl}?v=${Date.now()}`;
+
+        // Epic 9: 27-second Lockbreaker Timeout
+        const timeoutId = setTimeout(() => {
+            if (!isMounted) return;
+            const errMsg = `[HeroObject] TEXTURE_TIMEOUT_ERROR for product texture: ${imageUrl}`;
+            console.error(errMsg);
+            throw new Error(errMsg);
+        }, 27000);
+
+        loader.load(
+            cacheBustedUrl,
+            (tex) => {
+                if (!isMounted) return;
+                clearTimeout(timeoutId);
+                tex.minFilter = THREE.LinearFilter;
+                tex.magFilter = THREE.LinearFilter;
+                setTexture(tex);
+                advance(performance.now());
+                onReady();
+            },
+            undefined,
+            (err) => {
+                const errMsg = `[HeroObject] TEXTURE_LOAD_ERROR for product texture: ${imageUrl} - ${err}`;
+                console.error(errMsg);
+                if (!isMounted) return;
+                clearTimeout(timeoutId);
+                throw new Error(errMsg);
+            }
+        );
+
+        return () => { isMounted = false; clearTimeout(timeoutId); };
+    }, [imageUrl, onReady, advance]);
+
+    if (!texture) return null;
+
+    const img = texture.image as HTMLImageElement;
+    const imageAspect = img?.width && img?.height ? img.width / img.height : 1;
+    const planeWidth = 5 * imageAspect;
+    const planeHeight = 5;
+
+    const effectiveZoom = zoom * slot.scale;
+    const phaseOffset = slot.floatPhase * Math.PI * 2;
+    const slotFloatY = floatY + Math.sin(phaseOffset) * 0.05; // tiny extra phase per slot
 
     return (
         <>
@@ -244,8 +278,8 @@ const HeroScene: React.FC<HeroSceneProps> = ({
     const frame = useCurrentFrame();
     const { durationInFrames } = useVideoConfig();
 
-    const progress  = frame / durationInFrames;
-    const floatY    = Math.sin(progress * Math.PI * 2 * FLOAT_CYCLES) * 0.2;
+    const progress = frame / durationInFrames;
+    const floatY = Math.sin(progress * Math.PI * 2 * FLOAT_CYCLES) * 0.2;
     const rotationY = interpolate(
         frame,
         [0, durationInFrames],
@@ -253,8 +287,8 @@ const HeroScene: React.FC<HeroSceneProps> = ({
         { easing: Easing.bezier(0.42, 0, 0.58, 1) }
     );
 
-    const rig     = LIGHT_RIGS[sceneLightDirection ?? ''] ?? DEFAULT_RIG;
-    const shadow  = SURFACE_SHADOWS[contactSurface ?? ''] ?? DEFAULT_SHADOW;
+    const rig = LIGHT_RIGS[sceneLightDirection ?? ''] ?? DEFAULT_RIG;
+    const shadow = SURFACE_SHADOWS[contactSurface ?? ''] ?? DEFAULT_SHADOW;
     const lConfig = LIGHTING_CONFIGS[lightingIntent ?? ''] ?? DEFAULT_LIGHTING;
 
     const slots = buildGroupLayout(imageUrls.length, layoutType);
@@ -265,16 +299,16 @@ const HeroScene: React.FC<HeroSceneProps> = ({
     useLayoutEffect(() => {
         const light = dirLightRef.current;
         if (!light) return;
-        light.shadow.mapSize.width  = 2048;
+        light.shadow.mapSize.width = 2048;
         light.shadow.mapSize.height = 2048;
-        light.shadow.camera.near   = 0.5;
-        light.shadow.camera.far    = 50;
-        light.shadow.camera.left   = -8;
-        light.shadow.camera.right  = 8;
-        light.shadow.camera.top    = 8;
+        light.shadow.camera.near = 0.5;
+        light.shadow.camera.far = 50;
+        light.shadow.camera.left = -8;
+        light.shadow.camera.right = 8;
+        light.shadow.camera.top = 8;
         light.shadow.camera.bottom = -8;
-        light.shadow.radius        = 4;
-        light.shadow.needsUpdate   = true;
+        light.shadow.radius = 4;
+        light.shadow.needsUpdate = true;
     }, []);
 
     return (

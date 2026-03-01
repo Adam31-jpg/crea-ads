@@ -431,13 +431,14 @@ ${keyIngredient ? `**KEY INGREDIENT:** ${keyIngredient}\n(CRITICAL MANDATE: You 
 ${customCta ? `**CUSTOM CTA OVERRIDE:** ${customCta}\n(CRITICAL MANDATE: For any 'direct_response' composition, your 'cta' element text must be EXACTLY this custom CTA.)` : ""}
 ${brandName ? `**BRAND NAME EXPERT TEMPLATE TRIGGERED:** The user provided a Brand Name ("${brandName}").
 CRITICAL MANDATE: For ALL concepts where BrandName is present:
-1. BAN scenic elements in the background_prompt. Enforce a minimalist studio background (solid color, soft radial gradient, paper texture) using the primary color.
-2. Enforce a Left/Right split structure using the Component Registry:
-   - Left Column: HeroObject (the product, by setting negative_space_zone to "right").
-   - Right Column: You MUST output a component_layout array containing EXACTLY these elements:
-     a) BrandHeader (props: { brandName: "${brandName}", x: 75, y: 15 })
-     b) GlassCard (props: { features: [${usps.map((u: string) => `"${u}"`).join(', ')}], x: 75, y: 50 })
-3. Element positioning: Headline "hl" element must be anchored x: 75, y: 25. The CTA "cta" element must be anchored x: 75, y: 80.` : ""}
+1. BAN scenic realistic elements in the background_prompt.
+2. Enforce a minimalist studio background with "viscous liquid interaction flowing over the bottle" and soft lighting.
+3. Output \`template_id: "AD_LUXE_LOLY"\` in the root of the JSON concept object.
+4. When using a Template ID, DO NOT return any data in the \`elements\` or \`layout_config\` fields. All UI components must be strictly contained within \`component_layout\`.
+5. You MUST output a component_layout array containing EXACTLY these elements:
+   - BrandHeader (props: { brandName: "${brandName}" })
+   - FeatureCard (props: { features: [${usps.map((u: string) => `"${u}"`).join(', ')}] })
+   (Do NOT provide x/y coordinates; the responsive template handles positioning.)` : ""}
 
 Generate ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} ad concepts as a JSON array.`;
 
@@ -503,7 +504,27 @@ Generate ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} ad concepts as a JSON array.
       return NextResponse.json({ error: "invalidFormat" }, { status: 500 });
     }
 
-    return NextResponse.json({ concepts });
+    // CRITICAL: Strict Template Isolation Override
+    const finalizedConcepts = concepts.map((concept: any) => {
+      // Force interceptor if Gemini forgot to output template_id but we have a brandName trigger
+      if (concept.template_id === 'AD_LUXE_LOLY' || brandName) {
+        concept.template_id = 'AD_LUXE_LOLY';
+        const baseColor = colors?.primary || "#FF69B4";
+
+        // Nullify LLM's aesthetic decisions to prevent "Noir" or "Midnight" moods bleeding into the Loly theme
+        concept.colorMood = "AD_LUXE_LOLY_LOCKED";
+
+        // Use soft_spa explicitly because 'null' triggers DEFAULT_LIGHTING which is rim_glow!
+        concept.lighting_intent = "soft_spa";
+        concept.theme = "AD_LUXE_LOLY_LOCKED";
+
+        // Zero creative freedom for background
+        concept.background_prompt = `High-end product photography, pure minimalist ${baseColor} paper-texture background, soft 45-degree key light, NO shadows, thick translucent serum dripping onto the bottle.`;
+      }
+      return concept;
+    });
+
+    return NextResponse.json({ concepts: finalizedConcepts });
   } catch (err: unknown) {
     console.error("[Strategy API]", err);
     return NextResponse.json({ error: "connectFailed" }, { status: 500 });

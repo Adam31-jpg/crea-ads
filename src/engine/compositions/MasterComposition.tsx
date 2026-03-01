@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { AbsoluteFill, useVideoConfig, Img, delayRender, continueRender } from 'remotion';
-import { preloadImage } from '@remotion/preload';
 import { z } from 'zod';
 import { CameraMotionBlur } from '@remotion/motion-blur';
 import { HeroObject } from './HeroObject';
@@ -14,6 +13,7 @@ import { ArrowLayer } from '../components/ArrowLayer';
 import { LogoBar } from '../components/LogoBar';
 import { ScrimLayer } from '../components/ScrimLayer';
 import { ComponentRegistry } from '../library/index';
+import { TemplateLuxeLoly } from '../library/TemplateLuxeLoly';
 
 type Props = z.infer<typeof RemotionPropsSchema>;
 
@@ -91,8 +91,32 @@ export const MasterComposition: React.FC<Props> = (props) => {
         lightingIntent,
         productImageUrls,
         hideHeroObject = false,
-        layout_config,
+        layout_config: raw_layout_config,
     } = props;
+
+    // 1. Template Selection Logic
+    const activeTemplate = props.template_id || 'AD_LUXE_LOLY'; // For now, force AD_LUXE_LOLY as the default
+    const isTemplateActive = !!activeTemplate;
+
+    // 2. The "Wipe-Out" Rule
+    // If a template is active, engine MUST ignore and empty the elements array and legacy layout_config
+    const layout_config = isTemplateActive ? undefined : raw_layout_config;
+    const elements = isTemplateActive ? [] : props.elements;
+
+    // 3. The "Hijack Mode" Rule
+    // Strip all x, y, width, height overrides from component_layout so the Template is the sole authority
+    const componentLayout = isTemplateActive && props.component_layout
+        ? props.component_layout.map(comp => ({
+            ...comp,
+            props: {
+                ...comp.props,
+                x: undefined,
+                y: undefined,
+                width: undefined,
+                height: undefined,
+            }
+        }))
+        : props.component_layout;
 
     const isDev = process.env.NODE_ENV === 'development';
     const shouldBlur = enableMotionBlur && !isDev;
@@ -123,9 +147,8 @@ export const MasterComposition: React.FC<Props> = (props) => {
             return;
         }
 
-        // Belt #1 — @remotion/preload: tells Remotion to prefetch the URL before
-        // any frame is composited. Returns a cleanup function.
-        const cleanupPreload = preloadImage(props.backgroundImageUrl);
+        // Belt #1 — Removed @remotion/preload because it poisons the Chromium cache 
+        // with an opaque (no-CORS) response, causing the WebGL or HeroObject to hang.
 
         // Belt #2 — explicit delayRender/continueRender: Lambda captures frames
         // concurrently and can race ahead of the Img onLoad callback. Holding a
@@ -134,26 +157,38 @@ export const MasterComposition: React.FC<Props> = (props) => {
             `[MasterComposition] Loading background: ${props.backgroundImageUrl.slice(0, 80)}`
         );
 
+        // Epic 9: Chromium Taint Cache Buster
+        const cacheBustedUrl = props.backgroundImageUrl.includes('?')
+            ? `${props.backgroundImageUrl}&v=${Date.now()}`
+            : `${props.backgroundImageUrl}?v=${Date.now()}`;
+
+        let timeoutFired = false;
+        const timeoutId = setTimeout(() => {
+            timeoutFired = true;
+            const errMsg = `[MasterComposition] TEXTURE_TIMEOUT_ERROR for AI background: ${props.backgroundImageUrl}`;
+            console.error(errMsg);
+            throw new Error(errMsg);
+        }, 27000);
+
         const img = new window.Image();
+        img.crossOrigin = 'anonymous'; // Epic 9: Critical for avoiding Lambda CORS canvas taint
         img.onload = () => {
+            if (timeoutFired) return;
+            clearTimeout(timeoutId);
             setBgReady(true);
             continueRender(handle);
         };
         img.onerror = () => {
-            // Log the failure so it appears in Lambda CloudWatch / Next.js terminal
-            console.error(
-                `[MasterComposition] Background image failed to load. ` +
-                `URL: ${props.backgroundImageUrl}\n` +
-                `Check that the S3 bucket policy allows public read access.`
-            );
-            // Unblock render — show gradient fallback rather than a hung render.
-            setBgReady(true);
-            continueRender(handle);
+            if (timeoutFired) return;
+            clearTimeout(timeoutId);
+            const errMsg = `[MasterComposition] TEXTURE_LOAD_ERROR for AI background: ${props.backgroundImageUrl}`;
+            console.error(errMsg);
+            throw new Error(errMsg);
         };
-        img.src = props.backgroundImageUrl;
+        img.src = cacheBustedUrl;
 
         return () => {
-            cleanupPreload();
+            clearTimeout(timeoutId);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [props.backgroundImageUrl]);
@@ -190,6 +225,7 @@ export const MasterComposition: React.FC<Props> = (props) => {
                         {props.backgroundImageUrl && bgReady && (
                             <AbsoluteFill style={{ zIndex: 0 }}>
                                 <Img
+                                    crossOrigin="anonymous"
                                     src={props.backgroundImageUrl}
                                     style={{
                                         position: 'absolute',
@@ -209,10 +245,10 @@ export const MasterComposition: React.FC<Props> = (props) => {
                             <ScrimLayer layout_config={layout_config} />
                         )}
 
-                        {/* ── Layer 1: 3D product ── */}
+                        {/* ── Layer 1: 3D product (Bypassed if using a declarative Template Engine) ── */}
                         {/* Suppressed for still images where BRIA has already baked the product */}
                         {/* into the background — rendering both would create a double-layer artifact. */}
-                        {!hideHeroObject && (
+                        {!hideHeroObject && props.template_id !== 'AD_LUXE_LOLY' && (
                             <AbsoluteFill style={{ transform: `scale(${beatScale})`, zIndex: 10 }}>
                                 <HeroObject
                                     imageUrl={productImageUrl}
@@ -230,114 +266,132 @@ export const MasterComposition: React.FC<Props> = (props) => {
 
                         {/* ── Layer 2: Safe zone + Components / Legacy Overlays ── */}
                         <AbsoluteFill style={{ zIndex: 20 }}>
-                            <SafeZone aspectRatio={layout.aspectRatio}>
-                                {/* ── NEXT-GEN: Lego Component Architecture ── */}
-                                {props.component_layout && props.component_layout.length > 0 && (
-                                    props.component_layout.map((config, i) => {
-                                        const Component = ComponentRegistry[config.component];
-                                        if (!Component) {
-                                            console.warn(`[MasterComposition] Unregistered component: ${config.component}`);
-                                            return null;
-                                        }
-                                        return <Component key={i} {...config.props} />;
-                                    })
-                                )}
+                            {(() => {
+                                switch (activeTemplate) {
+                                    case 'AD_LUXE_LOLY':
+                                        return (
+                                            <TemplateLuxeLoly
+                                                props={{ ...props, component_layout: componentLayout }}
+                                                resolvedImageUrls={resolvedImageUrls}
+                                                beatScale={beatScale}
+                                            />
+                                        );
+                                    case 'AD_LUXE_DARK':
+                                        // Future template placeholder
+                                        return null;
+                                    default:
+                                        return (
+                                            <SafeZone aspectRatio={layout.aspectRatio}>
+                                                {/* ── NEXT-GEN: Lego Component Architecture ── */}
+                                                {props.component_layout && props.component_layout.length > 0 && (
+                                                    props.component_layout.map((config, i) => {
+                                                        const Component = ComponentRegistry[config.component];
+                                                        if (!Component) {
+                                                            console.warn(`[MasterComposition] Unregistered component: ${config.component}`);
+                                                            return null;
+                                                        }
+                                                        return <Component key={i} {...config.props} />;
+                                                    })
+                                                )}
 
-                                {/* ── LEGACY RENDERER: Graceful fallback for old jobs ── */}
-                                <>
-                                    {props.elements && props.elements.length > 0 ? (
-                                        props.elements.map(el => {
-                                            const isHeadline = el.type === 'headline';
-                                            const fontSize = isHeadline ? dynamicFontSize : el.type === 'subheadline' ? subheadSize : subheadSize * 0.8;
-                                            const color = isHeadline ? colors.textPrimary : colors.accent;
-                                            const textTransform = isHeadline ? 'uppercase' : 'none';
+                                                {/* ── LEGACY RENDERER: Graceful fallback for old jobs ── */}
+                                                <>
+                                                    {elements && elements.length > 0 ? (
+                                                        elements.map(el => {
+                                                            const isHeadline = el.type === 'headline';
+                                                            const fontSize = isHeadline ? dynamicFontSize : el.type === 'subheadline' ? subheadSize : subheadSize * 0.8;
+                                                            const color = isHeadline ? colors.textPrimary : colors.accent;
+                                                            const textTransform = isHeadline ? 'uppercase' : 'none';
 
-                                            const weightKey = (el as typeof el & { font_weight?: FontWeightKey }).font_weight;
-                                            const fontWeight: number = weightKey
-                                                ? FONT_WEIGHT_MAP[weightKey]
-                                                : (isHeadline ? 700 : 300);
+                                                            const weightKey = (el as typeof el & { font_weight?: FontWeightKey }).font_weight;
+                                                            const fontWeight: number = weightKey
+                                                                ? FONT_WEIGHT_MAP[weightKey]
+                                                                : (isHeadline ? 700 : 300);
 
-                                            const rawTreatment = (el as typeof el & { text_treatment?: string }).text_treatment;
-                                            const treatment: TextTreatment =
-                                                ['none', 'shadow', 'glass', 'outline', 'hero_block'].includes(rawTreatment ?? '')
-                                                    ? (rawTreatment as TextTreatment)
-                                                    : 'shadow';
-                                            const { containerStyle, textStyle } = getTextTreatmentStyles(
-                                                el.type === 'cta' ? 'none' : treatment
-                                            );
+                                                            const rawTreatment = (el as typeof el & { text_treatment?: string }).text_treatment;
+                                                            const treatment: TextTreatment =
+                                                                ['none', 'shadow', 'glass', 'outline', 'hero_block'].includes(rawTreatment ?? '')
+                                                                    ? (rawTreatment as TextTreatment)
+                                                                    : 'shadow';
+                                                            const { containerStyle, textStyle } = getTextTreatmentStyles(
+                                                                el.type === 'cta' ? 'none' : treatment
+                                                            );
 
-                                            return (
-                                                <div key={el.id} style={{
-                                                    position: 'absolute',
-                                                    left: `${el.x}%`,
-                                                    top: `${el.y}%`,
-                                                    transform: el.align === 'center' ? 'translateX(-50%)' : 'none',
-                                                    width: el.width ? `${el.width}%` : 'auto',
-                                                    textAlign: el.align,
-                                                    fontFamily,
-                                                    fontSize,
-                                                    color,
-                                                    fontWeight,
-                                                    textTransform: textTransform as React.CSSProperties['textTransform'],
-                                                    letterSpacing: isHeadline ? '0.05em' : 'normal',
-                                                    lineHeight: 1.1,
-                                                    whiteSpace: 'pre-wrap',
-                                                    ...containerStyle,
-                                                }}>
-                                                    {el.type === 'cta' ? (
+                                                            return (
+                                                                <div key={el.id} style={{
+                                                                    position: 'absolute',
+                                                                    left: `${el.x}%`,
+                                                                    top: `${el.y}%`,
+                                                                    transform: el.align === 'center' ? 'translateX(-50%)' : 'none',
+                                                                    width: el.width ? `${el.width}%` : 'auto',
+                                                                    textAlign: el.align,
+                                                                    fontFamily,
+                                                                    fontSize,
+                                                                    color,
+                                                                    fontWeight,
+                                                                    textTransform: textTransform as React.CSSProperties['textTransform'],
+                                                                    letterSpacing: isHeadline ? '0.05em' : 'normal',
+                                                                    lineHeight: 1.1,
+                                                                    whiteSpace: 'pre-wrap',
+                                                                    ...containerStyle,
+                                                                }}>
+                                                                    {el.type === 'cta' ? (
+                                                                        <div style={{
+                                                                            backgroundColor: colors.primary,
+                                                                            color: '#000',
+                                                                            padding: '12px 24px',
+                                                                            borderRadius: '8px',
+                                                                            display: 'inline-block',
+                                                                            fontWeight: 'bold',
+                                                                            fontSize: subheadSize * 0.7,
+                                                                            textTransform: 'uppercase',
+                                                                        }}>
+                                                                            {el.content}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span style={textStyle}>{el.content}</span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })
+                                                    ) : null /* empty elements = intentional editorial/cinematic canvas */}
+
+                                                    {/* ── Social proof stars (★★★★★) from layout_config ── */}
+                                                    {layout_config?.social_proof && (
                                                         <div style={{
-                                                            backgroundColor: colors.primary,
-                                                            color: '#000',
-                                                            padding: '12px 24px',
-                                                            borderRadius: '8px',
-                                                            display: 'inline-block',
-                                                            fontWeight: 'bold',
-                                                            fontSize: subheadSize * 0.7,
-                                                            textTransform: 'uppercase',
+                                                            position: 'absolute',
+                                                            left: `${layout_config.social_proof.x}%`,
+                                                            top: `${layout_config.social_proof.y}%`,
+                                                            transform: `scale(${layout_config.social_proof.scale})`,
+                                                            transformOrigin: 'top left',
+                                                            zIndex: 22,
+                                                            color: colors.accent,
+                                                            fontSize: 28,
+                                                            display: 'flex',
+                                                            gap: 3,
+                                                            filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.8))',
                                                         }}>
-                                                            {el.content}
+                                                            {'★★★★★'}
                                                         </div>
-                                                    ) : (
-                                                        <span style={textStyle}>{el.content}</span>
                                                     )}
-                                                </div>
-                                            );
-                                        })
-                                    ) : null /* empty elements = intentional editorial/cinematic canvas */}
 
-                                    {/* ── Social proof stars (★★★★★) from layout_config ── */}
-                                    {layout_config?.social_proof && (
-                                        <div style={{
-                                            position: 'absolute',
-                                            left: `${layout_config.social_proof.x}%`,
-                                            top: `${layout_config.social_proof.y}%`,
-                                            transform: `scale(${layout_config.social_proof.scale})`,
-                                            transformOrigin: 'top left',
-                                            zIndex: 22,
-                                            color: colors.accent,
-                                            fontSize: 28,
-                                            display: 'flex',
-                                            gap: 3,
-                                            filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.8))',
-                                        }}>
-                                            {'★★★★★'}
-                                        </div>
-                                    )}
+                                                    {/* ── Bezier arrow from layout_config ── */}
+                                                    {layout_config?.arrow && (
+                                                        <ArrowLayer
+                                                            arrow={layout_config.arrow}
+                                                            color={colors.accent}
+                                                            strokeWidth={3}
+                                                        />
+                                                    )}
 
-                                    {/* ── Bezier arrow from layout_config ── */}
-                                    {layout_config?.arrow && (
-                                        <ArrowLayer
-                                            arrow={layout_config.arrow}
-                                            color={colors.accent}
-                                            strokeWidth={3}
-                                        />
-                                    )}
-
-                                    {logoUrl && logoPosition && (
-                                        <BrandLogo src={logoUrl} position={logoPosition} />
-                                    )}
-                                </>
-                            </SafeZone>
+                                                    {logoUrl && logoPosition && (
+                                                        <BrandLogo src={logoUrl} position={logoPosition} />
+                                                    )}
+                                                </>
+                                            </SafeZone>
+                                        );
+                                }
+                            })()}
                         </AbsoluteFill>
 
                         {/* ── Layer 3: LogoBar trust strip from layout_config ── */}
