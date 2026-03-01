@@ -315,11 +315,13 @@ The surface material MUST appear in the background_prompt in the context of the 
 Each concept must specify a DIFFERENT light source / quality from the theme's Lighting list.
 The lighting MUST be written as a physical effect ON or THROUGH the product (e.g., "anamorphic lens flare bleeding through the product's glass" — NOT "ambient lighting").
 
-**background_prompt NARRATIVE RULE:**
-Every background_prompt MUST open with the PRODUCT as the subject, using an interaction verb from the NARRATIVE INTERACTION PROMPT section.
-Format: "[Product] [interaction verb] [surface/environment], [lighting effect on product], [atmospheric detail]."
-Example (neon): "A perfume bottle radiating bioluminescent blue light outward from its core, submersed in volumetric neon fog on rain-soaked reflective concrete, anamorphic horizontal lens flare crossing the frame."
-Example (nature): "A serum bottle shattering through a frozen wave of dew-covered moss, droplets catching golden morning sidelight from the left, misty forest depth dissolving into bokeh."
+**background_prompt NARRATIVE RULE (CRITICAL FOR MASKING):**
+Every background_prompt MUST ONLY describe the surrounding environment, lighting, and surface.
+You MUST NEVER mention the product itself (e.g., do NOT say "A bottle", "The product", "A serum", etc.).
+If the prompt mentions the product, the image generator will mutate the original image.
+Format: "[surface/environment detail], [lighting effect], [atmospheric detail]."
+Example (neon): "Volumetric neon fog on rain-soaked reflective concrete, anamorphic horizontal lens flare crossing the frame."
+Example (nature): "A frozen wave of dew-covered moss, droplets catching golden morning sidelight from the left, misty forest depth dissolving into bokeh."
 
 **FORBIDDEN in a single batch:**
 - Two concepts with the same surface material.
@@ -345,10 +347,10 @@ Example (nature): "A serum bottle shattering through a frozen wave of dew-covere
 13. LIGHTING INTENT: "lighting_intent" MANDATORY. Must be consistent with scene mood and colorMood.
 14. SCENE INTERACTION: "scene_interaction" should be used for at least half of the concepts. Use it to create "moments" — null is valid but overuse of null is lazy.
 15. DIVERSITY: Each image concept MUST use a different Surface, Lighting, and Perspective from the AESTHETIC VOCABULARY BY THEME. Identical-looking backgrounds in the same batch are a hard failure.
-16. PROMPT STRUCTURE: Every background_prompt MUST open with the PRODUCT as the subject + an interaction verb. Never open with a surface description, a generic mood adjective, or an empty scene. Correct: "A perfume bottle radiating..." Incorrect: "Polished obsidian shelf with..." or "A luxurious scene..."
+16. PROMPT STRUCTURE: Every background_prompt MUST ONLY describe the environment. NEVER mention the product or use verbs describing the product's action. Correct: "Polished obsidian shelf with..." Incorrect: "A perfume bottle on..."
 17. PERSPECTIVE MODE: "perspective_mode" is MANDATORY for all image concepts. Set "immersive" for top-down, macro, and tilted (≥30°) perspectives; set "structural" for all others. At least 1 concept per batch must be "immersive".
 18. THEME LOCK ENFORCEMENT: If the selected theme is "neon", ALL 4 background_prompts MUST contain at least one token from the neon Surfaces, Lighting, or Action verbs list. Obsidian, marble, wood, and botanical references are BANNED in neon batches. Violation = failed batch.
-19. NARRATIVE INTEGRATION: Every background_prompt MUST contain a product-scene interaction verb (radiating, shattering, submersed, enveloped, dissolving, bleeding, emerging, catching, cradled, floating). A prompt with no interaction verb is a critical failure.
+19. NARRATIVE INTEGRATION: Every background_prompt MUST describe a dynamic environment (submersed, enveloped, dissolving, bleeding, emerging).
 20. NO TEXT IN SCENES: background_prompt MUST NEVER include advertising headlines, slogans, product claims, CTAs, brand names, or any typographic instruction. ALL text is rendered by Remotion using layout_config coordinates. Text in background_prompt creates doubled AI-rendered artifacts. Critical failure.
 21. LAYOUT CONFIG: Every concept MUST include a "layout_config" object with spatial_strategy, negative_space_zone, and headline fields. Missing layout_config is equivalent to missing headline — a critical failure. The negative_space_zone MUST also appear as an explicit empty-space instruction in the background_prompt.
 22. FALLBACK DATA HALLUCINATION (CRITICAL): If you must select a template to fulfill the TOTAL_MEDIA_PER_BATCH quota, but the user didn't provide required data (like a brandName), you must creatively hallucinate plausible fallback data based on the product description instead of failing.
@@ -522,9 +524,16 @@ Generate ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} ad concepts as a JSON array.
     }
 
     // CRITICAL: Strict Template Isolation Override
-    const finalizedConcepts = concepts.map((concept: any) => {
+    const finalizedConcepts = concepts.map((concept: any, index: number) => {
+      // Force diversity mapping for 3-batch sizes
+      if (GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH === 3) {
+        if (index === 0) concept.template_id = 'AD_LUXE_LOLY';
+        if (index === 1) concept.template_id = 'AD_OVERHEAD_MINIMAL';
+        if (index === 2) concept.template_id = 'AD_CIRCLE_CENTER';
+      }
+
       // Force interceptor if Gemini forgot to output template_id but we have a brandName trigger
-      if (concept.template_id === 'AD_LUXE_LOLY' || brandName) {
+      if (concept.template_id === 'AD_LUXE_LOLY' || (brandName && !concept.template_id)) {
         concept.template_id = 'AD_LUXE_LOLY';
         const baseColor = colors?.primary || "#FF69B4";
 

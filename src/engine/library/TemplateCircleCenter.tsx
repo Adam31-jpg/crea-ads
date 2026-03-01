@@ -40,17 +40,19 @@ export const TemplateCircleCenter: React.FC<{ props: RemotionProps }> = ({ props
     return (
         <AbsoluteFill style={{ backgroundColor: props.colors.background }}>
             {/* AI Generated Background Composite (Contains Product & Geometric Circle) */}
-            {props.backgroundImageUrl && (
-                <Img
-                    src={props.backgroundImageUrl}
-                    style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        position: 'absolute',
-                    }}
-                />
-            )}
+            <AbsoluteFill style={{ zIndex: 0 }}>
+                {props.backgroundImageUrl && (
+                    <Img
+                        src={props.backgroundImageUrl}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            position: 'absolute',
+                        }}
+                    />
+                )}
+            </AbsoluteFill>
 
             {/* Sandbox Product Area Mock - Shows the exact zone Nano Banana uses */}
             {props.isSandboxMock && !props.backgroundImageUrl && (

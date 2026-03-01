@@ -58,8 +58,13 @@ export const TemplateLuxeLoly: React.FC<any> = ({
         <AbsoluteFill style={{ backgroundColor: props.colors.background }}>
 
             {/* Background Layer: Product Area */}
-            <AbsoluteFill style={{ transform: `scale(${beatScale})`, zIndex: 10 }}>
-                {!props.backgroundImageUrl && (
+            <AbsoluteFill style={{ transform: `scale(${beatScale})`, zIndex: 0 }}>
+                {props.backgroundImageUrl ? (
+                    <img
+                        src={cdnImageUrl}
+                        style={{ position: 'absolute', width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                ) : (
                     <HeroObject
                         imageUrl={cdnImageUrl}
                         productImageUrls={cdnResolvedUrls}

@@ -31,15 +31,11 @@ export const TemplateOverheadMinimal: React.FC<Props> = (props) => {
         <AbsoluteFill style={{ backgroundColor: props.colors.background }}>
 
             {/* Background Layer: Flat 2D Image */}
-            <AbsoluteFill style={{ zIndex: 10 }}>
+            <AbsoluteFill style={{ zIndex: 0 }}>
                 {cdnImageUrl && (
-                    <Img
+                    <img
                         src={cdnImageUrl}
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover'
-                        }}
+                        style={{ position: 'absolute', width: '100%', height: '100%', objectFit: 'cover' }}
                     />
                 )}
             </AbsoluteFill>

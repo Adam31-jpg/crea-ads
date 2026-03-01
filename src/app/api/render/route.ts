@@ -506,6 +506,7 @@ async function fetchNanoBananaProEdit(
                 num_images: 1,
                 output_format: 'jpeg',
                 safety_tolerance: '4',
+                sync_mode: true,
             }),
         });
 
