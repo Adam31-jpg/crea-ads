@@ -151,6 +151,8 @@ export default function StudioPage() {
     const handleSubmit = async () => {
         setLoading(true);
 
+        const isDevMock = typeof window !== "undefined" ? localStorage.getItem("lumina_dev_mock") === "true" : false;
+
         const inputData = {
             products: [
                 {
@@ -170,6 +172,7 @@ export default function StudioPage() {
             fps: form.fps, // Always 30
             durationSec: form.durationSec,
             targetLanguage: form.targetLanguage,
+            is_dev_mock: isDevMock,
         };
 
         // 1. Create batch via API

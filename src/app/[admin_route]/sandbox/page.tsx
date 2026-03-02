@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Player } from "@remotion/player";
 import { MasterComposition } from "@/engine/compositions/MasterComposition";
 import { RemotionProps } from "@/engine/schema/project";
-import { LayoutTemplate, MonitorPlay, Image as ImageIcon, Smartphone, Square, Monitor } from "lucide-react";
+import { LayoutTemplate, MonitorPlay, Image as ImageIcon, Smartphone, Square, Monitor, Upload, Loader2 } from "lucide-react";
 
 const TEMPLATES = [
     "AD_LUXE_LOLY",
@@ -20,7 +20,7 @@ const getMockProps = (template_id: string, aspectRatio: "9:16" | "1:1" | "16:9")
         return {
             template_id,
             isSandboxMock: true,
-            backgroundImageUrl: "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?q=80&w=3540&auto=format&fit=crop", // Aesthetic modern flatlay
+            backgroundImageUrl: "/sandbox_image.webp", // Default local test background
             productImageUrl: "",
             productImageUrls: [],
             logoUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Logo_NIKE.svg/1200px-Logo_NIKE.svg.png", // Fake minimalist logo
@@ -56,7 +56,7 @@ const getMockProps = (template_id: string, aspectRatio: "9:16" | "1:1" | "16:9")
         return {
             template_id,
             isSandboxMock: true,
-            backgroundImageUrl: "https://images.unsplash.com/photo-1616401784845-180882ba9ba8?q=80&w=3540&auto=format&fit=crop", // A deep background with some contrast
+            backgroundImageUrl: "/sandbox_image.webp", // Default local test background
             productImageUrl: "",
             productImageUrls: [],
             logoUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Logo_NIKE.svg/1200px-Logo_NIKE.svg.png",
@@ -91,7 +91,7 @@ const getMockProps = (template_id: string, aspectRatio: "9:16" | "1:1" | "16:9")
     return {
         template_id,
         isSandboxMock: true,
-        backgroundImageUrl: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=3540&auto=format&fit=crop",
+        backgroundImageUrl: "/sandbox_image.webp", // Default local test background
         productImageUrl: "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?q=80&w=3000&auto=format&fit=crop",
         productImageUrls: [],
         colors: {
@@ -137,6 +137,38 @@ export default function SandboxPage() {
     const [aspectRatio, setAspectRatio] = useState<"9:16" | "1:1" | "16:9">("9:16");
     const [templateId, setTemplateId] = useState<string>("AD_LUXE_LOLY");
     const [mediaMode, setMediaMode] = useState<"video" | "image">("image");
+    const [customBgUrl, setCustomBgUrl] = useState<string | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
+
+    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploading(true);
+        try {
+            const presignRes = await fetch("/api/sandbox/upload", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename: file.name, contentType: file.type }),
+            });
+            if (!presignRes.ok) throw new Error("Failed to get presigned URL");
+
+            const { presignedUrl, publicUrl } = await presignRes.json();
+            const uploadRes = await fetch(presignedUrl, {
+                method: "PUT",
+                headers: { "Content-Type": file.type },
+                body: file,
+            });
+            if (!uploadRes.ok) throw new Error("S3 Upload Failed");
+
+            setCustomBgUrl(publicUrl);
+        } catch (err) {
+            console.error("Upload Error:", err);
+            alert("Failed to upload custom background.");
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
     let width = 1080;
     let height = 1920;
@@ -148,6 +180,9 @@ export default function SandboxPage() {
     const DURATION_IN_FRAMES = isImage ? 1 : 150;
 
     const mockProps = getMockProps(templateId, aspectRatio);
+    if (customBgUrl) {
+        mockProps.backgroundImageUrl = customBgUrl;
+    }
 
     return (
         <div className="flex h-full text-white">
@@ -228,6 +263,28 @@ export default function SandboxPage() {
                         >
                             <Monitor className="w-6 h-6" />
                             <span className="text-xs">16:9</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div className="space-y-3">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                        <Upload className="w-4 h-4" /> Custom Background
+                    </label>
+                    <div className="relative">
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleUpload}
+                            disabled={isUploading}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
+                        />
+                        <button
+                            disabled={isUploading}
+                            className={`w-full flex items-center justify-center gap-2 p-3 rounded-lg border transition-all ${isUploading ? 'bg-zinc-800 border-zinc-700 text-zinc-500' : 'bg-transparent border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-white'}`}
+                        >
+                            {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+                            <span className="text-sm">{isUploading ? 'Uploading...' : 'Upload Image'}</span>
                         </button>
                     </div>
                 </div>

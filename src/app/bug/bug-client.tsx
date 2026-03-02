@@ -25,11 +25,12 @@ import { Label } from "@/components/ui/label";
 interface BugClientProps {
     userId: string | null;
     userEmail: string;
+    batches?: { id: string; status: string; createdAt: Date }[];
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
-export function BugClient({ userId, userEmail }: BugClientProps) {
+export function BugClient({ userId, userEmail, batches = [] }: BugClientProps) {
     const t = useTranslations("bug");
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -287,7 +288,19 @@ export function BugClient({ userId, userEmail }: BugClientProps) {
                                         className="space-y-2"
                                     >
                                         <Label className="text-foreground/80">{t("form.conditional.batch_id")}</Label>
-                                        <Input value={batchId} onChange={(e) => setBatchId(e.target.value)} className="bg-black/20 border-amber-500/10 focus:ring-amber-500/30 transition-all" />
+                                        <Select value={batchId} onValueChange={setBatchId}>
+                                            <SelectTrigger className="bg-black/20 border-amber-500/10 focus:ring-amber-500/30">
+                                                <SelectValue placeholder="Select a batch..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {batches.map(b => (
+                                                    <SelectItem key={b.id} value={b.id}>
+                                                        {new Date(b.createdAt).toLocaleDateString()} • {b.id.split("-")[0]} ({b.status})
+                                                    </SelectItem>
+                                                ))}
+                                                <SelectItem value="none">I don't know / None</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                         {errors.batch_id && <p className="text-sm text-red-400">{errors.batch_id}</p>}
                                     </motion.div>
                                 )}

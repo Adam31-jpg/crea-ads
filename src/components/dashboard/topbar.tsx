@@ -10,6 +10,7 @@ import Image from "next/image";
 import { toast } from "sonner";
 import { useRechargeModal } from "@/hooks/use-recharge-modal";
 import type { Session } from "next-auth";
+import { Label } from "@/components/ui/label";
 
 declare global {
     interface Window {
@@ -148,6 +149,27 @@ export function DashboardTopbar({ user }: TopbarProps) {
                 </Button>
 
                 <div className="h-4 w-px bg-border hidden sm:block" />
+
+                {process.env.NODE_ENV === "development" && (
+                    <div className="flex items-center gap-2 hidden lg:flex border border-zinc-800 rounded-md px-3 py-1.5 bg-zinc-900/50">
+                        <Label htmlFor="devMockToggle" className="text-xs font-semibold text-zinc-400 cursor-pointer">Dev Mock AI</Label>
+                        <input
+                            type="checkbox"
+                            id="devMockToggle"
+                            className="w-4 h-4 accent-amber-500 cursor-pointer rounded"
+                            onChange={(e) => {
+                                if (e.target.checked) {
+                                    localStorage.setItem("lumina_dev_mock", "true");
+                                    toast.success("Dev Mock Mode Enabled: Bypassing Fal.ai pipeline for 2D templates.");
+                                } else {
+                                    localStorage.removeItem("lumina_dev_mock");
+                                    toast.success("Dev Mock Mode Disabled: Live generation active.");
+                                }
+                            }}
+                            defaultChecked={typeof window !== "undefined" ? localStorage.getItem("lumina_dev_mock") === "true" : false}
+                        />
+                    </div>
+                )}
 
                 <span className="text-sm text-muted-foreground hidden lg:block">
                     {user?.email}

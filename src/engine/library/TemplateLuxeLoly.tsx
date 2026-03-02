@@ -1,5 +1,5 @@
 import React from 'react';
-import { AbsoluteFill, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Img, useVideoConfig } from 'remotion';
 import { BrandHeader } from './BrandHeader';
 import { GlassCard } from './GlassCard';
 import { FeatureSwitch } from './FeatureSwitch';
@@ -27,21 +27,9 @@ export const TemplateLuxeLoly: React.FC<any> = ({
     const split1 = isPortrait ? '40%' : '45%';
     const split2 = isPortrait ? '60%' : '55%';
 
-    let brandName = "LES SECRETS DE LOLY";
     let features: string[] = [];
 
-    // Extract BrandName and USPs from props.component_layout
-    if (props.component_layout) {
-        props.component_layout.forEach((c: any) => {
-            if (c.component === 'BrandHeader') brandName = c.props.brandName;
-            if (c.component === 'FeatureCard' || c.component === 'GlassCard') {
-                features = c.props.features || [];
-            }
-        });
-    }
-
-    if (features.length === 0 && props.elements) {
-        // Fallback to old element format if empty
+    if (props.elements) {
         features = props.elements.filter((e: any) => e.type === 'subheadline').map((e: any) => e.content);
     }
 
@@ -54,7 +42,7 @@ export const TemplateLuxeLoly: React.FC<any> = ({
             {/* Background Layer: 2D Pre-Baked AI Canvas */}
             <AbsoluteFill style={{ transform: `scale(${beatScale})`, zIndex: 0 }}>
                 {bgImageUrl ? (
-                    <img
+                    <Img
                         src={bgImageUrl}
                         style={{ position: 'absolute', width: '100%', height: '100%', objectFit: 'cover' }}
                     />
@@ -119,7 +107,7 @@ export const TemplateLuxeLoly: React.FC<any> = ({
                         letterSpacing: '-0.02em',
                         margin: 0
                     }}>
-                        {props.headlineText || brandName}
+                        {props.headlineText}
                     </h1>
 
                     <GlassCard style={{ width: '100%' }}>
@@ -145,7 +133,12 @@ export const TemplateLuxeLoly: React.FC<any> = ({
                     justifyContent: 'center',
                     zIndex: 22
                 }}>
-                    <BrandHeader brandName={brandName} isRelative={true} />
+                    {props.logoUrl && (
+                        <img
+                            src={props.logoUrl}
+                            style={{ width: isPortrait ? '120px' : '180px', objectFit: 'contain' }}
+                        />
+                    )}
                 </div>
 
             </div>

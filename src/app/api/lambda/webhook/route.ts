@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { broadcast } from "@/lib/sse";
 import { validateWebhookSignature, deleteRender } from "@remotion/lambda-client";
 import type { WebhookPayload } from "@remotion/lambda-client";
@@ -87,9 +88,21 @@ export async function POST(req: NextRequest) {
             const outputUrl = (body.outputUrl as string) || "";
             await prisma.job.update({
                 where: { id: job.id },
-                data: { status: "done", result_url: outputUrl },
+                data: {
+                    status: "done",
+                    result_url: outputUrl,
+                    cost_usd: new Prisma.Decimal("0.25"),
+                },
             });
             console.log(`[Webhook] Job ${job.id} marked as done.`);
+
+            // Explicitly sync the batch running total
+            await prisma.batch.update({
+                where: { id: job.batchId },
+                data: {
+                    cost_usd: { increment: new Prisma.Decimal("0.25") }
+                }
+            });
 
             // Push job_update event to client
             if (userId) {

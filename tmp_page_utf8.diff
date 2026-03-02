@@ -1,0 +1,65 @@
+﻿commit 7f13ef9052f8fdef161ac621208293e57e1f69db
+Author: Adam31-jpg <adam.haouzi31@gmail.com>
+Date:   Sat Feb 28 17:38:10 2026 +0100
+
+    feat: Implement core application features including authentication, dashboard, rendering engine, and database schema.
+
+diff --git a/src/app/bug/page.tsx b/src/app/bug/page.tsx
+index 79d7214..f145167 100644
+--- a/src/app/bug/page.tsx
++++ b/src/app/bug/page.tsx
+@@ -1,4 +1,4 @@
+-import { createClient } from "@/lib/supabase/server";
++import { auth } from "@/lib/auth";
+ import { BugClient } from "./bug-client";
+ 
+ export const metadata = {
+@@ -7,13 +7,11 @@ export const metadata = {
+ };
+ 
+ export default async function BugPage() {
+-    const supabase = await createClient();
+-    const { data: { user } } = await supabase.auth.getUser();
+-
++    const session = await auth();
+     return (
+         <BugClient
+-            userId={user?.id || null}
+-            userEmail={user?.email || ""}
++            userId={session?.user?.id || null}
++            userEmail={session?.user?.email || ""}
+         />
+     );
+ }
+
+commit 0e83e27a11a2f1e254974eac77e3cde13db7e9c3
+Author: Adam31-jpg <adam.haouzi31@gmail.com>
+Date:   Sat Feb 21 07:29:04 2026 +0100
+
+    feat: Implement core application structure, authentication, dashboard features, API routes, and database migrations.
+
+diff --git a/src/app/bug/page.tsx b/src/app/bug/page.tsx
+new file mode 100644
+index 0000000..79d7214
+--- /dev/null
++++ b/src/app/bug/page.tsx
+@@ -0,0 +1,19 @@
++import { createClient } from "@/lib/supabase/server";
++import { BugClient } from "./bug-client";
++
++export const metadata = {
++    title: "Report a Bug - Lumina",
++    description: "Submit bug reports or issues to the Lumina engineering team.",
++};
++
++export default async function BugPage() {
++    const supabase = await createClient();
++    const { data: { user } } = await supabase.auth.getUser();
++
++    return (
++        <BugClient
++            userId={user?.id || null}
++            userEmail={user?.email || ""}
++        />
++    );
++}

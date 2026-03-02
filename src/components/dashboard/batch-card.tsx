@@ -608,6 +608,10 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                                     month: "short",
                                     day: "numeric",
                                     year: "numeric",
+                                })} • {new Date(batch.created_at).toLocaleTimeString("en-US", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    hour12: false
                                 })}
                                 {totalCount > 1 && (
                                     <span className="ml-2 text-muted-foreground">

@@ -1,25 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 
-/**
- * POST /api/bug — Submit a bug report
- * Inserts a JSON record into a bug_submissions log table.
- * Body: { user_id, user_email, category, stripe_id?, batch_id?, urgency, subject, description, steps, file_url?, browser_version, operating_system, current_url }
- *
- * NOTE: This stores reports in a JSONB metadata column on the Bug model.
- * Add a Bug model to prisma/schema.prisma if more structured storage is needed.
- * For now, we log the report as a JSON blob in the "metadata" field.
- */
 export async function POST(req: NextRequest) {
+    const session = await auth();
+    const userId = session?.user?.id;
+
+    if (!userId) {
+        return NextResponse.json({ error: "Unauthorized. You must be logged in to submit a bug." }, { status: 401 });
+    }
+
     const body = await req.json();
 
-    // Simple honeypot validation
     if (!body.subject || !body.description) {
         return NextResponse.json({ error: "missingFields" }, { status: 400 });
     }
 
-    // For now, log to console and return OK (add a Bug model to schema later)
-    console.log("[BugReport]", JSON.stringify(body, null, 2));
+    const fullMessage = `
+Category: ${body.category}
+Urgency: ${body.urgency}
+Stripe ID: ${body.stripe_id || "N/A"}
 
-    return NextResponse.json({ success: true });
+Description:
+${body.description}
+
+Steps to Reproduce:
+${body.steps}
+
+Browser: ${body.browser_version} / OS: ${body.operating_system}
+File Attachment: ${body.file_url || "None"}
+    `.trim();
+
+    try {
+        await prisma.bugReport.create({
+            data: {
+                userId: userId,
+                subject: body.subject,
+                message: fullMessage,
+                batchId: body.batch_id && body.batch_id !== "none" ? body.batch_id : null
+            }
+        });
+
+        return NextResponse.json({ success: true });
+    } catch (e) {
+        console.error("Failed to commit Support Ticket to DB:", e);
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    }
 }

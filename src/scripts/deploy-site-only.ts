@@ -15,9 +15,10 @@
 import 'dotenv/config';
 import path from 'path';
 import { deploySite, getOrCreateBucket } from '@remotion/lambda';
+import fs from 'fs';
 
 const REGION = (process.env.REMOTION_AWS_REGION || 'us-east-1') as 'us-east-1';
-const SITE_NAME = 'crea-ads-engine-v2';
+const SITE_NAME = 'crea-ads-engine-v3';
 
 const main = async () => {
     console.log('📤 Deploying site bundle to S3...');
@@ -35,7 +36,12 @@ const main = async () => {
     console.log(`   Bucket:    ${bucketName}`);
 
     const entryPoint = path.join(process.cwd(), 'src', 'engine', 'index.ts');
-
+    // Nettoyage automatique du cache Webpack local
+    const cacheDir = path.join(process.cwd(), 'node_modules', '.cache');
+    if (fs.existsSync(cacheDir)) {
+        console.log('🧹 Nettoyage du cache local Remotion/Webpack...');
+        fs.rmSync(cacheDir, { recursive: true, force: true });
+    }
     const { serveUrl } = await deploySite({
         entryPoint,
         bucketName,

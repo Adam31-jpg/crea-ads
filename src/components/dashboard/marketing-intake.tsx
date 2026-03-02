@@ -103,7 +103,6 @@ export function MarketingIntake({
         targetLanguage: initialTargetLanguage || "Français",
         offerText: "",
         socialProof: "",
-        socialProof: "",
         keyIngredient: "",
         customCta: "",
         websiteUrl: "",
@@ -230,7 +229,6 @@ export function MarketingIntake({
                     theme: theme ?? "luxe-sombre",
                     colors: colors ?? { primary: "#FFFFFF", secondary: "#888888", tertiary: "#000000" },
                     offerText: data.offerText,
-                    socialProof: data.socialProof,
                     socialProof: data.socialProof,
                     keyIngredient: data.keyIngredient,
                     customCta: data.customCta,
@@ -415,7 +413,6 @@ export function MarketingIntake({
                                         >
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 pt-2">
                                                 <OfferBrick data={data} onChange={handleChange} t={t} />
-                                                <SocialProofBrick data={data} onChange={handleChange} t={t} />
                                                 <SocialProofBrick data={data} onChange={handleChange} t={t} />
                                                 <IngredientBrick data={data} onChange={handleChange} t={t} />
                                                 <CtaBrick data={data} onChange={handleChange} t={t} />

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { renderMediaOnLambda, renderStillOnLambda } from "@remotion/lambda-client";
+import { broadcast } from "@/lib/sse";
 import { GENERATION_CONFIG } from "@/config/generation.config";
 import { uploadUrlToS3, uploadBase64ToS3 } from "@/lib/s3";
 import { GoogleAuth } from "google-auth-library";
@@ -59,6 +60,7 @@ interface AdConcept {
     visualDirection: string;
     colorMood: string;
     emphasis: string;
+    template_id?: string;
     logo_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right" | null;
     cameraMotion?: string;
     layoutType?: "converter" | "minimalist";
@@ -1081,6 +1083,15 @@ export async function POST(req: NextRequest) {
                 { status: 402 }
             );
         }
+
+        // SSE Emit new balance to UI
+        const refreshedUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { credits: true }
+        });
+        if (refreshedUser) {
+            broadcast(userId, { type: "credits_update", credits: refreshedUser.credits });
+        }
     }
 
     // === CHECKPOINT 1: Payload Intake ===
@@ -1298,7 +1309,19 @@ export async function POST(req: NextRequest) {
                             console.warn('[Still][PRE-FLIGHT] HEAD-check network error:', e);
                         }
 
-                        if (productUrlAccessible && stillMode !== 'narrative') {
+                        // PHASE 1: Dev Mock API Bypass
+                        if (inputData.is_dev_mock) {
+                            console.log(`[Still][MOCK] Bypassing Fal.ai. Serving mock background for ${concept.template_id} — JobID ${jobId}`);
+                            if (concept.template_id === 'AD_LUXE_LOLY') {
+                                backgroundImageUrl = "https://d1zfhdugugdhgw.cloudfront.net/backgrounds/nbedit_1772401096558_gvumud.jpg";
+                            } else if (concept.template_id === 'AD_OVERHEAD_MINIMAL') {
+                                backgroundImageUrl = "https://d1zfhdugugdhgw.cloudfront.net/backgrounds/nbedit_1772401132822_9rxdg.jpg";
+                            } else if (concept.template_id === 'AD_CIRCLE_CENTER') {
+                                backgroundImageUrl = "https://d1zfhdugugdhgw.cloudfront.net/backgrounds/nbedit_1772401159547_gwcb7d.jpg";
+                            } else {
+                                backgroundImageUrl = "https://d1zfhdugugdhgw.cloudfront.net/backgrounds/nbedit_1772401096558_gvumud.jpg"; // fallback
+                            }
+                        } else if (productUrlAccessible && stillMode !== 'narrative') {
                             // Tier 0 — Nano Banana Pro /edit (gold standard)
                             console.log(`[Still][0/3] NBPro /edit (product recontextualization) — JobID ${jobId}`);
                             backgroundImageUrl = await fetchNanoBananaProEdit(
@@ -1404,6 +1427,8 @@ export async function POST(req: NextRequest) {
                 productImageUrl: heroUrl,
                 productImageUrls,
                 backgroundImageUrl: backgroundImageUrl || undefined,
+                websiteUrl: inputData.websiteUrl || undefined,
+                phoneNumber: inputData.phoneNumber || undefined,
                 hideHeroObject,
                 colors: {
                     primary: inputData.accentColor || "#D4AF37",
@@ -1445,6 +1470,7 @@ export async function POST(req: NextRequest) {
                 elements,
                 component_layout: concept.component_layout ?? [],
                 layout_config: concept.layout_config ?? undefined,
+                template_id: concept.template_id,
             };
 
             const webhookConfig = {
@@ -1484,8 +1510,20 @@ export async function POST(req: NextRequest) {
                                 renderType: "still",
                                 functionName: FUNCTION_NAME,
                             })) as Prisma.InputJsonValue,
+                            cost_usd: new Prisma.Decimal("0.16"),
                         },
                     });
+
+                    // Update Batch explicitly
+                    await prisma.batch.update({
+                        where: { id: batchId },
+                        data: {
+                            cost_usd: { increment: new Prisma.Decimal("0.16") }
+                        }
+                    });
+
+                    // SSE: Push job completion so UI instantly marks as 'done'
+                    broadcast(userId, { type: "job_update", jobId, status: "done", result_url: url });
                 } else {
                     console.log(`[AWS] Triggering Lambda securely for JobID: ${jobId} (Type: video/media)`);
 
@@ -1528,7 +1566,8 @@ export async function POST(req: NextRequest) {
                 if (!hasRefunded) {
                     console.warn(`[Queue] Remotion render failed for JobID ${jobId}, executing 1-Spark refund safety fallback`);
                     try {
-                        await prisma.user.update({ where: { id: userId }, data: { credits: { increment: 1 } } });
+                        const refundedUser = await prisma.user.update({ where: { id: userId }, data: { credits: { increment: 1 } }, select: { credits: true } });
+                        broadcast(userId, { type: "credits_update", credits: refundedUser.credits });
                     } catch (refundErr) {
                         console.error(`[CRITICAL] Failed to process refund for JobID ${jobId}:`, refundErr);
                     }
@@ -1542,6 +1581,9 @@ export async function POST(req: NextRequest) {
                         error_message: friendlyError(message),
                     },
                 });
+
+                // SSE: Push failure to UI immediately
+                broadcast(userId, { type: "job_update", jobId, status: "failed" });
             }
         }
         console.log(`[Queue] All Lambda triggers dispatched for batch ${batchId}. Awaiting webhooks.`);

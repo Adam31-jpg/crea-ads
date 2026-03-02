@@ -87,7 +87,7 @@ export function DashboardSidebar() {
                     )}
                 >
                     <Bug className="h-4 w-4" />
-                    {t("bug")}
+                    Support
                 </Link>
                 <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground pt-2 border-t border-border/50">
                     <span className="inline-block w-2 h-2 rounded-full bg-success opacity-80" />

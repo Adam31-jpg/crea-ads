@@ -535,6 +535,8 @@ Generate ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} ad concepts as a JSON array.
       // Force interceptor if Gemini forgot to output template_id but we have a brandName trigger
       if (concept.template_id === 'AD_LUXE_LOLY' || (brandName && !concept.template_id)) {
         concept.template_id = 'AD_LUXE_LOLY';
+        concept.component_layout = []; // Epic 19: Strip ghost UI components
+
         const baseColor = colors?.primary || "#FF69B4";
 
         // Nullify LLM's aesthetic decisions to prevent "Noir" or "Midnight" moods bleeding into the Loly theme
@@ -544,13 +546,28 @@ Generate ${GENERATION_CONFIG.TOTAL_MEDIA_PER_BATCH} ad concepts as a JSON array.
         concept.lighting_intent = "soft_spa";
         concept.theme = "AD_LUXE_LOLY_LOCKED";
 
-        // Zero creative freedom for background
-        concept.background_prompt = `High-end product photography, pure minimalist ${baseColor} paper-texture background, soft 45-degree key light, NO shadows, thick translucent serum dripping onto the bottle.`;
+        // Epic 19: Prompt Concatenation (Preserve LLM creativity + spatial anchor)
+        const spatialRule = `High-end product photography, pure minimalist ${baseColor} paper-texture background, soft 45-degree key light, NO shadows, thick translucent serum dripping onto the bottle.`;
+        if (!concept.background_prompt?.includes("thick translucent serum")) {
+          concept.background_prompt = concept.background_prompt ? `${concept.background_prompt} ${spatialRule}` : spatialRule;
+        }
       } else if (concept.template_id === 'AD_OVERHEAD_MINIMAL') {
-        // Ensure the spatial instruction is strictly maintained
-        concept.background_prompt = "Top-down flat lay shot of the product on a solid color background. Dramatic lighting with a deep, dark shadow cast over the top-right quadrant of the image.";
+        concept.component_layout = []; // Epic 19: Strip ghost UI components
+
+        // Epic 19: Prompt Concatenation
+        const spatialRule = "Top-down flat lay shot of the product on a solid color background. Dramatic lighting with a deep, dark shadow cast over the top-right quadrant of the image.";
+        if (!concept.background_prompt?.includes("Top-down flat lay shot")) {
+          concept.background_prompt = concept.background_prompt ? `${concept.background_prompt} ${spatialRule}` : spatialRule;
+        }
       } else if (concept.template_id === 'AD_CIRCLE_CENTER') {
-        concept.background_prompt = "Minimalist background featuring a large, solid geometric circle right in the center. The circle must be in a vibrant color that contrasts with the main background color. Top-down or straight-on shot of the product placed perfectly in the center, overlapping the circle.";
+        concept.component_layout = []; // Epic 19: Strip ghost UI components
+
+        // Epic 19/20: Prompt Concatenation & Client Accent Color
+        const circleHex = colors?.primary || "#FF69B4";
+        const spatialRule = `Minimalist background featuring a large, solid geometric circle right in the center. The circle must be heavily tinted with the client's accent color (${circleHex}). Top-down or straight-on shot of the product placed perfectly in the center, overlapping the circle.`;
+        if (!concept.background_prompt?.includes("solid geometric circle")) {
+          concept.background_prompt = concept.background_prompt ? `${concept.background_prompt} ${spatialRule}` : spatialRule;
+        }
       }
       return concept;
     });

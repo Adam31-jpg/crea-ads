@@ -364,7 +364,7 @@
             },
             "intake": {
                 "title": "Directeur Créatif IA",
-                "subtitle": "Notre IA concevra {total} concepts ({images} image + {videos} vidéo).",
+                "subtitle": "Notre IA concevra {total} concepts ({images} image(s)).",
                 "sections": {
                     "a": "L'Essence du Produit",
                     "b": "Les Piliers de Vente (USPs)",

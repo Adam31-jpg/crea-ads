@@ -112,12 +112,12 @@ export const MasterComposition: React.FC<Props> = (props) => {
             ...comp,
             props: {
                 ...comp.props,
-                x: undefined,
-                y: undefined,
+                x: 0,
+                y: 0,
                 width: undefined,
                 height: undefined,
             }
-        }))
+        } as any)) as typeof props.component_layout
         : props.component_layout;
 
     const isDev = process.env.NODE_ENV === 'development';
@@ -138,7 +138,7 @@ export const MasterComposition: React.FC<Props> = (props) => {
         : [productImageUrl];
     // 🔍 REMOTE-DEBUG — if this never appears in the terminal, Lambda is running a stale bundle.
     // Fix: run `npm run deploy:site` to re-upload the engine bundle to S3.
-    console.log('🚀 [REMOTE-DEBUG] MasterComposition v2 is MOUNTED — bundle is fresh.');
+    console.log('🚀 [REMOTE-DEBUG] MasterComposition v3 is MOUNTED — bundle is fresh.');
     console.log(`🔗 [REMOTE-DEBUG] backgroundImageUrl received: ${JSON.stringify(props.backgroundImageUrl ?? null)}`);
 
     const [bgReady, setBgReady] = useState(!props.backgroundImageUrl);

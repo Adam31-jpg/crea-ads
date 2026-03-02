@@ -10,16 +10,6 @@ export const TemplateOverheadMinimal: React.FC<Props> = (props) => {
     const { width, height } = useVideoConfig();
     const isPortrait = height > width;
 
-    // Extract brandName dynamically if available in components
-    let brandName = "LUMINA";
-    if (props.component_layout) {
-        props.component_layout.forEach((c: any) => {
-            if (c.component === 'BrandHeader') {
-                brandName = c.props.brandName;
-            }
-        });
-    }
-
     // Reconstruct URLs just like in Loly
     const bucketUrl = "https://lumina-remotion-projects.s3.us-east-1.amazonaws.com";
     let cdnImageUrl = props.backgroundImageUrl;
@@ -33,7 +23,7 @@ export const TemplateOverheadMinimal: React.FC<Props> = (props) => {
             {/* Background Layer: Flat 2D Image */}
             <AbsoluteFill style={{ zIndex: 0 }}>
                 {cdnImageUrl && (
-                    <img
+                    <Img
                         src={cdnImageUrl}
                         style={{ position: 'absolute', width: '100%', height: '100%', objectFit: 'cover' }}
                     />
@@ -92,7 +82,7 @@ export const TemplateOverheadMinimal: React.FC<Props> = (props) => {
                         margin: 0,
                         textShadow: '0 4px 12px rgba(0,0,0,0.3)'
                     }}>
-                        {props.headlineText || "PURE ESSENCE"}
+                        {props.headlineText}
                     </h1>
                 </div>
 
@@ -105,7 +95,7 @@ export const TemplateOverheadMinimal: React.FC<Props> = (props) => {
                     justifyContent: 'flex-end',
                     zIndex: 30
                 }}>
-                    {props.logoUrl ? (
+                    {props.logoUrl && (
                         <Img
                             src={props.logoUrl}
                             style={{
@@ -113,8 +103,6 @@ export const TemplateOverheadMinimal: React.FC<Props> = (props) => {
                                 objectFit: 'contain'
                             }}
                         />
-                    ) : (
-                        <BrandHeader brandName={brandName} isRelative={true} />
                     )}
                 </div>
 
