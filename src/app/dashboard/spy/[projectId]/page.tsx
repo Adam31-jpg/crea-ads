@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 import {
@@ -95,7 +94,6 @@ export default function SpyProjectPage() {
         updateBlueprintAspectRatio,
         addJob,
         updateJob,
-        reset,
     } = useSpySession();
 
     // ── Load project from DB ─────────────────────────────────────────────────
@@ -129,52 +127,59 @@ export default function SpyProjectPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [projectId]);
 
-    // ── Poll every 4s as belt-and-suspenders for SSE gaps ────────────────────
-    const [pollTick, setPollTick] = useState(0);
+    // ── Smart polling: only fires while rendering jobs exist, shows toast on completion ──
+    const hasRenderingJobs = generatedJobs.some(j => j.status === "rendering");
     useEffect(() => {
-        const timer = setInterval(() => setPollTick((t) => t + 1), 4000);
-        return () => clearInterval(timer);
-    }, []);
-    useEffect(() => {
-        if (isLoading || pollTick === 0) return;
-        fetch(`/api/spy/project/${projectId}`)
-            .then((r) => r.json())
-            .then((data) => {
-                if (data.jobs?.length) {
-                    data.jobs.forEach((j: GeneratedJob) => {
-                        updateJob(j.jobId, { status: j.status as GeneratedJob["status"], result_url: j.result_url ?? "" });
+        if (!hasRenderingJobs || !projectId) return;
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/spy/project/${projectId}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.jobs && Array.isArray(data.jobs)) {
+                    data.jobs.forEach((dbJob: { jobId: string; status: string; result_url: string | null }) => {
+                        const current = generatedJobs.find(j => j.jobId === dbJob.jobId);
+                        if (current && current.status === "rendering" && dbJob.status !== "rendering") {
+                            updateJob(dbJob.jobId, {
+                                status: dbJob.status as "done" | "failed" | "rendering",
+                                result_url: dbJob.result_url ?? undefined,
+                            });
+                            if (dbJob.status === "done") toast.success("Créative générée !");
+                            if (dbJob.status === "failed") toast.error("Génération échouée — Spark remboursé");
+                        }
                     });
                 }
-            })
-            .catch(() => {});
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pollTick]);
+            } catch { /* silently retry */ }
+        }, 3000);
+        return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hasRenderingJobs, projectId]);
 
-    // ── SSE ──────────────────────────────────────────────────────────────────
-    const eventSourceRef = useRef<EventSource | null>(null);
+    // ── SSE with auto-reconnect ───────────────────────────────────────────────
     useEffect(() => {
         if (!session?.user) return;
         let es: EventSource;
+        let reconnectTimer: ReturnType<typeof setTimeout>;
+
         function connect() {
             es = new EventSource("/api/events");
-            eventSourceRef.current = es;
             es.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
                     if (data.type === "job_update") {
                         updateJob(data.jobId, { status: data.status, result_url: data.result_url, warning: data.warning });
-                        if (data.status === "done") toast.success("Creative generated!");
+                        if (data.status === "done") toast.success("Créative générée !");
                         else if (data.status === "failed") toast.error(t("errors.generationFailed"));
                     }
                 } catch {}
             };
             es.onerror = () => {
                 es.close();
-                setTimeout(connect, 2000);
+                reconnectTimer = setTimeout(connect, 2000);
             };
         }
         connect();
-        return () => es?.close();
+        return () => { es?.close(); clearTimeout(reconnectTimer); };
     }, [session, updateJob, t]);
 
     // ── Upload ────────────────────────────────────────────────────────────────
@@ -275,9 +280,7 @@ export default function SpyProjectPage() {
     const handleGenerateSingle = useCallback(
         async (blueprint: CreativeBlueprint, customImgUrl?: string | null) => {
             const imgUrl = customImgUrl ?? productImageUrl ?? null;
-            if (!imgUrl) {
-                toast.warning(t("noProductWarning"));
-            }
+            if (!imgUrl) toast.warning(t("noProductWarning"));
 
             const promptWithLang = `${blueprint.reproductionPrompt}\n\nIMPORTANT: All text, headlines, CTAs, and copy in this creative MUST be written in ${LANG_MAP[creativeLang]}. Generate native-level marketing copy in this language.`;
 
@@ -310,7 +313,6 @@ export default function SpyProjectPage() {
         [productImageUrl, creativeLang, globalResolution, addJob, updateJob, t],
     );
 
-    // ── Generate all selected ─────────────────────────────────────────────────
     async function handleGenerateAll() {
         const selected = blueprints.filter((b) => b.isSelected && b.creativeType !== "ugc_video");
         for (const b of selected) await handleGenerateSingle(b);
@@ -330,79 +332,79 @@ export default function SpyProjectPage() {
     const isCreativesStep = currentStep === "creatives" || currentStep === "generating" || currentStep === "results";
 
     return (
-        <div className="max-w-7xl mx-auto space-y-6">
-            {/* Header */}
-            <div className="flex items-start gap-4">
-                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 shrink-0">
-                    <Eye className="h-5 w-5 text-amber-400" />
+        <div className="max-w-7xl mx-auto flex flex-col" style={{ height: "calc(100vh - 80px)" }}>
+            {/* ── Fixed header + stepper ─────────────────────────────── */}
+            <div className="flex-shrink-0 space-y-4 pb-4">
+                {/* Header */}
+                <div className="flex items-start gap-4">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 shrink-0">
+                        <Eye className="h-5 w-5 text-amber-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <h1 className="text-xl font-bold tracking-tight truncate">
+                            {storeAnalysis?.storeName ?? t("title")}
+                        </h1>
+                        <p className="text-muted-foreground text-xs mt-0.5 truncate">
+                            {storeAnalysis?.storeUrl ?? t("subtitle")}
+                        </p>
+                    </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                    <h1 className="text-xl font-bold tracking-tight truncate">
-                        {storeAnalysis?.storeName ?? t("title")}
-                    </h1>
-                    <p className="text-muted-foreground text-xs mt-0.5 truncate">
-                        {storeAnalysis?.storeUrl ?? t("subtitle")}
-                    </p>
-                </div>
-            </div>
 
-            {/* Step indicator */}
-            <div className="flex items-center gap-2">
-                {STEPS.map((step, i) => {
-                    const isDone = activeStepIndex > i;
-                    const isActive = activeStepIndex === i || (step === "creatives" && isCreativesStep);
-                    return (
-                        <div key={step} className="flex items-center gap-2">
-                            <div
-                                className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold border transition-colors ${
-                                    isDone
-                                        ? "bg-amber-500 border-amber-500 text-black"
-                                        : isActive
-                                          ? "border-amber-500 text-amber-400 bg-amber-500/10"
-                                          : "border-border text-muted-foreground"
-                                }`}
-                            >
-                                {isDone ? "✓" : i + 1}
+                {/* Step indicator */}
+                <div className="flex items-center gap-2">
+                    {STEPS.map((step, i) => {
+                        const isDone = activeStepIndex > i;
+                        const isActive = activeStepIndex === i || (step === "creatives" && isCreativesStep);
+                        return (
+                            <div key={step} className="flex items-center gap-2">
+                                <div
+                                    className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold border transition-colors ${
+                                        isDone
+                                            ? "bg-amber-500 border-amber-500 text-black"
+                                            : isActive
+                                              ? "border-amber-500 text-amber-400 bg-amber-500/10"
+                                              : "border-border text-muted-foreground"
+                                    }`}
+                                >
+                                    {isDone ? "✓" : i + 1}
+                                </div>
+                                <span className={`text-xs hidden sm:block ${isActive ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                                    {STEP_LABELS[i]}
+                                </span>
+                                {i < STEPS.length - 1 && (
+                                    <div className={`h-px w-6 sm:w-12 ${isDone ? "bg-amber-500" : "bg-border"}`} />
+                                )}
                             </div>
-                            <span className={`text-xs hidden sm:block ${isActive ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-                                {STEP_LABELS[i]}
-                            </span>
-                            {i < STEPS.length - 1 && (
-                                <div className={`h-px w-6 sm:w-12 ${isDone ? "bg-amber-500" : "bg-border"}`} />
-                            )}
-                        </div>
-                    );
-                })}
+                        );
+                    })}
+                </div>
             </div>
 
-            {/* Step 1: Store review */}
-            {(currentStep === "url_input" || currentStep === "store_review") && (
-                <StoreAnalysisForm onConfirm={() => setStep("competitors")} />
-            )}
+            {/* ── Scrollable content area ──────────────────────────────── */}
+            <div className="flex-1 min-h-0 overflow-y-auto">
+                {/* Step 1: Store review */}
+                {(currentStep === "url_input" || currentStep === "store_review") && (
+                    <StoreAnalysisForm onConfirm={() => setStep("competitors")} />
+                )}
 
-            {/* Step 2: Competitors */}
-            {currentStep === "competitors" && (
-                <div className="space-y-4">
-                    <h2 className="font-semibold">{t("step2.title")}</h2>
-                    <CompetitorList onConfirm={() => setStep("creatives")} />
-                </div>
-            )}
+                {/* Step 2: Competitors */}
+                {currentStep === "competitors" && (
+                    <div className="space-y-4">
+                        <h2 className="font-semibold">{t("step2.title")}</h2>
+                        <CompetitorList onConfirm={() => setStep("creatives")} />
+                    </div>
+                )}
 
-            {/* Step 3+4: Split-screen creatives + results */}
-            {isCreativesStep && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:gap-6 min-h-[70vh]">
-                    {/* ── LEFT PANEL: Blueprints ──────────────────────────── */}
-                    <div className="space-y-4 overflow-y-auto lg:pr-3 lg:max-h-[80vh] pb-8">
-                        {/* Product image + resolution + language controls */}
-                        <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                {t("productImageSection")}
-                            </p>
-
+                {/* Step 3+4: Unified rows — blueprint aligned with its result */}
+                {isCreativesStep && (
+                    <div className="space-y-4 pb-8">
+                        {/* ── Sticky controls bar ─────────────────────────── */}
+                        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border border-border rounded-lg p-4 space-y-3">
+                            {/* Global product image */}
                             {productImageUrl ? (
                                 <div className="flex items-center gap-3">
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={productImageUrl} alt="Product" className="w-12 h-12 object-cover rounded-md border border-border" />
+                                    <img src={productImageUrl} alt="Product" className="w-10 h-10 object-cover rounded-md border border-border" />
                                     <div className="flex-1 min-w-0">
                                         <p className="text-xs text-muted-foreground">{t("productImageReady")}</p>
                                         <label className="text-xs text-amber-400 hover:underline cursor-pointer">
@@ -412,18 +414,19 @@ export default function SpyProjectPage() {
                                     </div>
                                 </div>
                             ) : (
-                                <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground hover:text-foreground transition-colors">
+                                <label className="flex items-center gap-2 cursor-pointer">
                                     <span className="px-3 py-1.5 rounded border border-border bg-background text-xs hover:bg-muted transition-colors flex items-center gap-1.5">
                                         <Camera className="h-3.5 w-3.5" />
                                         {t("step4.uploadProduct")}
                                     </span>
-                                    <span className="text-xs">{t("productImageHint")}</span>
+                                    <span className="text-xs text-muted-foreground">{t("productImageHint")}</span>
                                     <input type="file" accept="image/*" className="sr-only" onChange={handleGlobalImageUpload} />
                                 </label>
                             )}
 
-                            {/* Resolution + Lang inline */}
+                            {/* Controls row */}
                             <div className="flex items-center gap-3 flex-wrap">
+                                {/* Resolution */}
                                 <div className="flex rounded-md border border-border overflow-hidden text-xs">
                                     {(["1K", "2K", "4K"] as const).map((r) => (
                                         <button
@@ -435,6 +438,8 @@ export default function SpyProjectPage() {
                                         </button>
                                     ))}
                                 </div>
+
+                                {/* Language */}
                                 <div className="flex items-center gap-1">
                                     {(["fr", "en", "de", "es", "it"] as const).map((lang) => (
                                         <button
@@ -447,18 +452,45 @@ export default function SpyProjectPage() {
                                         </button>
                                     ))}
                                 </div>
+
+                                {/* Actions */}
+                                <div className="flex gap-2 ml-auto">
+                                    {blueprints.length > 0 && (
+                                        <>
+                                            <Button variant="outline" size="sm" onClick={handleExtract} disabled={isExtracting} className="gap-1 text-xs h-7">
+                                                <RefreshCw className="h-3 w-3" />
+                                                {t("reExtract")}
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                onClick={handleGenerateAll}
+                                                disabled={blueprints.filter((b) => b.isSelected && b.creativeType !== "ugc_video").length === 0}
+                                                className="bg-gradient-to-r from-amber-400 to-orange-500 text-black border-none gap-1 text-xs h-7"
+                                            >
+                                                <Zap className="h-3 w-3" />
+                                                {t("generateAll")} ({blueprints.filter(b => b.isSelected && b.creativeType !== "ugc_video").length})
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
                             </div>
+
+                            {blueprints.length > 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                    {blueprints.filter((b) => b.isSelected).length} {t("selected")}
+                                </p>
+                            )}
                         </div>
 
-                        {/* Blueprints section */}
-                        {blueprints.length === 0 ? (
+                        {/* ── Empty / loading state ────────────────────────── */}
+                        {blueprints.length === 0 && (
                             isExtracting ? (
-                                <div className="space-y-3">
+                                <div className="space-y-3 pt-4">
                                     <ProgressMessage messages={["Extracting creative blueprints...", "Analyzing competitor ads...", "Identifying winning formats...", "Building prompts..."]} />
                                     <CardSkeleton count={4} />
                                 </div>
                             ) : (
-                                <div className="flex flex-col items-center gap-4 py-8 text-center">
+                                <div className="flex flex-col items-center gap-4 py-16 text-center">
                                     <p className="text-sm text-muted-foreground">Ready to extract creative blueprints.</p>
                                     <Button onClick={handleExtract} className="bg-gradient-to-r from-amber-400 to-orange-500 text-black border-none gap-2">
                                         <Zap className="h-4 w-4" />
@@ -466,34 +498,15 @@ export default function SpyProjectPage() {
                                     </Button>
                                 </div>
                             )
-                        ) : (
-                            <>
-                                {/* Blueprint toolbar */}
-                                <div className="flex items-center justify-between gap-2 flex-wrap">
-                                    <p className="text-xs text-muted-foreground">
-                                        {blueprints.filter((b) => b.isSelected).length} {t("selected")}
-                                    </p>
-                                    <div className="flex gap-2">
-                                        <Button variant="outline" size="sm" onClick={handleExtract} disabled={isExtracting} className="gap-1 text-xs h-7">
-                                            <RefreshCw className="h-3 w-3" />
-                                            {t("reExtract")}
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            onClick={handleGenerateAll}
-                                            disabled={blueprints.filter((b) => b.isSelected && b.creativeType !== "ugc_video").length === 0}
-                                            className="bg-gradient-to-r from-amber-400 to-orange-500 text-black border-none gap-1 text-xs h-7"
-                                        >
-                                            <Zap className="h-3 w-3" />
-                                            {t("generateAll")}
-                                        </Button>
-                                    </div>
-                                </div>
+                        )}
 
-                                {/* Blueprint cards */}
-                                {blueprints.map((blueprint) => (
+                        {/* ── Unified rows: each blueprint aligned with its result ── */}
+                        {blueprints.map((blueprint) => {
+                            const job = generatedJobs.find(j => j.blueprintId === blueprint.id);
+                            return (
+                                <div key={blueprint.id} className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                                    {/* LEFT: Blueprint card */}
                                     <BlueprintCard
-                                        key={blueprint.id}
                                         blueprint={blueprint}
                                         resolution={globalResolution}
                                         globalProductImageUrl={productImageUrl}
@@ -505,53 +518,56 @@ export default function SpyProjectPage() {
                                         onGenerate={(customImg) => handleGenerateSingle(blueprint, customImg)}
                                         uploadImage={uploadImage}
                                     />
-                                ))}
 
-                                {/* Expand Analysis */}
-                                <Button
-                                    variant="outline"
-                                    onClick={handleExpand}
-                                    disabled={isExpanding || expandExhausted}
-                                    className="w-full border-dashed gap-2"
-                                >
-                                    {isExpanding ? (
-                                        <><Loader2 className="h-4 w-4 animate-spin" /> {t("expandSearching")}</>
-                                    ) : expandExhausted ? (
-                                        <>{t("expandEmpty")}</>
-                                    ) : (
-                                        <><Plus className="h-4 w-4" /> {t("expandAnalysis")}</>
-                                    )}
-                                </Button>
-                            </>
+                                    {/* RIGHT: Result or placeholder */}
+                                    <div className="min-h-[200px]">
+                                        {job ? (
+                                            <ResultCard
+                                                job={job}
+                                                blueprint={blueprint}
+                                                t={t}
+                                                resolution={globalResolution}
+                                                onRegenerate={(customImg) => handleGenerateSingle(blueprint, customImg)}
+                                            />
+                                        ) : (
+                                            <div className="h-full min-h-[200px] rounded-lg border border-dashed border-border/40 bg-muted/5 flex flex-col items-center justify-center text-center p-6">
+                                                {blueprint.creativeType === "ugc_video" ? (
+                                                    <p className="text-xs text-muted-foreground">Vidéo UGC — bientôt disponible</p>
+                                                ) : (
+                                                    <>
+                                                        <ImageIcon className="h-8 w-8 text-muted-foreground/15 mb-2" />
+                                                        <p className="text-xs text-muted-foreground/50">
+                                                            Cliquez sur &quot;Générer&quot; pour voir le résultat ici
+                                                        </p>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        {/* ── Expand analysis ──────────────────────────────── */}
+                        {blueprints.length > 0 && (
+                            <Button
+                                variant="outline"
+                                onClick={handleExpand}
+                                disabled={isExpanding || expandExhausted}
+                                className="w-full border-dashed gap-2"
+                            >
+                                {isExpanding ? (
+                                    <><Loader2 className="h-4 w-4 animate-spin" /> {t("expandSearching")}</>
+                                ) : expandExhausted ? (
+                                    <>{t("expandEmpty")}</>
+                                ) : (
+                                    <><Plus className="h-4 w-4" /> {t("expandAnalysis")}</>
+                                )}
+                            </Button>
                         )}
                     </div>
-
-                    {/* ── RIGHT PANEL: Generated results ─────────────────── */}
-                    <div className="space-y-4 lg:pl-3 lg:border-l lg:border-border overflow-y-auto lg:max-h-[80vh] pb-8 mt-6 lg:mt-0">
-                        {generatedJobs.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-48 text-center gap-3">
-                                <ImageIcon className="h-10 w-10 text-muted-foreground/20" />
-                                <p className="text-sm text-muted-foreground">{t("emptyResults")}</p>
-                                <p className="text-xs text-muted-foreground/60">{t("emptyResultsHint")}</p>
-                            </div>
-                        ) : (
-                            generatedJobs.map((job) => {
-                                const blueprint = blueprints.find((b) => b.id === job.blueprintId);
-                                return (
-                                    <ResultCard
-                                        key={job.jobId}
-                                        job={job}
-                                        blueprint={blueprint}
-                                        t={t}
-                                        resolution={globalResolution}
-                                        onRegenerate={(customImg) => blueprint && handleGenerateSingle(blueprint, customImg)}
-                                    />
-                                );
-                            })
-                        )}
-                    </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 }
@@ -622,8 +638,8 @@ function BlueprintCard({
 
     return (
         <Card className={cn("border transition-colors", blueprint.isSelected && !isUgc ? "border-amber-500/40 bg-amber-500/5" : "border-border bg-card", isUgc && "opacity-75")}>
-            <CardContent className="pt-4 pb-4 space-y-3">
-                {/* Header row */}
+            <CardContent className="p-4 space-y-3">
+                {/* 1. Header row */}
                 <div className="flex items-center gap-2 flex-wrap">
                     {!isUgc ? (
                         <button onClick={onToggle} className={cn("shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors", blueprint.isSelected ? "border-amber-500 bg-amber-500" : "border-border")}>
@@ -643,121 +659,128 @@ function BlueprintCard({
                     {isUgc && <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{t("step3.comingSoon")}</span>}
                 </div>
 
-                {/* Source preview + controls row */}
-                <div className="grid grid-cols-2 gap-3">
-                    {/* CreativePreview */}
-                    <CreativePreview
-                        sourceUrl={blueprint.sourceUrl}
-                        sourceImageUrl={blueprint.sourceImageUrl}
-                        sourcePlatform={blueprint.sourcePlatform}
-                        creativeName={blueprint.creativeName}
-                    />
+                {/* 2. Source preview — full width */}
+                <CreativePreview
+                    sourceUrl={blueprint.sourceUrl}
+                    sourceImageUrl={blueprint.sourceImageUrl}
+                    sourcePlatform={blueprint.sourcePlatform}
+                    creativeName={blueprint.creativeName}
+                />
 
-                    {/* Controls */}
-                    <div className="space-y-2">
-                        {/* Collapsible description */}
-                        <button onClick={() => setShowDesc((v) => !v)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground w-full">
-                            {showDesc ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                            {t("description")}
-                        </button>
-                        {showDesc && <p className="text-xs text-muted-foreground leading-relaxed line-clamp-4">{blueprint.description}</p>}
+                {/* 3. Collapsible details */}
+                <div className="space-y-2">
+                    <button onClick={() => setShowDesc((v) => !v)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground w-full">
+                        {showDesc ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        {t("description")}
+                    </button>
+                    {showDesc && <p className="text-xs text-muted-foreground leading-relaxed">{blueprint.description}</p>}
 
-                        {/* Prompt editor */}
-                        {!isUgc && (
-                            <>
-                                <button onClick={() => setShowPrompt((v) => !v)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground w-full">
-                                    {showPrompt ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                                    {t("step3.editPrompt")}
-                                </button>
-                                {showPrompt && (
-                                    <textarea
-                                        className="w-full rounded border border-input bg-background px-2 py-1.5 text-xs min-h-[70px] resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                        value={blueprint.reproductionPrompt}
-                                        onChange={(e) => onPromptChange(e.target.value)}
-                                    />
-                                )}
-                            </>
-                        )}
+                    {!isUgc && (
+                        <>
+                            <button onClick={() => setShowPrompt((v) => !v)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground w-full">
+                                {showPrompt ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                {t("step3.editPrompt")}
+                            </button>
+                            {showPrompt && (
+                                <textarea
+                                    className="w-full rounded border border-input bg-background px-2 py-1.5 text-xs min-h-[70px] resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    value={blueprint.reproductionPrompt}
+                                    onChange={(e) => onPromptChange(e.target.value)}
+                                />
+                            )}
+                        </>
+                    )}
 
-                        {/* Aspect ratio */}
-                        {!isUgc && (
+                    {!isUgc && (
+                        <div className="flex items-center gap-2 flex-wrap">
                             <select
                                 value={blueprint.aspectRatio}
                                 onChange={(e) => onAspectRatioChange(e.target.value)}
-                                className="text-xs rounded border border-border bg-background px-2 py-1 w-full text-muted-foreground focus:outline-none"
+                                className="text-xs rounded border border-border bg-background px-2 py-1 text-muted-foreground focus:outline-none"
                             >
                                 {["9:16", "1:1", "16:9", "4:5"].map((ar) => (
                                     <option key={ar} value={ar}>{ar}</option>
                                 ))}
                             </select>
-                        )}
+                            {perf && (
+                                <div className="flex gap-1 flex-wrap">
+                                    {perf.hookRate && <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400">Hook {perf.hookRate}</span>}
+                                    {perf.engagement && <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400">{perf.engagement}</span>}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
 
-                        {/* Performance badges */}
-                        {perf && (
-                            <div className="flex gap-1 flex-wrap">
-                                {perf.hookRate && <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400">Hook {perf.hookRate}</span>}
-                                {perf.engagement && <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/10 text-green-400">{perf.engagement}</span>}
-                            </div>
+                {/* 4. Product image slot — visible */}
+                {!isUgc && (
+                    <div className="flex items-center gap-3 p-2 rounded-md bg-muted/10 border border-border/50">
+                        {activeProductImg ? (
+                            <>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={activeProductImg} alt="Product" className="w-10 h-10 rounded object-cover border border-border shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] text-muted-foreground">
+                                        {customProductImage ? t("customImage") : t("productImageReady")}
+                                    </p>
+                                    <div className="flex gap-2 mt-0.5">
+                                        <label className="text-[10px] text-amber-400 hover:underline cursor-pointer">
+                                            {t("changeImage")}
+                                            <input type="file" accept="image/*" className="sr-only" onChange={handleCustomImageUpload} />
+                                        </label>
+                                        {customProductImage && (
+                                            <button onClick={() => setCustomProductImage(null)} className="text-[10px] text-muted-foreground hover:text-foreground">
+                                                {t("useGlobal")}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <label className="flex items-center gap-2 cursor-pointer w-full p-1">
+                                <div className="w-10 h-10 rounded border border-dashed border-border flex items-center justify-center bg-muted/5 shrink-0">
+                                    {isUploadingCustom
+                                        ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/40" />
+                                        : <Camera className="h-4 w-4 text-muted-foreground/40" />
+                                    }
+                                </div>
+                                <span className="text-xs text-muted-foreground">{t("customImage")}</span>
+                                <input type="file" accept="image/*" className="sr-only" onChange={handleCustomImageUpload} />
+                            </label>
                         )}
                     </div>
-                </div>
+                )}
 
-                {/* Footer: per-creative image override + generate / UGC download */}
-                <div className="flex items-center gap-2 flex-wrap pt-1">
-                    {!isUgc && (
-                        <>
-                            {/* Per-creative image override */}
-                            <div className="flex items-center gap-1.5">
-                                {customProductImage ? (
-                                    <>
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={customProductImage} alt="Custom" className="w-6 h-6 rounded object-cover border border-amber-500/40" />
-                                        <button
-                                            onClick={() => setCustomProductImage(null)}
-                                            className="text-[10px] text-amber-400 hover:underline"
-                                        >
-                                            {t("useGlobal")}
-                                        </button>
-                                    </>
-                                ) : (
-                                    <label className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground cursor-pointer">
-                                        {isUploadingCustom ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
-                                        <input type="file" accept="image/*" className="sr-only" onChange={handleCustomImageUpload} />
-                                    </label>
-                                )}
-                            </div>
-
-                            {/* Ad Library link */}
-                            {competitorName && (
-                                <a
-                                    href={`https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&q=${encodeURIComponent(competitorName)}&search_type=keyword_unordered`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground ml-auto"
-                                >
-                                    {t("step3.viewAds")} <ExternalLink className="h-3 w-3" />
-                                </a>
-                            )}
-
-                            <Button
-                                size="sm"
-                                onClick={() => onGenerate(customProductImage)}
-                                className="bg-gradient-to-r from-amber-400 to-orange-500 text-black border-none text-xs h-7 gap-1 ml-auto"
+                {/* 5. Action */}
+                {!isUgc && (
+                    <div className="space-y-2">
+                        {competitorName && (
+                            <a
+                                href={`https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&q=${encodeURIComponent(competitorName)}&search_type=keyword_unordered`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground justify-end"
                             >
-                                <Zap className="h-3 w-3" />
-                                {t("generateOne")} ({RESOLUTION_COSTS[resolution]}⚡)
-                            </Button>
-                        </>
-                    )}
-
-                    {/* UGC script download */}
-                    {isUgc && blueprint.ugcScript && (
-                        <Button variant="outline" size="sm" onClick={handleDownloadScript} className="gap-1.5 text-xs h-7">
-                            <Download className="h-3 w-3" />
-                            {t("step3.downloadScript")}
+                                {t("step3.viewAds")} <ExternalLink className="h-3 w-3" />
+                            </a>
+                        )}
+                        <Button
+                            onClick={() => onGenerate(customProductImage)}
+                            className="w-full bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-black border-none gap-2 h-9"
+                        >
+                            <Zap className="h-3.5 w-3.5" />
+                            {t("generateOne")} ({RESOLUTION_COSTS[resolution]}⚡)
                         </Button>
-                    )}
-                </div>
+                    </div>
+                )}
+
+                {/* UGC script download */}
+                {isUgc && blueprint.ugcScript && (
+                    <Button variant="outline" size="sm" onClick={handleDownloadScript} className="gap-1.5 text-xs h-7 w-full">
+                        <Download className="h-3 w-3" />
+                        {t("step3.downloadScript")}
+                    </Button>
+                )}
             </CardContent>
         </Card>
     );
@@ -789,7 +812,7 @@ function ResultCard({
     if (job.status === "rendering") {
         return (
             <div className="rounded-lg border border-border bg-card p-4 animate-pulse space-y-3">
-                <div className="h-48 bg-muted rounded-lg" />
+                <div className="h-64 bg-muted rounded-lg" />
                 <ProgressMessage messages={["Génération en cours...", "Modèle IA en cours...", "Presque terminé..."]} />
             </div>
         );
@@ -812,15 +835,19 @@ function ResultCard({
     if (!cfUrl) return null;
 
     return (
-        <div className="rounded-lg border border-border bg-card overflow-hidden space-y-0">
-            <div className="relative aspect-square max-h-[300px] bg-muted">
-                <Image src={cfUrl} alt={blueprint?.creativeName ?? "Generated creative"} fill className="object-cover" />
-                {job.warning === "upload_failed" && (
-                    <div className="absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded bg-amber-500/90 text-black">
-                        Temp URL
-                    </div>
-                )}
-            </div>
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+                src={cfUrl}
+                alt={blueprint?.creativeName ?? "Generated creative"}
+                className="w-full object-cover"
+                style={{ maxHeight: "360px" }}
+            />
+            {job.warning === "upload_failed" && (
+                <div className="px-3 pt-2">
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/90 text-black">Temp URL</span>
+                </div>
+            )}
             <div className="p-3 space-y-2">
                 {blueprint && (
                     <p className="text-xs text-muted-foreground">
@@ -844,7 +871,7 @@ function ResultCard({
                     {blueprint && (
                         <Button variant="outline" size="sm" onClick={() => onRegenerate()} className="gap-1 text-xs h-7 ml-auto">
                             <RefreshCw className="h-3 w-3" />
-                            {t("step5.regenerate")}
+                            {t("step5.regenerate")} ({RESOLUTION_COSTS[resolution]}⚡)
                         </Button>
                     )}
                 </div>

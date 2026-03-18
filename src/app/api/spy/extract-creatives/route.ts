@@ -71,13 +71,26 @@ export async function POST(req: NextRequest) {
                 `- reproductionPrompt: string (Fal.ai prompt — describe SCENE/ENVIRONMENT only for ${storeAnalysis.storeName ?? "the brand"}, never mention "a product" directly)`,
                 '- aspectRatio: "9:16" | "1:1" | "16:9" | "4:5"',
                 '- sourceLabel: "cloned_from_competitor"',
-                '- sourceUrl: string | null (DIRECT URL to the specific post/ad e.g. "https://www.facebook.com/ads/library/?id=123" or "https://www.instagram.com/p/ABC/". null if not found)',
-                "- sourceImageUrl: string | null (direct URL to image/thumbnail. null if not found)",
-                '- sourcePlatform: "meta_ads" | "tiktok_ads" | "google_ads" | "instagram_organic" | "tiktok_organic" | "facebook_organic" | "youtube"',
+                "",
+                "CRITICAL — SOURCE URLs: For each creative, you MUST try to provide real URLs:",
+                "1. sourceUrl — Try these in order:",
+                `   a) Search "${competitor.competitorName} facebook ads library" → if found, construct: https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&q=${encodeURIComponent(competitor.competitorName ?? "")}`,
+                `   b) Search "${competitor.competitorName} instagram" → if found, use: https://www.instagram.com/[username]/`,
+                `   c) Search "${competitor.competitorName} tiktok" → if found, use: https://www.tiktok.com/@[username]`,
+                `   d) Use their website URL as last resort: ${competitor.competitorUrl ?? ""}`,
+                "   NEVER return null for sourceUrl if the competitor has any web presence.",
+                "2. sourceImageUrl — Try these in order:",
+                "   a) If you found a specific Instagram post URL, include the image URL if accessible",
+                `   b) Search Google Images for "${competitor.competitorName} ad creative" or "${competitor.competitorName} product"`,
+                "   c) Check the competitor's website for product images — look for og:image meta tags",
+                "   d) If the competitor has a Shopify/WooCommerce store, product images are at predictable URLs",
+                "   If you truly cannot find any image URL, return null — but TRY.",
+                '- sourceImageUrl: string | null (direct URL to image/thumbnail. null if not found)',
+                '- sourcePlatform: "meta_ads" | "tiktok_ads" | "google_ads" | "instagram_organic" | "tiktok_organic" | "facebook_organic" | "youtube" — ALWAYS set based on where your creative inspiration came from.',
                 "",
                 "For ugc_video also include ugcScript: string (HOOK 0-3s, BODY 3-18s, CTA 18-22s with camera directions)",
                 "",
-                "Generate 2-4 creatives. Return ONLY a JSON array. If no specific ads found, generate from niche trends, set sourceLabel to \"market_trend\" and sourceUrl to null.",
+                "Generate 2-4 creatives. Return ONLY a JSON array. If no specific ads found, generate from niche trends, set sourceLabel to \"market_trend\" and sourceUrl to the competitor's main website.",
                 "",
                 `LANGUAGE: Marketing copy (headlines, CTAs, overlay text), ugcScript, creativeName in ${langLabel}. Scene descriptions in English.`,
             ];
@@ -109,6 +122,15 @@ export async function POST(req: NextRequest) {
                     .replace(/```\n?/g, "")
                     .trim();
                 blueprintsRaw = JSON.parse(cleaned);
+
+                // Debug: log what Gemini returned for each creative
+                console.log(`[spy/extract-creatives] ── Competitor: ${competitor.competitorName} ──`);
+                blueprintsRaw.forEach((b, i) => {
+                    console.log(`  [${i}] "${b.creativeName}" type=${b.creativeType}`);
+                    console.log(`       sourceUrl=${b.sourceUrl ?? "NULL"}`);
+                    console.log(`       sourceImageUrl=${b.sourceImageUrl ?? "NULL"}`);
+                    console.log(`       sourcePlatform=${b.sourcePlatform ?? "NULL"}`);
+                });
             } catch {
                 console.error(
                     `[spy/extract-creatives] Failed for competitor ${competitor.competitorName}`,
@@ -122,6 +144,30 @@ export async function POST(req: NextRequest) {
             }
 
             if (!Array.isArray(blueprintsRaw)) continue;
+
+            // og:image fallback — for any blueprint where sourceImageUrl is null but sourceUrl is not null
+            for (const b of blueprintsRaw) {
+                if (!b.sourceImageUrl && b.sourceUrl) {
+                    try {
+                        const pageRes = await fetch(b.sourceUrl, {
+                            headers: { "User-Agent": "Mozilla/5.0 (compatible; Lumina/1.0)" },
+                            signal: AbortSignal.timeout(5000),
+                        });
+                        if (pageRes.ok) {
+                            const html = await pageRes.text();
+                            const ogMatch =
+                                html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i) ||
+                                html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:image"/i);
+                            if (ogMatch?.[1]) {
+                                b.sourceImageUrl = ogMatch[1];
+                                console.log(`  [og:image fallback] Found for "${b.creativeName}": ${b.sourceImageUrl}`);
+                            }
+                        }
+                    } catch {
+                        // Silently fail — sourceImageUrl stays null
+                    }
+                }
+            }
 
             const created = await Promise.all(
                 blueprintsRaw.map((b) =>
