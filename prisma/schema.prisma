@@ -20,19 +20,20 @@ model User {
   image         String?
   /// Bcrypt hash for Credentials (email/password) login. Null for OAuth-only users.
   password_hash String?
-  /// Lumina Sparks credit balance. New users start with 10 free credits.
-  credits         Int       @default(10)
+  /// Lumina Sparks credit balance. New users start with 5 free credits.
+  credits         Int       @default(5)
   /// Lifetime USD spent by this user (Gross Revenue).
   total_spent_usd Decimal   @default(0.0000) @db.Decimal(10, 4)
   createdAt       DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts Account[]
-  sessions Session[]
-  batches    Batch[]
-  jobs       Job[]
-  adminLogs  AdminAuditLog[]
-  bugReports BugReport[]
+  accounts      Account[]
+  sessions      Session[]
+  batches       Batch[]
+  jobs          Job[]
+  adminLogs     AdminAuditLog[]
+  bugReports    BugReport[]
+  storeAnalyses StoreAnalysis[]
 
   @@index([total_spent_usd])
   @@map("users")
@@ -118,8 +119,14 @@ model Job {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Spy Mode: reference to the creative blueprint this job was generated from
+  blueprintId   String?
+  /// "legacy" for old flow, "spy" for Spy Mode generated jobs
+  source        String   @default("legacy")
+
+  batch     Batch              @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  blueprint CreativeBlueprint? @relation(fields: [blueprintId], references: [id], onDelete: SetNull)
 
   @@index([batchId])
   @@index([userId])
@@ -155,4 +162,76 @@ model BugReport {
 
   @@index([userId])
   @@map("bug_reports")
+}
+
+// ─── Spy Mode Models ──────────────────────────────────────────────────────────
+
+model StoreAnalysis {
+  id              String   @id @default(uuid())
+  userId          String
+  storeUrl        String
+  storeName       String?
+  productCategory String?
+  niche           String?
+  priceRange      String?
+  usps            Json?
+  toneOfVoice     String?
+  targetMarket    String?
+  rawAnalysis     Json?
+  status          String   @default("pending") // pending | analyzing | done | failed | manual_fallback
+  errorMessage    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  competitors CompetitorAnalysis[]
+
+  @@index([userId])
+  @@map("store_analyses")
+}
+
+model CompetitorAnalysis {
+  id                 String   @id @default(uuid())
+  storeAnalysisId    String
+  competitorName     String
+  competitorUrl      String?
+  positioning        String?
+  priceRange         String?
+  marketingChannels  Json?
+  relevanceScore     Int      @default(5)
+  isSelected         Boolean  @default(true)
+  isManual           Boolean  @default(false)
+  metaAdLibraryUrl   String?
+  tiktokAdLibraryUrl String?
+  createdAt          DateTime @default(now())
+
+  storeAnalysis StoreAnalysis       @relation(fields: [storeAnalysisId], references: [id], onDelete: Cascade)
+  blueprints    CreativeBlueprint[]
+
+  @@index([storeAnalysisId])
+  @@map("competitor_analyses")
+}
+
+model CreativeBlueprint {
+  id                   String   @id @default(uuid())
+  competitorAnalysisId String?
+  storeAnalysisId      String
+  creativeName         String
+  creativeType         String   // ugc_video | flat_lay | comparison | asmr | lifestyle | carousel | testimonial
+  description          String   @db.Text
+  estimatedPerformance Json?
+  reproductionPrompt   String   @db.Text
+  ugcScript            String?  @db.Text
+  isSelected           Boolean  @default(false)
+  aspectRatio          String   @default("9:16")
+  sourceLabel          String   @default("market_trend") // cloned_from_competitor | market_trend
+  status               String   @default("ready") // ready | generating | done | failed
+  createdAt            DateTime @default(now())
+
+  competitorAnalysis CompetitorAnalysis? @relation(fields: [competitorAnalysisId], references: [id], onDelete: SetNull)
+  jobs               Job[]
+
+  @@index([storeAnalysisId])
+  @@index([competitorAnalysisId])
+  @@map("creative_blueprints")
 }

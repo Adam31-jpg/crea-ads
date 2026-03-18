@@ -3,11 +3,10 @@ import Stripe from 'stripe';
 import { prisma } from '@/lib/prisma';
 import { broadcast } from '@/lib/sse';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {} as any);
-
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {} as any);
     const payload = await req.text();
     const signature = req.headers.get('Stripe-Signature');
 

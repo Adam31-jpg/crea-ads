@@ -596,6 +596,99 @@
             "button": "Signaler un bug"
         }
     },
+    "SpyMode": {
+        "navLabel": "Spy Mode",
+        "title": "Spy Mode",
+        "subtitle": "Analysez vos concurrents. Clonez leurs meilleures créatives.",
+        "step1": {
+            "title": "Analysez votre boutique",
+            "placeholder": "https://votre-boutique.com",
+            "analyzeBtn": "Analyser",
+            "analyzing": "Analyse en cours...",
+            "manualFallbackTitle": "Analyse impossible",
+            "manualFallbackDesc": "Nous n'avons pas pu analyser cette URL. Décrivez votre produit manuellement.",
+            "confirmBtn": "Confirmer",
+            "fields": {
+                "storeName": "Nom de la marque",
+                "productCategory": "Catégorie produit",
+                "niche": "Niche",
+                "priceRange": "Gamme de prix",
+                "usps": "Arguments de vente (USPs)",
+                "toneOfVoice": "Ton de communication",
+                "targetMarket": "Marché cible"
+            }
+        },
+        "step2": {
+            "title": "Vos concurrents",
+            "findBtn": "Trouver les concurrents",
+            "searching": "Recherche en cours...",
+            "noResults": "Aucun concurrent trouvé. Essayez une catégorie plus large ou ajoutez manuellement.",
+            "addManual": "Ajouter un concurrent",
+            "confirmBtn": "Confirmer la sélection",
+            "reSearch": "Relancer la recherche",
+            "relevance": "Pertinence",
+            "viewOnMeta": "Voir sur Meta Ad Library",
+            "viewOnTikTok": "Voir sur TikTok Ad Library"
+        },
+        "step3": {
+            "title": "Créatives à cloner",
+            "extractBtn": "Extraire les créatives",
+            "extracting": "Extraction en cours...",
+            "generateSelected": "Générer la sélection",
+            "sparkCost": "{count} Spark(s)",
+            "totalCost": "Coût total : {count} Sparks",
+            "clonedFrom": "Cloné de {name}",
+            "marketTrend": "Tendance du marché",
+            "comingSoon": "Bientôt disponible",
+            "downloadScript": "Télécharger le script UGC",
+            "editPrompt": "Modifier le prompt",
+            "viewAds": "Voir les pubs →",
+            "types": {
+                "ugc_video": "Vidéo UGC",
+                "flat_lay": "Flat-Lay",
+                "comparison": "Comparatif",
+                "asmr": "ASMR",
+                "lifestyle": "Lifestyle",
+                "carousel": "Carrousel",
+                "testimonial": "Témoignage"
+            },
+            "resolution": {
+                "label": "Résolution",
+                "1K": "1K (1 ⚡)",
+                "2K": "2K (2 ⚡)",
+                "4K": "4K (3 ⚡)"
+            }
+        },
+        "step4": {
+            "title": "Génération en cours",
+            "uploadProduct": "Uploadez votre image produit",
+            "generating": "Génération...",
+            "retrying": "Nouvelle tentative...",
+            "done": "Terminé !",
+            "failed": "Échec — Spark remboursé",
+            "retry": "Réessayer"
+        },
+        "step5": {
+            "title": "Vos créatives",
+            "download": "Télécharger",
+            "downloadAll": "Tout télécharger (ZIP)",
+            "editInCanva": "Éditer dans Canva",
+            "regenerate": "Regénérer",
+            "editPrompt": "Modifier le prompt",
+            "basedOn": "Basé sur {competitor} — {type}",
+            "newSpy": "Nouvelle analyse"
+        },
+        "errors": {
+            "fetchFailed": "Impossible d'accéder à cette URL. Vérifiez l'adresse et réessayez.",
+            "analysisFailedRetry": "L'analyse IA a échoué. Veuillez réessayer.",
+            "fillManually": "Veuillez remplir les informations manuellement.",
+            "searchFailed": "La recherche a échoué. Réessayez ou ajoutez manuellement.",
+            "generationFailed": "La génération a échoué. Votre Spark a été remboursé.",
+            "insufficientSparks": "Sparks insuffisants. Rechargez pour continuer.",
+            "videoComingSoon": "La génération vidéo arrive bientôt !",
+            "serviceUnavailable": "Service temporairement indisponible. Réessayez plus tard."
+        }
+    },
     "bug": {
         "title": "Signaler un dysfonctionnement",
         "subtitle": "Un souci ? Nos ingénieurs analysent chaque rapport sous 24h.",

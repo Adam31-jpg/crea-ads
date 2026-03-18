@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { BatchList } from "@/components/dashboard/batch-list";
 import { RenderingProgressBar } from "@/components/dashboard/rendering-progress-bar";
 import type { Batch } from "@/components/dashboard/batch-card";
-import { Sparkles, Plus, Archive, Layers } from "lucide-react";
+import { Sparkles, Archive, Layers, Eye } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InsightsBar } from "@/components/dashboard/insights-bar";
 import { getTranslations } from "next-intl/server";
@@ -82,15 +82,35 @@ export default async function DashboardPage() {
                     <h1 className="text-2xl font-bold tracking-tight">{t("title", { name: firstName || t("titleFallback") })}</h1>
                     <p className="text-muted-foreground text-sm mt-1">{t("subtitle")}</p>
                 </div>
-                <Link href="/dashboard/studio">
+                <Link href="/dashboard/spy">
                     <Button className="bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-black border-none shadow-[0_0_15px_rgba(245,158,11,0.3)] gap-2">
-                        <Plus className="h-4 w-4" />
-                        {t("newProject")}
+                        <Eye className="h-4 w-4" />
+                        Spy Mode
                     </Button>
                 </Link>
             </div>
 
             <InsightsBar hoursSaved={hoursSaved} totalSuccess={totalSuccess} successRate={successRate} producerTier={producerTier} />
+
+            {/* Spy Mode CTA */}
+            <Link href="/dashboard/spy" className="block mb-6">
+                <Card className="border-amber-500/20 bg-gradient-to-r from-amber-500/5 to-orange-500/5 hover:from-amber-500/10 hover:to-orange-500/10 transition-colors cursor-pointer">
+                    <CardContent className="flex items-center gap-4 py-4">
+                        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 shrink-0">
+                            <Eye className="h-5 w-5 text-amber-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-sm text-foreground">Try Spy Mode →</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                Analyze your competitors and clone their best ads
+                            </p>
+                        </div>
+                        <span className="text-xs px-2 py-1 rounded-full bg-amber-500/15 text-amber-400 font-semibold shrink-0">
+                            NEW
+                        </span>
+                    </CardContent>
+                </Card>
+            </Link>
 
             {/* Live render progress — only visible while Lambda jobs are in-flight */}
             <RenderingProgressBar />
@@ -139,9 +159,9 @@ export default async function DashboardPage() {
                     </div>
                     <h2 className="font-[var(--font-bodoni)] text-3xl md:text-4xl font-bold tracking-tight mb-3 text-foreground">{t("empty.noBatchesTitle")}</h2>
                     <p className="text-muted-foreground text-sm max-w-md mb-8 leading-relaxed">{t("empty.noBatchesDesc")}</p>
-                    <Link href="/dashboard/studio">
+                    <Link href="/dashboard/spy">
                         <Button size="lg" className="bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-black border-none shadow-[0_0_15px_rgba(245,158,11,0.4)] gap-2">
-                            <Plus className="h-4 w-4" />
+                            <Eye className="h-4 w-4" />
                             {t("empty.generateFirst")}
                         </Button>
                     </Link>

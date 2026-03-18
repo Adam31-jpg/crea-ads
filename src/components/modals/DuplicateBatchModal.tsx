@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeSelector } from "@/components/shared/studio/ThemeSelector";
-import { THEMES, ThemePreviewSVG } from "@/app/dashboard/studio/page";
+import { THEMES, ThemePreviewSVG } from "@/config/studio-themes";
 import { GENERATION_CONFIG } from "@/config/generation.config";
 import { Loader2, Sparkles, Smartphone, Square, Monitor, Check } from "lucide-react";
 import { useTranslations } from "next-intl";

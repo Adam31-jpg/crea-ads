@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx prisma:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node -e \"const {Prisma} = require\\(''@prisma/client''\\); console.log\\(typeof Prisma.JsonNull\\);\")",
+      "Bash(mv src/app/api/strategy/route.ts src/app/api/strategy/route.legacy.ts)",
+      "Bash(mv src/app/api/render/route.ts src/app/api/render/route.legacy.ts)",
+      "Bash(mv src/app/api/render/single/route.ts src/app/api/render/single/route.legacy.ts)",
+      "Bash(mv src/app/api/render/status/route.ts src/app/api/render/status/route.legacy.ts)",
+      "Bash(node -e \":*)"
+    ]
+  }
+}

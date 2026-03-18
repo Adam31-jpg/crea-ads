@@ -1,18 +1,20 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutGrid, Sparkles, Archive, Settings, HelpCircle, Bug } from "lucide-react";
+import { LayoutGrid, Sparkles, Archive, Settings, HelpCircle, Bug, Eye } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 export function DashboardSidebar() {
     const pathname = usePathname();
     const t = useTranslations("Dashboard.nav");
 
-    const navItems = [
+    const navItems: { label: string; href: string; icon: React.ComponentType<{ className?: string }>; highlight?: boolean }[] = [
         { label: t("batches"), href: "/dashboard", icon: LayoutGrid },
+        { label: "Spy Mode", href: "/dashboard/spy", icon: Eye, highlight: true },
         { label: t("studio"), href: "/dashboard/studio", icon: Sparkles },
         { label: t("archives"), href: "/dashboard/archives", icon: Archive },
         { label: t("settings"), href: "/dashboard/settings", icon: Settings },
@@ -53,11 +55,18 @@ export function DashboardSidebar() {
                                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                                 isActive
                                     ? "bg-brand/10 text-brand"
-                                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    : item.highlight
+                                      ? "text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+                                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
                             )}
                         >
                             <item.icon className="h-4 w-4" />
                             {item.label}
+                            {item.highlight && !isActive && (
+                                <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold tracking-wide">
+                                    NEW
+                                </span>
+                            )}
                         </Link>
                     );
                 })}

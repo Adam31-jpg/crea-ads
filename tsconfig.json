@@ -33,5 +33,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "prisma.config.ts", "scripts/**", "src/scripts/**", "src/lib/supabase/**"]
 }

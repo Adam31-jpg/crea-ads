@@ -1,0 +1,742 @@
+{
+    "Landing": {
+        "nav": {
+            "signIn": "Sign in",
+            "getStarted": "Get started",
+            "help": "Help"
+        },
+        "hero": {
+            "beta": "Public Beta",
+            "h1": "The professional video factory. Redefined.",
+            "subtext": "Take absolute control of your art direction. Enter your data with surgical precision and generate hundreds of media assets of unmatched quality.",
+            "ctaPrimary": "Start now",
+            "ctaSecondary": "See the technology",
+            "dashboardPlaceholder": "Dashboard Interface Preview"
+        },
+        "socialProof": {
+            "title": "Powered by the infrastructure of giants."
+        },
+        "features": {
+            "c1Title": "Artisanal Control",
+            "c1Desc": "No blind imports. You decide every pixel and every variable manually for a perfect render.",
+            "c2Title": "Surgical Precision",
+            "c2Desc": "Every video is assembled frame by frame. Artisanal quality, powered at industrial scale.",
+            "c3Title": "Pay-as-you-go",
+            "c3Desc": "No toxic subscription. Buy Sparks, create your videos with total creative freedom."
+        },
+        "process": {
+            "title": "Your workflow, elevated.",
+            "step1Title": "Master your data",
+            "step1Desc": "Enter every variable manually to ensure flawless quality.",
+            "step2Title": "AWS Parallel Render",
+            "step2Desc": "Lumina deploys a fleet of instances to render your media simultaneously.",
+            "step3Title": "Retrieve excellence",
+            "step3Desc": "Your HD images and videos are ready and securely archived."
+        },
+        "testimonials": {
+            "title": "Loved by demanding creators.",
+            "feedback1": "\"The level of manual control Lumina offers ensures our brand guidelines are never compromised. It's masterful work.\"",
+            "name1": "Alexandre D.",
+            "role1": "Agency CEO",
+            "feedback2": "\"No more waiting hours. The precision and speed are remarkable.\"",
+            "name2": "Sarah K.",
+            "role2": "Media Buyer",
+            "feedback3": "\"We abandoned mass automation to return to manual control via Lumina. Quality skyrocketed.\"",
+            "name3": "Julien M.",
+            "role3": "Art Director"
+        },
+        "pricing": {
+            "title": "Gain speed, not just money.",
+            "note": "1 Spark = 1 Media (Image or Video). No subscription: pay only what you use. Your Sparks never expire.",
+            "badgePro": "MOST POPULAR",
+            "badgeAntiSub": "🏷️ ONE-TIME PAYMENT — NO SUBSCRIPTION",
+            "globalAdv1": "Non-expiring Sparks: Use them at your own pace.",
+            "globalAdv2": "Pro quality included in every generation.",
+            "globalAdv3": "Multi-Platform Formats (Meta, TikTok, Google Ads).",
+            "p1Title": "Starter",
+            "p1Price": "€15",
+            "p1Credits": "50 Sparks",
+            "p1Label": "€0.30 per creation",
+            "p1Btn": "Buy 50 Sparks",
+            "p1Adv1": "Full HD Render (1080p)",
+            "p1Adv2": "Watermark-free export",
+            "p1Adv3": "Secure archiving",
+            "p1Adv4": "Responsive support",
+            "p2Title": "Pro",
+            "p2Price": "€45",
+            "p2Credits": "200 Sparks",
+            "p2Label": "€0.22 per creation",
+            "p2Btn": "Buy 200 Sparks",
+            "p2Adv1": "Full HD Render (1080p)",
+            "p2Adv2": "Watermark-free export",
+            "p2Adv3": "Secure archiving",
+            "p2Adv4": "Responsive support",
+            "p2Stat": "Cut your production time by 50×. From idea to ad in 5 minutes.",
+            "p3Title": "Expert",
+            "p3Price": "€90",
+            "p3Credits": "500 Sparks",
+            "p3Label": "€0.18 per creation",
+            "p3Btn": "Buy 500 Sparks",
+            "p3Adv1": "Full HD Render (1080p)",
+            "p3Adv2": "Watermark-free export",
+            "p3Adv3": "Secure archiving",
+            "p3Adv4": "Priority support"
+        },
+        "comparison": {
+            "title": "The choice of raw performance.",
+            "colFeature": "Criterion",
+            "colCompetitor": "The Competition",
+            "colLumina": "Lumina",
+            "f1": "Cost per Media",
+            "c1": "€2.00+",
+            "l1": "€0.18 to €0.30",
+            "f2": "Commitment",
+            "c2": "Forced monthly subscription",
+            "l2": "One-time payment, no subscription (Sparks)",
+            "f3": "Editing",
+            "c3": "Locked content (.mp4)",
+            "l3": "Unlimited editing (Code-based)",
+            "f4": "Intelligence",
+            "c4": "Generic templates",
+            "l4": "Pro Art Director AI",
+            "f5": "Ownership",
+            "c5": "Limited usage",
+            "l5": "Full sovereignty",
+            "footer": "With others, a mistake on a video costs you a new generation. With Lumina, it costs you 3 seconds of free editing."
+        },
+        "faq": {
+            "title": "Frequently Asked Questions.",
+            "q1": "How does the Sparks system work?",
+            "a1": "Simple: 1 Spark equals 1 fully generated media, with no extra charges.",
+            "q2": "Is my data secure?",
+            "a2": "Absolutely. Your assets are stored on encrypted S3 storage and automatically deleted after 15 days.",
+            "q3": "Can I manually edit each asset?",
+            "a3": "Yes. Lumina prioritises manual control for total precision of your art direction.",
+            "q4": "What is the render time?",
+            "a4": "Thanks to our AWS Lambda architecture, most of your videos are generated in a few seconds, even for large batches.",
+            "q5": "Can I try for free?",
+            "a5": "Yes. You receive 5 free generations (Sparks) when you create your account to test the technology."
+        },
+        "cta": {
+            "title": "Ready to revolutionise your video production?",
+            "offer": "Try Lumina for free. 5 Sparks gifted on account creation.",
+            "btn": "Create my account for free"
+        },
+        "footer": {
+            "rights": "© 2026 Lumina. All rights reserved.",
+            "bug": "Report a bug"
+        }
+    },
+    "Dashboard": {
+        "title": "Hello, {name}",
+        "titleFallback": "Producer",
+        "subtitle": "Check your stats and manage your batch video generations.",
+        "newProject": "New Project",
+        "tabs": {
+            "active": "Active ({count})",
+            "archived": "Archived ({count})"
+        },
+        "empty": {
+            "activeTitle": "No active projects",
+            "activeDesc": "You have no projects currently generating or recently completed.",
+            "archivedTitle": "No archives",
+            "archivedDesc": "Your archived projects will appear here. They will be kept until their expiry date.",
+            "noBatchesTitle": "Create your first ad",
+            "noBatchesDesc": "Turn your products into compelling videos in minutes. Upload your images, choose a style, and let the AI generate surgical renders.",
+            "generateFirst": "Generate my first batch"
+        },
+        "insights": {
+            "timeSaved": "Time saved",
+            "mediaGenerated": "Media generated",
+            "successRate": "Success rate",
+            "producerStatus": "Producer Status",
+            "tiers": {
+                "beginner": "Beginner",
+                "expert": "Expert",
+                "factory": "Lumina Factory"
+            }
+        },
+        "topbar": {
+            "title": "Dashboard",
+            "tokens": "Sparks",
+            "generateMore": "Generate (+ Sparks)",
+            "logout": "Sign out",
+            "refill": {
+                "title": "Fuel your creativity",
+                "desc": "No subscription. 1 Spark = 1 Media. Your Sparks never expire.",
+                "starter": "Starter",
+                "pro": "Pro",
+                "popular": "RECOMMENDED",
+                "business": "Expert",
+                "credits": "{count} Sparks",
+                "btn": "Buy {count} Sparks",
+                "footer": "Secured by Lemon Squeezy — VAT billing included",
+                "unit": "{price} / spark",
+                "success": "✨ Congratulations! Your Sparks have been added to your wallet."
+            }
+        },
+        "settings": {
+            "title": "Settings",
+            "subtitle": "Manage your account, Sparks and billing.",
+            "wallet": {
+                "title": "Sparks Wallet",
+                "desc": "Your current balance for media generation.",
+                "tokens": "Sparks",
+                "refill": "Recharge",
+                "available": "{count} Sparks available",
+                "loading": "Loading..."
+            },
+            "billing": {
+                "title": "Purchase History",
+                "desc": "Access your secure space to download invoices and manage your transactions.",
+                "email": "Associated email address",
+                "loading": "Loading...",
+                "manage": "My Invoices & Payments",
+                "redirecting": "Redirecting to Lemon Squeezy..."
+            },
+            "danger": {
+                "title": "Danger Zone",
+                "desc": "Deleting your account is permanent. All your generated videos, assets stored on our servers (S3), and Sparks will be permanently deleted.",
+                "btn": "Delete my account",
+                "dialogTitle": "Are you absolutely sure?",
+                "dialogDesc1": "This action cannot be undone. This will permanently delete your account and remove your data from our servers.",
+                "dialogDesc2": "Please type <strong>{word}</strong> to confirm.",
+                "confirmWord": "DELETE",
+                "confirmBtn": "I understand the consequences, delete.",
+                "deleting": "Deleting..."
+            },
+            "toasts": {
+                "portalError": "Unable to access the billing portal.",
+                "connError": "Connection error.",
+                "delSuccess": "Account and data successfully deleted.",
+                "delError": "Error deleting account.",
+                "serverError": "Server connection error."
+            }
+        },
+        "batch": {
+            "smartLabels": {
+                "launching": "Launching Generation…",
+                "frames": "Processing frames…",
+                "uploading": "Finishing upload…",
+                "short": {
+                    "launching": "Launching",
+                    "frames": "Frames",
+                    "uploading": "Upload"
+                }
+            },
+            "status": {
+                "rendering": "Rendering",
+                "done": "Done",
+                "failed": "Failed",
+                "pending": "Pending",
+                "processing": "Processing",
+                "generating_assets": "Generating"
+            },
+            "card": {
+                "expiresIn": "Expires in {days} day(s)",
+                "expired": "Expired",
+                "assetsCount": "{count} assets",
+                "retryAll": "Retry all",
+                "retrying": "Retrying...",
+                "resync": "Re-Sync",
+                "archive": "Archive",
+                "unarchive": "Unarchive",
+                "delete": "Delete",
+                "downloadAll": "Download all",
+                "previewHint": "Click a cell to preview",
+                "renderingProgress": "Rendering in progress...",
+                "download": "Download",
+                "preview": "Preview",
+                "errorLog": "Error log",
+                "waiting": "Waiting to start..."
+            },
+            "cell": {
+                "stuck": "Stuck — click to retry this asset",
+                "error": "Click to see the error",
+                "preview": "Click to preview",
+                "retry": "Retry"
+            },
+            "dialogs": {
+                "previewVideo": "Video preview — starts without sound",
+                "previewImage": "Image preview",
+                "errorTitle": "Render failed",
+                "errorDesc": "A problem occurred while generating the asset.",
+                "errorHint": "If the problem persists, try reducing the duration or changing the output format, then resubmit from Studio.",
+                "deleteTitle": "Permanently delete batch?",
+                "deleteDesc": "This will permanently delete <strong>{name}</strong>, all {count} assets, and product images from storage. This action is irreversible.",
+                "cancel": "Cancel",
+                "deleteConfirm": "Delete everything",
+                "deleting": "Deleting..."
+            },
+            "toasts": {
+                "delFailed": "Batch deletion failed",
+                "delSuccess": "Batch and assets permanently deleted.",
+                "retryFailed": "Retry failed",
+                "retrySuccess": "Full batch resubmitted!",
+                "resyncSuccess": "Re-sync complete",
+                "resyncFailed": "Re-sync failed",
+                "noResync": "No active render tasks to sync.",
+                "jobRetryFailed": "Job retry failed",
+                "jobRetrySuccess": "Asset resubmitted!",
+                "actionFailed": "Action failed",
+                "archived": "Batch archived.",
+                "restored": "Batch restored."
+            }
+        },
+        "nav": {
+            "batches": "Batches",
+            "studio": "Studio",
+            "archives": "Archives",
+            "settings": "Settings",
+            "help": "Help",
+            "bug": "Report a bug"
+        },
+        "studio": {
+            "title": "Studio",
+            "subtitle": "Create a complete ad pack — {images} images + {videos} AI-boosted videos.",
+            "steps": {
+                "product": "Product Info",
+                "strategy": "AI Strategy",
+                "style": "Style & Theme",
+                "output": "Output Settings"
+            },
+            "form": {
+                "productInfo": "Product information",
+                "productName": "Product name *",
+                "productNamePlaceholder": "e.g. Midnight Elixir",
+                "tagline": "Tagline *",
+                "taglinePlaceholder": "e.g. Luxury Redefined",
+                "productImages": "Product images",
+                "batchName": "Batch name (optional)",
+                "batchNamePlaceholder": "e.g. Q1 Campaign",
+                "styleTheme": "Style & Theme",
+                "theme": "Theme",
+                "themePlaceholder": "Select a theme",
+                "accentColor": "Accent colour",
+                "outputSettings": "Output Settings",
+                "format": "Format",
+                "formatPlaceholder": "Select a format",
+                "duration": "Duration (seconds)",
+                "durationHint": "Optimised durations for Reels, TikTok, and Shorts (Max 15s).",
+                "durations": {
+                    "6": "6s",
+                    "10": "10s",
+                    "15": "15s"
+                }
+            },
+            "tips": {
+                "proTip": "Pro tip: Use transparent PNGs for optimal results"
+            },
+            "buttons": {
+                "back": "← Back",
+                "next": "Next →",
+                "generate": "Generate Pack ({images}+{videos}) →",
+                "regenerate": "Regenerate",
+                "openDirector": "Open AI Director",
+                "launching": "Launching {total} Renders…"
+            },
+            "strategy": {
+                "title": "AI Creative Strategy",
+                "emptyState": "Let our AI design {total} hard-hitting ad concepts for your product.",
+                "video": "🎬 Video",
+                "image": "🖼 Image"
+            },
+            "themes": {
+                "luxe-sombre": "Dark Luxe",
+                "nature": "Nature",
+                "neon": "Neon",
+                "pop": "Pop",
+                "studio-white": "Studio White",
+                "sunset": "Sunset"
+            },
+            "imageUploader": {
+                "errorType": "Please upload PNG, JPEG, or WebP images.",
+                "errorUpload": "Upload failed: {message}",
+                "success": "{count} image(s) uploaded",
+                "uploading": "Uploading...",
+                "clickToUpload": "Click to upload",
+                "dragDrop": " or drag and drop",
+                "files": "PNG, JPEG, or WebP (max 10MB)",
+                "proTip": "Pro tip:",
+                "proTipText": " Use transparent PNGs for optimal results.",
+                "hero": "HERO",
+                "setHero": "Set as Hero"
+            },
+            "intake": {
+                "title": "AI Creative Director",
+                "subtitle": "Our AI will design {total} concepts ({images} image(s)).",
+                "sections": {
+                    "a": "The Essence of the Product",
+                    "b": "Selling Pillars (USPs)",
+                    "c": "Audience & Identity",
+                    "brandOption": "Visual Identity (Optional)"
+                },
+                "form": {
+                    "langue": "Creative Language",
+                    "languePlaceholder": "Select a language",
+                    "languages": {
+                        "Français": "French",
+                        "English": "English",
+                        "Español": "Spanish",
+                        "Deutsch": "German",
+                        "Italiano": "Italian",
+                        "Russe": "Russian",
+                        "Arabe": "Arabic",
+                        "Chinois (Simplifié)": "Chinese (Simplified)",
+                        "Japonais": "Japanese",
+                        "Coréen": "Korean"
+                    },
+                    "productDesc": "Product Description",
+                    "productDescPlaceholder": "Describe your product in detail — features, benefits, what makes it unique…",
+                    "usps": "USPs (Selling points)",
+                    "uspPlaceholder": "USP {num} — e.g. \"Free worldwide shipping\"",
+                    "audience": "Target Audience",
+                    "audiencePlaceholder": "e.g. Women 25-40, urban, active on Instagram",
+                    "brandLogo": "Add your logo (PNG)",
+                    "brandLogoTooltip": "Leave empty for no overlay.",
+                    "logoError": "Invalid file format. Please import a PNG file.",
+                    "logoUploadFailed": "Logo upload failed.",
+                    "logoSuccess": "Logo imported successfully!",
+                    "quickImportTitle": "Quick Import (Optional)",
+                    "downloadSample": "Download template (.json / .csv)",
+                    "importExisting": "Import existing strategy (JSON/CSV)",
+                    "importSuccess": "File received (Processing coming soon)"
+                },
+                "buttons": {
+                    "generate": "Generate Strategy",
+                    "generating": "Generating Strategy…",
+                    "regenerate": "Regenerate",
+                    "confirm": "Confirm & Continue"
+                },
+                "toasts": {
+                    "generateFailed": "Strategy generation failed",
+                    "generateSuccess": "🧠 AI Strategy generated! Check your {total} concepts.",
+                    "connectFailed": "Failed to connect to AI"
+                },
+                "tooltips": {
+                    "cta": "Replaces the AI-generated default button with a conversion-focused text you define.",
+                    "productDesc": "Describe the physical product, its use, and its tone. This forms the foundation of the strategy.",
+                    "usps": "Unique selling points. They directly become subtitles and key components.",
+                    "audience": "Influences the tone of voice and aesthetic selection of the strategy.",
+                    "offer": "Adding an active offer automatically activates the scrolling banner or underlined text.",
+                    "socialProof": "Activates the social proof component (e.g. 5-star badge).",
+                    "ingredient": "Activates the circular Pure Ingredient badge to highlight elements.",
+                    "brandName": "Your brand name. Displayed in certain cases"
+                },
+                "expertTip": "💡 Expert tip: The more precise your descriptions and USPs, the more Lumina can generate a hard-hitting and visually coherent ad strategy.",
+                "optionalBoosts": "Optional Creative Boosts (Epic 6)",
+                "errors": {
+                    "unauthorized": "Unauthorised",
+                    "noApiKey": "API key not configured",
+                    "missingFields": "Required fields missing",
+                    "invalidFormat": "Invalid format returned by AI. {total} concepts expected.",
+                    "insufficient_funds": "Not enough Sparks for this generation ({cost} required)."
+                }
+            },
+            "formats": {
+                "story": {
+                    "label": "Story (1080×1920)",
+                    "desc": "Ideal for TikTok / Reels"
+                },
+                "square": {
+                    "label": "Square (1080×1080)",
+                    "desc": "Ideal for Instagram / Facebook Feed"
+                },
+                "landscape": {
+                    "label": "Landscape (1920×1080)",
+                    "desc": "Ideal for YouTube / Web"
+                }
+            },
+            "toasts": {
+                "batchFailed": "Batch creation failed",
+                "batchSuccess": "Batch created! Launching {total} renders…",
+                "renderFailed": "Render launch failed",
+                "renderSuccess": "🚀 {count} renders launched! Track progress on the Dashboard."
+            }
+        },
+        "duplicateModal": {
+            "title": "Duplicate & Edit",
+            "subtitle": "Simply adjust the theme or format of",
+            "subtitleSuffix": ". The rest of the AI strategy is preserved.",
+            "stepStyle": "Style & Theme",
+            "stepOutput": "Export",
+            "projectName": "Project name (Copy)",
+            "projectNamePlaceholder": "e.g. Winter Collection (Copy)",
+            "format": "Export format",
+            "duration": "Duration (Seconds)",
+            "back": "Back",
+            "next": "Next",
+            "generating": "Creating...",
+            "generate": "Generate ({images} images, {videos} videos)"
+        }
+    },
+    "Auth": {
+        "google_button": "Continue with Google",
+        "login": {
+            "title": "Welcome back",
+            "subtitle": "Sign in to your account to continue",
+            "email": "Email",
+            "emailPlaceholder": "you@company.com",
+            "password": "Password",
+            "passwordPlaceholder": "••••••••",
+            "signingIn": "Signing in...",
+            "signIn": "Sign In",
+            "noAccount": "Don't have an account?",
+            "signUpLink": "Sign up",
+            "errors": {
+                "invalidCredentials": "Invalid credentials",
+                "generic": "An error occurred during sign in"
+            }
+        },
+        "signup": {
+            "checkEmailTitle": "Check your email",
+            "checkEmailDesc": "We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account.",
+            "backToLogin": "Back to sign in",
+            "title": "Create your account",
+            "subtitle": "Start generating professional ad videos",
+            "email": "Email",
+            "emailPlaceholder": "you@company.com",
+            "password": "Password",
+            "passwordPlaceholder": "Min. 6 characters",
+            "creating": "Creating account...",
+            "create": "Create account",
+            "hasAccount": "Already have an account?",
+            "signInLink": "Sign in",
+            "toastSuccess": "Check your email for the confirmation link!"
+        }
+    },
+    "Api": {
+        "errors": {
+            "unauthorized": "Unauthorised",
+            "missingJobId": "Missing job ID",
+            "jobNotFound": "Job not found",
+            "missingBatchData": "Missing batch ID or input data",
+            "lambdaNotConfigured": "Lambda not configured",
+            "configError": "Configuration error",
+            "missingSignature": "Missing signature header",
+            "invalidSignature": "Invalid signature",
+            "internalError": "Internal server error",
+            "jobCompleted": "Job already completed",
+            "batchNotFoundForJob": "Batch not found for this job",
+            "noApiKey": "No API key",
+            "batchNotFound": "Batch not found",
+            "deleteFailed": "Delete failed: batch not found or permission denied",
+            "archiveFailed": "Archive failed: permission denied or batch not found",
+            "missingClientRef": "Missing client reference",
+            "dbUpdateFailed": "Database update failed",
+            "missingJobData": "Missing job ID, concept, or data"
+        }
+    },
+    "SpyMode": {
+        "navLabel": "Spy Mode",
+        "title": "Spy Mode",
+        "subtitle": "Analyze your competitors. Clone their best creatives.",
+        "step1": {
+            "title": "Analyze your store",
+            "placeholder": "https://your-store.com",
+            "analyzeBtn": "Analyze",
+            "analyzing": "Analyzing...",
+            "manualFallbackTitle": "Analysis failed",
+            "manualFallbackDesc": "We couldn't analyze this URL. Please describe your product manually.",
+            "confirmBtn": "Confirm",
+            "fields": {
+                "storeName": "Brand name",
+                "productCategory": "Product category",
+                "niche": "Niche",
+                "priceRange": "Price range",
+                "usps": "Selling points (USPs)",
+                "toneOfVoice": "Tone of voice",
+                "targetMarket": "Target market"
+            }
+        },
+        "step2": {
+            "title": "Your competitors",
+            "findBtn": "Find competitors",
+            "searching": "Searching...",
+            "noResults": "No competitors found. Try a broader category or add manually.",
+            "addManual": "Add a competitor",
+            "confirmBtn": "Confirm selection",
+            "reSearch": "Search again",
+            "relevance": "Relevance",
+            "viewOnMeta": "View on Meta Ad Library",
+            "viewOnTikTok": "View on TikTok Ad Library"
+        },
+        "step3": {
+            "title": "Creatives to clone",
+            "extractBtn": "Extract creatives",
+            "extracting": "Extracting...",
+            "generateSelected": "Generate selected",
+            "sparkCost": "{count} Spark(s)",
+            "totalCost": "Total cost: {count} Sparks",
+            "clonedFrom": "Cloned from {name}",
+            "marketTrend": "Market trend",
+            "comingSoon": "Coming soon",
+            "downloadScript": "Download UGC script",
+            "editPrompt": "Edit prompt",
+            "viewAds": "View ads →",
+            "types": {
+                "ugc_video": "UGC Video",
+                "flat_lay": "Flat-Lay",
+                "comparison": "Comparison",
+                "asmr": "ASMR",
+                "lifestyle": "Lifestyle",
+                "carousel": "Carousel",
+                "testimonial": "Testimonial"
+            },
+            "resolution": {
+                "label": "Resolution",
+                "1K": "1K (1 ⚡)",
+                "2K": "2K (2 ⚡)",
+                "4K": "4K (3 ⚡)"
+            }
+        },
+        "step4": {
+            "title": "Generating",
+            "uploadProduct": "Upload your product image",
+            "generating": "Generating...",
+            "retrying": "Retrying...",
+            "done": "Done!",
+            "failed": "Failed — Spark refunded",
+            "retry": "Retry"
+        },
+        "step5": {
+            "title": "Your creatives",
+            "download": "Download",
+            "downloadAll": "Download all (ZIP)",
+            "editInCanva": "Edit in Canva",
+            "regenerate": "Regenerate",
+            "editPrompt": "Edit prompt",
+            "basedOn": "Based on {competitor} — {type}",
+            "newSpy": "New analysis"
+        },
+        "errors": {
+            "fetchFailed": "Couldn't reach this URL. Check the address and try again.",
+            "analysisFailedRetry": "AI analysis failed. Please try again.",
+            "fillManually": "Please fill in the information manually.",
+            "searchFailed": "Search failed. Try again or add manually.",
+            "generationFailed": "Generation failed. Your Spark has been refunded.",
+            "insufficientSparks": "Not enough Sparks. Recharge to continue.",
+            "videoComingSoon": "Video generation coming soon!",
+            "serviceUnavailable": "Service temporarily unavailable. Please try again later."
+        }
+    },
+    "help": {
+        "nav": {
+            "backToHome": "Back to home",
+            "backToDashboard": "Back to Dashboard"
+        },
+        "search": {
+            "emptyState": "No results found.",
+            "emptyStateLink": "Report a bug or ask a question"
+        },
+        "title": "Lumina Help Centre",
+        "search_placeholder": "Search for an answer...",
+        "intro": {
+            "title": "The batch render revolution",
+            "description": "Lumina was designed for one mission: eliminate the bottleneck of video production. Where a creator spends 5 hours manually exporting 100 variants, Lumina does it in 150 seconds. Using the raw power of the AWS cloud, we offer a parallel render factory accessible without any technical skills."
+        },
+        "categories": {
+            "getting_started": {
+                "title": "Getting Started",
+                "q1": "What is Lumina?",
+                "a1": "Lumina is a batch video rendering SaaS. You enter your data, we generate hundreds of videos simultaneously via AWS Lambda.",
+                "q2": "How do I launch my first batch?",
+                "a2": "Fill in the required fields in your dashboard, preview a sample, and click 'Launch render'.",
+                "q3": "Is there a video limit per batch?",
+                "a3": "Currently, you can launch up to 10 videos per batch to guarantee maximum stability."
+            },
+            "tokens": {
+                "title": "Sparks & Pricing",
+                "q1": "How does the Sparks system work?",
+                "a1": "1 Spark = 1 successfully generated media. Sparks are only deducted when the render is complete.",
+                "q2": "Do my Sparks expire?",
+                "a2": "No. Once purchased, your Sparks remain on your Lumina account forever.",
+                "q3": "Can I get a Sparks refund?",
+                "a3": "Purchased Sparks are non-refundable, but they have no expiry date.",
+                "q4": "How do I get the 5 free Sparks?",
+                "a4": "They are automatically credited to your account upon registration so you can test the factory."
+            },
+            "technical": {
+                "title": "Technical & Rendering",
+                "q1": "What resolution are the videos?",
+                "a1": "We currently support Full HD (1080p) format. 4K support is coming soon for Business packs.",
+                "q2": "Why does rendering take around 1.5s?",
+                "a2": "This is the average processing time by our cloud architecture for each individual media within a batch.",
+                "q3": "What file formats can I download?",
+                "a3": "Your renders are available in MP4 (H.264) format for maximum compatibility across all social networks.",
+                "q4": "Why is there no CSV import?",
+                "a4": "Lumina prioritises manual control to guarantee surgical precision on every data entry."
+            },
+            "security": {
+                "title": "Security & Privacy",
+                "q1": "How long are my files kept?",
+                "a1": "Your renders are kept on our servers for 15 days. After that, they are permanently deleted.",
+                "q2": "Why a 15-day limit?",
+                "a2": "This allows us to keep costs low for you and guarantee maximum security by not storing your data indefinitely.",
+                "q3": "Is my data shared?",
+                "a3": "Never. Your assets and render data are encrypted and strictly reserved for your personal use."
+            },
+            "support": {
+                "title": "Account & Support",
+                "q1": "How do I delete my account?",
+                "a1": "In your settings, click 'Delete my account'. This will instantly erase all your data and S3 renders.",
+                "q2": "I found a bug, what should I do?",
+                "a2": "Use our dedicated 'Report a bug' page to send us the technical details."
+            }
+        },
+        "cta": {
+            "text": "Can't find your answer?",
+            "button": "Report a bug"
+        }
+    },
+    "bug": {
+        "title": "Report an issue",
+        "subtitle": "A problem? Our engineers analyse every report within 24h.",
+        "nav_back": "Back",
+        "form": {
+            "category": {
+                "label": "Nature of the issue",
+                "placeholder": "Select a category",
+                "rendu": "Rendering issue (Batch/Video)",
+                "paiement": "Payment or missing Sparks",
+                "affichage": "Display error (Interface)",
+                "autre": "Other / Suggestion"
+            },
+            "conditional": {
+                "stripe_id": "Stripe transaction ID (optional)",
+                "batch_id": "Batch ID or project name (Required)"
+            },
+            "urgency": {
+                "label": "Urgency level",
+                "low": "Minor — slight inconvenience",
+                "medium": "Major — feature slowed down",
+                "high": "Blocking — I can no longer work"
+            },
+            "subject": {
+                "label": "Report subject",
+                "placeholder": "e.g. The download button doesn't respond"
+            },
+            "description": {
+                "label": "Detailed description",
+                "placeholder": "Describe what happened..."
+            },
+            "steps": {
+                "label": "Steps to reproduce (Crucial)",
+                "placeholder": "1. I opened Studio... 2. I clicked on... 3. The error appeared..."
+            },
+            "upload": {
+                "label": "Screenshot or video of the bug",
+                "hint": "Drag and drop or click (Max 5MB)"
+            },
+            "submit": "Send report",
+            "success": "Report sent successfully! We'll get back to you soon.",
+            "errors": {
+                "required": "This field is required",
+                "batchRequired": "Batch ID is required for rendering issues",
+                "uploadError": "Upload error",
+                "fileTooLarge": "File exceeds 5MB",
+                "submitError": "An error occurred while sending"
+            }
+        }
+    }
+}
