@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { auth } from "@/lib/auth";
 import { BugClient } from "./bug-client";
 import { prisma } from "@/lib/prisma";
