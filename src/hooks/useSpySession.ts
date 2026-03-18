@@ -50,6 +50,9 @@ export interface CreativeBlueprint {
     sourceLabel: string;
     status: string;
     competitorName?: string; // Denormalized for display
+    sourceUrl?: string | null;
+    sourceImageUrl?: string | null;
+    sourcePlatform?: string | null;
 }
 
 export interface GeneratedJob {

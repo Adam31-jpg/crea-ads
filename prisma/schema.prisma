@@ -226,6 +226,9 @@ model CreativeBlueprint {
   aspectRatio          String   @default("9:16")
   sourceLabel          String   @default("market_trend") // cloned_from_competitor | market_trend
   status               String   @default("ready") // ready | generating | done | failed
+  sourceUrl            String?  // Direct URL to the original ad/post
+  sourceImageUrl       String?  // Direct URL to creative image (best-effort preview)
+  sourcePlatform       String?  // meta_ads | tiktok_ads | google_ads | instagram_organic | tiktok_organic | facebook_organic | youtube
   createdAt            DateTime @default(now())
 
   competitorAnalysis CompetitorAnalysis? @relation(fields: [competitorAnalysisId], references: [id], onDelete: SetNull)

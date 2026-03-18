@@ -657,7 +657,9 @@
                 "1K": "1K (1 ⚡)",
                 "2K": "2K (2 ⚡)",
                 "4K": "4K (3 ⚡)"
-            }
+            },
+            "reExtract": "Ré-extraire",
+            "description": "Description"
         },
         "step4": {
             "title": "Génération en cours",
@@ -691,7 +693,31 @@
         "newProject": "Nouvelle analyse",
         "emptyTitle": "Aucun projet",
         "emptyDesc": "Lancez votre première analyse pour espionner vos concurrents.",
-        "loadingProject": "Chargement du projet..."
+        "loadingProject": "Chargement du projet...",
+        "selected": "sélectionné(e)s",
+        "productImageReady": "Image produit prête",
+        "changeImage": "Changer",
+        "reExtract": "Ré-extraire",
+        "description": "Description",
+        "generateAll": "Tout générer",
+        "generateOne": "Générer (1 ⚡)",
+        "noProductWarning": "Aucune image produit — la créative sera générée sans votre produit (scène seule)",
+        "generatedWithoutProduct": "Généré sans image produit",
+        "expandAnalysis": "Élargir l analyse",
+        "expandSearching": "Recherche complémentaire...",
+        "expandDone": "nouvelles créatives trouvées",
+        "expandEmpty": "Analyse complète — aucun résultat supplémentaire",
+        "verifyingCompetitors": "Vérification des concurrents...",
+        "emptyResults": "Aucune créative générée pour l instant",
+        "emptyResultsHint": "Sélectionnez des créatives à gauche et cliquez sur Générer",
+        "basedOn": "Basé sur",
+        "viewOriginal": "Voir l original",
+        "noPreview": "Pas de preview disponible",
+        "productImageSection": "Image produit globale",
+        "productImageHint": "PNG, JPG jusqu à 10Mo — utilisée pour toutes les créatives sans image personnalisée",
+        "customImage": "Image personnalisée",
+        "useGlobal": "Utiliser l image globale",
+        "seconds": "secondes par créative"
     },
     "bug": {
         "title": "Signaler un dysfonctionnement",

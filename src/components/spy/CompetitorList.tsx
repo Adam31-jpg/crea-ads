@@ -269,14 +269,20 @@ function CompetitorCard({
                                     )}
                                 >
                                     <Zap className="h-2.5 w-2.5" />
-                                    {competitor.hasActiveAds ? "Ads actives ✓" : "Aucune pub détectée"}
+                                    {competitor.hasActiveAds ? "⚡ Ads détectées" : "Aucune pub confirmée"}
                                 </span>
                             )}
                         </div>
                         {competitor.competitorUrl && (
-                            <p className="text-xs text-muted-foreground truncate pl-6">
+                            <a
+                                href={competitor.competitorUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-amber-400/80 hover:text-amber-400 hover:underline truncate max-w-[300px] inline-block pl-6"
+                                onClick={(e) => e.stopPropagation()}
+                            >
                                 {competitor.competitorUrl}
-                            </p>
+                            </a>
                         )}
                         {competitor.positioning && (
                             <p className="text-xs text-muted-foreground mt-1 pl-6 line-clamp-2">

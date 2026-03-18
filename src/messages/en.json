@@ -588,7 +588,9 @@
                 "1K": "1K (1 ⚡)",
                 "2K": "2K (2 ⚡)",
                 "4K": "4K (3 ⚡)"
-            }
+            },
+            "reExtract": "Re-extract",
+            "description": "Description"
         },
         "step4": {
             "title": "Generating",
@@ -622,7 +624,31 @@
         "newProject": "New analysis",
         "emptyTitle": "No projects yet",
         "emptyDesc": "Launch your first analysis to spy on your competitors.",
-        "loadingProject": "Loading project..."
+        "loadingProject": "Loading project...",
+        "selected": "selected",
+        "productImageReady": "Product image ready",
+        "changeImage": "Change",
+        "reExtract": "Re-extract",
+        "description": "Description",
+        "generateAll": "Generate all",
+        "generateOne": "Generate (1 ⚡)",
+        "noProductWarning": "No product image — the creative will be generated without your product (scene only)",
+        "generatedWithoutProduct": "Generated without product image",
+        "expandAnalysis": "Expand analysis",
+        "expandSearching": "Searching for more...",
+        "expandDone": "new creatives found",
+        "expandEmpty": "Analysis complete — no additional results found",
+        "verifyingCompetitors": "Verifying competitors...",
+        "emptyResults": "No creatives generated yet",
+        "emptyResultsHint": "Select creatives on the left and click Generate",
+        "basedOn": "Based on",
+        "viewOriginal": "View original",
+        "noPreview": "No preview available",
+        "productImageSection": "Global product image",
+        "productImageHint": "PNG, JPG up to 10MB — used for all creatives without a custom image",
+        "customImage": "Custom image",
+        "useGlobal": "Use global image",
+        "seconds": "seconds per creative"
     },
     "help": {
         "nav": {

@@ -39,40 +39,49 @@ export async function POST(req: NextRequest) {
         const storeAnalysis = await prisma.storeAnalysis.findFirst({
             where: { id: storeAnalysisId, userId },
         });
-
-        if (!storeAnalysis) {
-            return NextResponse.json({ error: "not_found" }, { status: 404 });
-        }
+        if (!storeAnalysis) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
         const competitors = await prisma.competitorAnalysis.findMany({
             where: { id: { in: competitorIds }, storeAnalysisId },
         });
-
         const geminiKey = process.env.GEMINI_API_KEY;
-        if (!geminiKey) {
-            return NextResponse.json({ error: "configuration_error" }, { status: 500 });
-        }
+        if (!geminiKey) return NextResponse.json({ error: "configuration_error" }, { status: 500 });
 
         const ai = new GoogleGenAI({ apiKey: geminiKey });
         const allBlueprints: object[] = [];
 
         for (const competitor of competitors) {
-            const prompt = `You are Lumina's Ad Creative Analyst. Research the advertising strategy of ${competitor.competitorName} (${competitor.competitorUrl ?? "unknown URL"}).
-Search for their Facebook ads, Instagram ads, TikTok content, and marketing campaigns.
-For each identifiable ad creative pattern, generate a reproduction blueprint:
-- creativeName: string (e.g., "POV Energy Replacement", "Flat-Lay Premium Product")
-- creativeType: "ugc_video" | "flat_lay" | "comparison" | "asmr" | "lifestyle" | "carousel" | "testimonial"
-- description: string (detailed description of the original creative — format, angle, hook, visual style, what makes it effective)
-- estimatedPerformance: { hookRate: string, engagement: string, format: string }
-- reproductionPrompt: string (a detailed Fal.ai image generation prompt that would recreate a similar creative for the user's product: ${storeAnalysis.storeName ?? "the brand"}. Include the product category, visual style, lighting, composition, and mood. The prompt must describe the SCENE AND ENVIRONMENT, never mention "a product" — the product image is provided separately via image_urls.)
-- aspectRatio: "9:16" | "1:1" | "16:9" | "4:5"
-- sourceLabel: "cloned_from_competitor"
-If creativeType is "ugc_video", also include:
-- ugcScript: string (a complete UGC video script with HOOK (0-3s), BODY (3-18s), CTA (18-22s), including camera directions and text overlays)
-Generate 2-4 creatives per competitor. Return ONLY a JSON array.
-If you cannot find specific ads for this competitor, generate creatives based on what typically performs in ${storeAnalysis.niche ?? "this niche"}. Set sourceLabel to "market_trend" for these.
-
-LANGUAGE REQUIREMENT: All reproductionPrompt marketing copy (headlines, CTAs, overlay text), ugcScript content (hook, body, CTA), and creativeName must be generated in ${langLabel}. The scene description in reproductionPrompt (lighting, composition, environment) stays in English for the image model, but any text that would appear ON the creative must be in ${langLabel}.`;
+            const lines = [
+                `You are Lumina's Ad Creative Analyst. Research ALL advertising and marketing content of ${competitor.competitorName} (${competitor.competitorUrl ?? "search for their website"}).`,
+                "",
+                "SEARCH SCOPE — analyze ALL channels:",
+                "1. Meta Ads: Search Meta Ad Library for active/recent ads",
+                "2. TikTok Ads: Search TikTok ad campaigns and promoted content",
+                "3. Google Ads: Display ads, Shopping ads, search ads",
+                "4. Instagram organic: Top-performing posts",
+                "5. TikTok organic: Viral videos",
+                "6. Facebook posts: Top page posts",
+                "7. YouTube: Video ads or product reviews",
+                "",
+                "For each creative pattern return ALL fields:",
+                "- creativeName: string",
+                '- creativeType: "ugc_video" | "flat_lay" | "comparison" | "asmr" | "lifestyle" | "carousel" | "testimonial"',
+                "- description: string (what makes it effective, visual style, hook)",
+                '- estimatedPerformance: { hookRate: string, engagement: string, format: string }',
+                `- reproductionPrompt: string (Fal.ai prompt — describe SCENE/ENVIRONMENT only for ${storeAnalysis.storeName ?? "the brand"}, never mention "a product" directly)`,
+                '- aspectRatio: "9:16" | "1:1" | "16:9" | "4:5"',
+                '- sourceLabel: "cloned_from_competitor"',
+                '- sourceUrl: string | null (DIRECT URL to the specific post/ad e.g. "https://www.facebook.com/ads/library/?id=123" or "https://www.instagram.com/p/ABC/". null if not found)',
+                "- sourceImageUrl: string | null (direct URL to image/thumbnail. null if not found)",
+                '- sourcePlatform: "meta_ads" | "tiktok_ads" | "google_ads" | "instagram_organic" | "tiktok_organic" | "facebook_organic" | "youtube"',
+                "",
+                "For ugc_video also include ugcScript: string (HOOK 0-3s, BODY 3-18s, CTA 18-22s with camera directions)",
+                "",
+                "Generate 2-4 creatives. Return ONLY a JSON array. If no specific ads found, generate from niche trends, set sourceLabel to \"market_trend\" and sourceUrl to null.",
+                "",
+                `LANGUAGE: Marketing copy (headlines, CTAs, overlay text), ugcScript, creativeName in ${langLabel}. Scene descriptions in English.`,
+            ];
+            const prompt = lines.join("\n");
 
             let blueprintsRaw: Array<{
                 creativeName: string;
@@ -83,22 +92,27 @@ LANGUAGE REQUIREMENT: All reproductionPrompt marketing copy (headlines, CTAs, ov
                 ugcScript?: string;
                 aspectRatio?: string;
                 sourceLabel?: string;
+                sourceUrl?: string | null;
+                sourceImageUrl?: string | null;
+                sourcePlatform?: string | null;
             }> = [];
 
             try {
                 const response = await ai.models.generateContent({
                     model: "gemini-2.5-flash",
                     contents: [{ role: "user", parts: [{ text: prompt }] }],
-                    config: {
-                        tools: [{ googleSearch: {} }],
-                    },
+                    config: { tools: [{ googleSearch: {} }] },
                 });
                 const text = response.text ?? "[]";
-                const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+                const cleaned = text
+                    .replace(/```json\n?/g, "")
+                    .replace(/```\n?/g, "")
+                    .trim();
                 blueprintsRaw = JSON.parse(cleaned);
             } catch {
-                // Log failure but continue with remaining competitors
-                console.error(`[spy/extract-creatives] Failed for competitor ${competitor.competitorName}`);
+                console.error(
+                    `[spy/extract-creatives] Failed for competitor ${competitor.competitorName}`,
+                );
                 broadcast(userId, {
                     type: "creative_extraction_failed",
                     competitorId: competitor.id,
@@ -125,6 +139,9 @@ LANGUAGE REQUIREMENT: All reproductionPrompt marketing copy (headlines, CTAs, ov
                             ugcScript: b.ugcScript ?? null,
                             aspectRatio: b.aspectRatio ?? "9:16",
                             sourceLabel: b.sourceLabel ?? "cloned_from_competitor",
+                            sourceUrl: b.sourceUrl ?? null,
+                            sourceImageUrl: b.sourceImageUrl ?? null,
+                            sourcePlatform: b.sourcePlatform ?? null,
                             status: "ready",
                         },
                     }),
@@ -132,7 +149,6 @@ LANGUAGE REQUIREMENT: All reproductionPrompt marketing copy (headlines, CTAs, ov
             );
 
             allBlueprints.push(...created);
-
             broadcast(userId, {
                 type: "creatives_extracted",
                 competitorId: competitor.id,
@@ -141,10 +157,7 @@ LANGUAGE REQUIREMENT: All reproductionPrompt marketing copy (headlines, CTAs, ov
             });
         }
 
-        return NextResponse.json({
-            status: "done",
-            blueprints: allBlueprints,
-        });
+        return NextResponse.json({ status: "done", blueprints: allBlueprints });
     } catch (err) {
         console.error("[spy/extract-creatives]", err);
         return NextResponse.json({ status: "failed", error: "internal_error" }, { status: 500 });
