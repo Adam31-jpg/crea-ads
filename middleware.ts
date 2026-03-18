@@ -1,29 +1,23 @@
-/**
- * middleware.ts — Edge Runtime compatible.
- *
- * Uses NextAuth initialised with the lean authConfig (no Prisma, no bcrypt).
- * Route protection logic lives in authConfig.callbacks.authorized().
- *
- * See: https://authjs.dev/guides/edge-compatibility
- */
 import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth.config";
 
+/**
+ * middleware.ts — Edge Runtime compatible.
+ *
+ * next-intl v4 is used in "without routing" mode — locale is resolved
+ * server-side via cookie/Accept-Language in src/i18n/request.ts.
+ * No next-intl middleware is required here.
+ *
+ * Auth protection is handled by authConfig.callbacks.authorized().
+ * authConfig has zero Node.js-only imports, making it Edge-safe.
+ */
 export const { auth: middleware } = NextAuth(authConfig);
 export default middleware;
 
 export const config = {
     matcher: [
-        /*
-         * Match all routes EXCEPT:
-         *  - _next/static (static files)
-         *  - _next/image (image optimisation)
-         *  - favicon.ico
-         *  - api/auth/* (NextAuth internal endpoints — must stay public)
-         *  - login / signup pages
-         *  - Public marketing pages (root "/")
-         */
-        "/((?!api/auth|login|signup|_next/static|_next/image|favicon.ico).*)",
+        // Skip Next.js internals, static files, auth routes, and public pages.
+        // The dot in favicon.ico must be escaped for the Edge regex compiler.
+        "/((?!api/auth|_next/static|_next/image|favicon\\.ico|login|signup).*)",
     ],
 };
-
