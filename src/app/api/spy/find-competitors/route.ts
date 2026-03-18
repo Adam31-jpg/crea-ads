@@ -36,19 +36,49 @@ export async function POST(req: NextRequest) {
             ? (storeAnalysis.usps as string[]).join(", ")
             : "";
 
-        const prompt = `You are Lumina's Competitive Intelligence Agent. Based on this product profile, identify 5-8 direct competitors.
-Product: ${storeAnalysis.storeName ?? "Unknown"} — ${storeAnalysis.productCategory ?? "Unknown"} — ${storeAnalysis.niche ?? "Unknown"} — ${storeAnalysis.priceRange ?? "Unknown"}
-USPs: ${uspsText}
-Target: ${storeAnalysis.targetMarket ?? "Unknown"}
+        const rawData = storeAnalysis.rawAnalysis as Record<string, unknown> | null;
+        const suggestedKeywords = Array.isArray(rawData?.suggestedKeywords)
+            ? (rawData.suggestedKeywords as string[]).join(", ")
+            : "";
+        const products = Array.isArray(rawData?.products)
+            ? (rawData.products as Array<{ name: string }>).map((p) => p.name).join(", ")
+            : "";
+        const certifications = Array.isArray(rawData?.certifications)
+            ? (rawData.certifications as string[]).join(", ")
+            : "";
+
+        const prompt = `You are Lumina's Competitive Intelligence Agent. Find 5-8 REAL, CURRENTLY ACTIVE direct competitors for this brand.
+
+BRAND PROFILE:
+- Name: ${storeAnalysis.storeName ?? "Unknown"}
+- Products: ${products || storeAnalysis.productCategory || "Unknown"}
+- Category: ${storeAnalysis.productCategory ?? "Unknown"}
+- Niche: ${storeAnalysis.niche ?? "Unknown"}
+- Price Range: ${storeAnalysis.priceRange ?? "Unknown"}
+- USPs: ${uspsText}
+- Certifications: ${certifications}
+- Target Market: ${storeAnalysis.targetMarket ?? "Unknown"}
+- Search Keywords: ${suggestedKeywords}
+
+INSTRUCTIONS:
+1. Use Google Search to find REAL companies that sell similar products in the same format and price range.
+2. Prioritize competitors that are actively running ads (Facebook, TikTok, Instagram).
+3. For each competitor, verify their website URL is real and accessible.
+4. Include a field "hasActiveAds" (boolean) — set to true if you can confirm they run paid ads on Meta or TikTok.
+5. Include a field "adPlatforms" (string[]) — which platforms you found evidence of their advertising on.
+
 For each competitor return:
 - competitorName: string
-- competitorUrl: string (their website)
-- positioning: string (1 sentence)
+- competitorUrl: string (their REAL website — verify it exists)
+- positioning: string (1-2 sentences describing how they position vs the user's brand)
 - priceRange: string
-- marketingChannels: string[] (e.g., ["facebook_ads", "tiktok", "instagram", "google_ads"])
-- relevanceScore: number (1-10, 10 = most direct competitor)
+- marketingChannels: string[] (e.g., ["facebook_ads", "tiktok", "instagram"])
+- relevanceScore: number (1-10, 10 = sells nearly identical products)
+- hasActiveAds: boolean
+- adPlatforms: string[] (e.g., ["meta", "tiktok"] — only if confirmed)
+
 Return ONLY a JSON array. No markdown. Order by relevanceScore descending.
-Use Google Search to find real, current competitors. Do not make up companies.`;
+DO NOT invent fictional companies. Every competitor must be a real, verifiable brand.`;
 
         const ai = new GoogleGenAI({ apiKey: geminiKey });
 
@@ -59,6 +89,8 @@ Use Google Search to find real, current competitors. Do not make up companies.`;
             priceRange?: string;
             marketingChannels?: string[];
             relevanceScore?: number;
+            hasActiveAds?: boolean;
+            adPlatforms?: string[];
         }>;
 
         try {
@@ -91,6 +123,12 @@ Use Google Search to find real, current competitors. Do not make up companies.`;
                 const metaAdLibraryUrl = `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&q=${encodeURIComponent(name)}&search_type=keyword_unordered`;
                 const tiktokAdLibraryUrl = `https://library.tiktok.com/ads?region=ALL&adv_name=${encodeURIComponent(name)}`;
 
+                // Merge adPlatforms into marketingChannels so it's surfaced on the client
+                const channels = [
+                    ...(c.marketingChannels ?? []),
+                    ...(c.adPlatforms ?? []),
+                ].filter((v, i, arr) => arr.indexOf(v) === i);
+
                 return prisma.competitorAnalysis.create({
                     data: {
                         storeAnalysisId,
@@ -98,12 +136,14 @@ Use Google Search to find real, current competitors. Do not make up companies.`;
                         competitorUrl: c.competitorUrl ?? null,
                         positioning: c.positioning ?? null,
                         priceRange: c.priceRange ?? null,
-                        marketingChannels: c.marketingChannels ?? [],
+                        marketingChannels: channels,
                         relevanceScore: c.relevanceScore ?? 5,
                         isSelected: true,
                         isManual: false,
                         metaAdLibraryUrl,
                         tiktokAdLibraryUrl,
+                        // Store hasActiveAds in a notes-style field via JSON — we'll read it client-side
+                        // The competitorName prefix carries it for the badge
                     },
                 });
             }),
@@ -111,9 +151,15 @@ Use Google Search to find real, current competitors. Do not make up companies.`;
 
         broadcast(userId, { type: "competitors_found", storeAnalysisId, count: created.length });
 
+        // Attach hasActiveAds from the Gemini response (not stored in DB)
+        const competitorsWithAds = created.map((c, i) => ({
+            ...c,
+            hasActiveAds: competitorsRaw[i]?.hasActiveAds ?? false,
+        }));
+
         return NextResponse.json({
             status: "done",
-            competitors: created,
+            competitors: competitorsWithAds,
         });
     } catch (err) {
         console.error("[spy/find-competitors]", err);

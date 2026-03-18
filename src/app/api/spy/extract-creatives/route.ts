@@ -14,10 +14,20 @@ export async function POST(req: NextRequest) {
         const userId = session.user.id;
 
         const body = await req.json();
-        const { storeAnalysisId, competitorIds } = body as {
+        const { storeAnalysisId, competitorIds, targetLanguage = "fr" } = body as {
             storeAnalysisId: string;
             competitorIds: string[];
+            targetLanguage?: string;
         };
+
+        const langNames: Record<string, string> = {
+            fr: "French",
+            en: "English",
+            de: "German",
+            es: "Spanish",
+            it: "Italian",
+        };
+        const langLabel = langNames[targetLanguage] ?? "French";
 
         if (!storeAnalysisId || !Array.isArray(competitorIds) || competitorIds.length === 0) {
             return NextResponse.json(
@@ -60,7 +70,9 @@ For each identifiable ad creative pattern, generate a reproduction blueprint:
 If creativeType is "ugc_video", also include:
 - ugcScript: string (a complete UGC video script with HOOK (0-3s), BODY (3-18s), CTA (18-22s), including camera directions and text overlays)
 Generate 2-4 creatives per competitor. Return ONLY a JSON array.
-If you cannot find specific ads for this competitor, generate creatives based on what typically performs in ${storeAnalysis.niche ?? "this niche"}. Set sourceLabel to "market_trend" for these.`;
+If you cannot find specific ads for this competitor, generate creatives based on what typically performs in ${storeAnalysis.niche ?? "this niche"}. Set sourceLabel to "market_trend" for these.
+
+LANGUAGE REQUIREMENT: All reproductionPrompt marketing copy (headlines, CTAs, overlay text), ugcScript content (hook, body, CTA), and creativeName must be generated in ${langLabel}. The scene description in reproductionPrompt (lighting, composition, environment) stays in English for the image model, but any text that would appear ON the creative must be in ${langLabel}.`;
 
             let blueprintsRaw: Array<{
                 creativeName: string;

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Search, AlertTriangle } from "lucide-react";
+import { CardSkeleton, ProgressMessage, IndeterminateBar } from "./SpySkeleton";
 import { toast } from "sonner";
 import { useSpySession, type StoreAnalysis } from "@/hooks/useSpySession";
 
@@ -107,6 +108,28 @@ export function StoreAnalysisForm({ onConfirm }: StoreAnalysisFormProps) {
         } catch {
             toast.error("Failed to save. Please try again.");
         }
+    }
+
+    // Loading skeleton while analyzing
+    if (isAnalyzing) {
+        return (
+            <Card className="border-border bg-card">
+                <CardContent className="pt-6 space-y-4">
+                    <IndeterminateBar />
+                    <ProgressMessage
+                        messages={[
+                            "Analyzing your store...",
+                            "Extracting product data...",
+                            "Identifying brand positioning...",
+                            "Reading pricing & USPs...",
+                            "Almost done...",
+                        ]}
+                    />
+                    <CardSkeleton count={1} />
+                    <CardSkeleton count={1} />
+                </CardContent>
+            </Card>
+        );
     }
 
     // Editable review mode — analysis done

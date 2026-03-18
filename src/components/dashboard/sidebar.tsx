@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutGrid, Sparkles, Archive, Settings, HelpCircle, Bug, Eye } from "lucide-react";
+import { LayoutGrid, Archive, Settings, HelpCircle, Bug, Eye } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 export function DashboardSidebar() {
@@ -15,7 +15,6 @@ export function DashboardSidebar() {
     const navItems: { label: string; href: string; icon: React.ComponentType<{ className?: string }>; highlight?: boolean }[] = [
         { label: t("batches"), href: "/dashboard", icon: LayoutGrid },
         { label: "Spy Mode", href: "/dashboard/spy", icon: Eye, highlight: true },
-        { label: t("studio"), href: "/dashboard/studio", icon: Sparkles },
         { label: t("archives"), href: "/dashboard/archives", icon: Archive },
         { label: t("settings"), href: "/dashboard/settings", icon: Settings },
     ];

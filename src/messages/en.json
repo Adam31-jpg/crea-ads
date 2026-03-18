@@ -618,7 +618,11 @@
             "insufficientSparks": "Not enough Sparks. Recharge to continue.",
             "videoComingSoon": "Video generation coming soon!",
             "serviceUnavailable": "Service temporarily unavailable. Please try again later."
-        }
+        },
+        "newProject": "New analysis",
+        "emptyTitle": "No projects yet",
+        "emptyDesc": "Launch your first analysis to spy on your competitors.",
+        "loadingProject": "Loading project..."
     },
     "help": {
         "nav": {

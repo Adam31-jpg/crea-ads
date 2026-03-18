@@ -5,7 +5,8 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, Plus, RefreshCw, Star, Check } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Star, Check, Zap } from "lucide-react";
+import { CardSkeleton, ProgressMessage } from "./SpySkeleton";
 import { toast } from "sonner";
 import { useSpySession, type Competitor } from "@/hooks/useSpySession";
 import { AdPreviewCard } from "./AdPreviewCard";
@@ -94,22 +95,34 @@ export function CompetitorList({ onConfirm }: CompetitorListProps) {
 
     const selectedCount = competitors.filter((c) => c.isSelected).length;
 
-    if (competitors.length === 0 && !isSearching) {
+    // Loading state — show skeletons
+    if (isSearching) {
+        return (
+            <div className="space-y-4">
+                <ProgressMessage
+                    messages={[
+                        "Searching for competitors...",
+                        "Checking Meta Ad Library...",
+                        "Verifying TikTok activity...",
+                        "Ranking by relevance...",
+                    ]}
+                />
+                <CardSkeleton count={4} />
+            </div>
+        );
+    }
+
+    if (competitors.length === 0) {
         return (
             <Card className="border-border bg-card">
                 <CardContent className="pt-6 flex flex-col items-center gap-4 text-center">
                     <p className="text-muted-foreground text-sm">{t("noResults")}</p>
                     <Button
                         onClick={handleSearch}
-                        disabled={isSearching}
                         className="bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-black border-none gap-2"
                     >
-                        {isSearching ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <RefreshCw className="h-4 w-4" />
-                        )}
-                        {isSearching ? t("searching") : t("findBtn")}
+                        <RefreshCw className="h-4 w-4" />
+                        {t("findBtn")}
                     </Button>
                 </CardContent>
             </Card>
@@ -211,7 +224,7 @@ function CompetitorCard({
     onToggle,
     t,
 }: {
-    competitor: Competitor;
+    competitor: Competitor & { hasActiveAds?: boolean };
     onToggle: () => void;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     t: any;
@@ -244,6 +257,19 @@ function CompetitorCard({
                             {competitor.isManual && (
                                 <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
                                     Manual
+                                </span>
+                            )}
+                            {"hasActiveAds" in competitor && (
+                                <span
+                                    className={cn(
+                                        "text-xs px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0",
+                                        competitor.hasActiveAds
+                                            ? "bg-emerald-500/10 text-emerald-400"
+                                            : "bg-muted text-muted-foreground",
+                                    )}
+                                >
+                                    <Zap className="h-2.5 w-2.5" />
+                                    {competitor.hasActiveAds ? "Ads actives ✓" : "Aucune pub détectée"}
                                 </span>
                             )}
                         </div>

@@ -122,6 +122,19 @@ export function DashboardTopbar({ user }: TopbarProps) {
         await signOut({ callbackUrl: "/" });
     };
 
+    // Read current locale from cookie (client-side)
+    const [currentLocale, setCurrentLocale] = useState<"fr" | "en">(() => {
+        if (typeof window === "undefined") return "fr";
+        const match = document.cookie.match(/NEXT_LOCALE=([^;]+)/);
+        return (match?.[1] as "fr" | "en") ?? "fr";
+    });
+
+    function switchLocale(locale: "fr" | "en") {
+        document.cookie = `NEXT_LOCALE=${locale};path=/;max-age=31536000`;
+        setCurrentLocale(locale);
+        window.location.reload();
+    }
+
     return (
         <header className="flex items-center justify-between h-16 px-6 lg:px-8 border-b border-border bg-background">
             <div>
@@ -188,6 +201,23 @@ export function DashboardTopbar({ user }: TopbarProps) {
                         {user?.email?.charAt(0).toUpperCase() || "U"}
                     </div>
                 )}
+
+                {/* Language switcher */}
+                <div className="flex rounded-md border border-border overflow-hidden text-xs hidden sm:flex">
+                    {(["fr", "en"] as const).map((lang) => (
+                        <button
+                            key={lang}
+                            onClick={() => switchLocale(lang)}
+                            className={`px-2.5 py-1.5 transition-colors font-medium ${
+                                currentLocale === lang
+                                    ? "bg-amber-500/20 text-amber-400"
+                                    : "text-muted-foreground hover:text-foreground"
+                            }`}
+                        >
+                            {lang === "fr" ? "🇫🇷 FR" : "🇬🇧 EN"}
+                        </button>
+                    ))}
+                </div>
 
                 <Button variant="ghost" size="sm" onClick={handleLogout} className="hidden sm:inline-flex">
                     {t("logout")}

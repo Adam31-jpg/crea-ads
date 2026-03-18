@@ -8,13 +8,17 @@ async function resolveLocale(): Promise<Locale> {
     // 1. Check cookie (explicit user preference)
     const cookieStore = await cookies();
     const cookieLocale = cookieStore.get('NEXT_LOCALE')?.value;
-    if (cookieLocale && SUPPORTED_LOCALES.includes(cookieLocale as Locale)) {
-        return cookieLocale as Locale;
-    }
 
     // 2. Check Accept-Language header
     const headerStore = await headers();
     const acceptLanguage = headerStore.get('accept-language') ?? '';
+
+    console.log('[i18n] Cookie locale:', cookieLocale, '| Accept-Language:', acceptLanguage.slice(0, 50));
+
+    if (cookieLocale && SUPPORTED_LOCALES.includes(cookieLocale as Locale)) {
+        return cookieLocale as Locale;
+    }
+
     const preferred = acceptLanguage
         .split(',')
         .map((lang: string) => lang.split(';')[0].trim().toLowerCase().slice(0, 2))

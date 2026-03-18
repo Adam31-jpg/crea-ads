@@ -687,7 +687,11 @@
             "insufficientSparks": "Sparks insuffisants. Rechargez pour continuer.",
             "videoComingSoon": "La génération vidéo arrive bientôt !",
             "serviceUnavailable": "Service temporairement indisponible. Réessayez plus tard."
-        }
+        },
+        "newProject": "Nouvelle analyse",
+        "emptyTitle": "Aucun projet",
+        "emptyDesc": "Lancez votre première analyse pour espionner vos concurrents.",
+        "loadingProject": "Chargement du projet..."
     },
     "bug": {
         "title": "Signaler un dysfonctionnement",
