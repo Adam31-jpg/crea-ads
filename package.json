@@ -12,7 +12,8 @@
     "batch": "npx tsx src/scripts/render-all.ts",
     "test:supabase": "npx tsx src/scripts/test-supabase.ts",
     "deploy": "npx tsx src/scripts/deploy-lambda.ts",
-    "deploy:site": "npx tsx src/scripts/deploy-site-only.ts"
+    "deploy:site": "npx tsx src/scripts/deploy-site-only.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
