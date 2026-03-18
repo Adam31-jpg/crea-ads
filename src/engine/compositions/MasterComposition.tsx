@@ -13,6 +13,7 @@ import { ArrowLayer } from '../components/ArrowLayer';
 import { LogoBar } from '../components/LogoBar';
 import { ScrimLayer } from '../components/ScrimLayer';
 import { ComponentRegistry } from '../library/index';
+import { DraggableLayer } from '@/components/studio/DraggableLayer';
 import { TemplateLuxeLoly } from '../library/TemplateLuxeLoly';
 import { TemplateOverheadMinimal } from '../library/TemplateOverheadMinimal';
 import { TemplateCircleCenter } from '../library/TemplateCircleCenter';
@@ -331,23 +332,26 @@ export const MasterComposition: React.FC<Props> = (props) => {
                                                             );
 
                                                             return (
-                                                                <div key={el.id} style={{
-                                                                    position: 'absolute',
-                                                                    left: `${el.x}%`,
-                                                                    top: `${el.y}%`,
-                                                                    transform: el.align === 'center' ? 'translateX(-50%)' : 'none',
-                                                                    width: el.width ? `${el.width}%` : 'auto',
-                                                                    textAlign: el.align,
-                                                                    fontFamily,
-                                                                    fontSize,
-                                                                    color,
-                                                                    fontWeight,
-                                                                    textTransform: textTransform as React.CSSProperties['textTransform'],
-                                                                    letterSpacing: isHeadline ? '0.05em' : 'normal',
-                                                                    lineHeight: 1.1,
-                                                                    whiteSpace: 'pre-wrap',
-                                                                    ...containerStyle,
-                                                                }}>
+                                                                <DraggableLayer
+                                                                    key={el.id}
+                                                                    id={el.id}
+                                                                    initialX={el.x}
+                                                                    initialY={el.y}
+                                                                    style={{
+                                                                        transform: el.align === 'center' ? 'translateX(-50%)' : 'none',
+                                                                        width: el.width ? `${el.width}%` : 'auto',
+                                                                        textAlign: el.align,
+                                                                        fontFamily,
+                                                                        fontSize,
+                                                                        color,
+                                                                        fontWeight,
+                                                                        textTransform: textTransform as React.CSSProperties['textTransform'],
+                                                                        letterSpacing: isHeadline ? '0.05em' : 'normal',
+                                                                        lineHeight: 1.1,
+                                                                        whiteSpace: 'pre-wrap',
+                                                                        ...containerStyle,
+                                                                    }}
+                                                                >
                                                                     {el.type === 'cta' ? (
                                                                         <div style={{
                                                                             backgroundColor: colors.primary,
@@ -364,37 +368,53 @@ export const MasterComposition: React.FC<Props> = (props) => {
                                                                     ) : (
                                                                         <span style={textStyle}>{el.content}</span>
                                                                     )}
-                                                                </div>
+                                                                </DraggableLayer>
                                                             );
                                                         })
                                                     ) : null /* empty elements = intentional editorial/cinematic canvas */}
 
                                                     {/* ── Social proof stars (★★★★★) from layout_config ── */}
                                                     {layout_config?.social_proof && (
-                                                        <div style={{
-                                                            position: 'absolute',
-                                                            left: `${layout_config.social_proof.x}%`,
-                                                            top: `${layout_config.social_proof.y}%`,
-                                                            transform: `scale(${layout_config.social_proof.scale})`,
-                                                            transformOrigin: 'top left',
-                                                            zIndex: 22,
-                                                            color: colors.accent,
-                                                            fontSize: 28,
-                                                            display: 'flex',
-                                                            gap: 3,
-                                                            filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.8))',
-                                                        }}>
+                                                        <DraggableLayer
+                                                            layoutConfigKey="social_proof"
+                                                            initialX={layout_config.social_proof.x}
+                                                            initialY={layout_config.social_proof.y}
+                                                            style={{
+                                                                transform: `scale(${layout_config.social_proof.scale})`,
+                                                                transformOrigin: 'top left',
+                                                                zIndex: 22,
+                                                                color: colors.accent,
+                                                                fontSize: 28,
+                                                                display: 'flex',
+                                                                gap: 3,
+                                                                filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.8))',
+                                                            }}
+                                                        >
                                                             {'★★★★★'}
-                                                        </div>
+                                                        </DraggableLayer>
                                                     )}
 
                                                     {/* ── Bezier arrow from layout_config ── */}
                                                     {layout_config?.arrow && (
-                                                        <ArrowLayer
-                                                            arrow={layout_config.arrow}
-                                                            color={colors.accent}
-                                                            strokeWidth={3}
-                                                        />
+                                                        <DraggableLayer
+                                                            layoutConfigKey="arrow"
+                                                            initialX={layout_config.arrow.startPos[0]}
+                                                            initialY={layout_config.arrow.startPos[1]}
+                                                            style={{ zIndex: 20 }}
+                                                        >
+                                                            <ArrowLayer
+                                                                arrow={{
+                                                                    ...layout_config.arrow,
+                                                                    startPos: [0, 0], // Re-anchor arrow start to the draggable container
+                                                                    endPos: [
+                                                                        layout_config.arrow.endPos[0] - layout_config.arrow.startPos[0],
+                                                                        layout_config.arrow.endPos[1] - layout_config.arrow.startPos[1]
+                                                                    ]
+                                                                }}
+                                                                color={colors.accent}
+                                                                strokeWidth={3}
+                                                            />
+                                                        </DraggableLayer>
                                                     )}
 
                                                     {logoUrl && logoPosition && (
@@ -410,10 +430,17 @@ export const MasterComposition: React.FC<Props> = (props) => {
                         {/* ── Layer 3: LogoBar trust strip from layout_config ── */}
                         {layout_config?.trust_bar && (
                             <AbsoluteFill style={{ zIndex: 24, pointerEvents: 'none' }}>
-                                <LogoBar
-                                    trust_bar={layout_config.trust_bar}
-                                    accentColor={colors.accent}
-                                />
+                                <DraggableLayer
+                                    layoutConfigKey="trust_bar"
+                                    initialX={0}
+                                    initialY={layout_config.trust_bar.y_position}
+                                    style={{ width: '100%', pointerEvents: 'auto' }}
+                                >
+                                    <LogoBar
+                                        trust_bar={{ ...layout_config.trust_bar, y_position: 0 }} // Container manages Y
+                                        accentColor={colors.accent}
+                                    />
+                                </DraggableLayer>
                             </AbsoluteFill>
                         )}
 

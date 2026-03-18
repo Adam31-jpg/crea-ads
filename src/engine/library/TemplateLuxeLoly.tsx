@@ -5,6 +5,7 @@ import { GlassCard } from './GlassCard';
 import { FeatureSwitch } from './FeatureSwitch';
 import { CleanIngredient } from './CleanIngredient';
 import { PointerBenefit } from './PointerBenefit';
+import { DraggableLayer } from '@/components/studio/DraggableLayer';
 
 export const TemplateLuxeLoly: React.FC<any> = ({
     props,
@@ -82,19 +83,19 @@ export const TemplateLuxeLoly: React.FC<any> = ({
             <div style={{ width: '100%', height: '100%', zIndex: 20, position: 'absolute', top: 0, left: 0 }}>
 
                 {/* 1. BLOC DE GAUCHE : Titre + Switchs */}
-                <div style={{
-                    position: 'absolute',
-                    left: '5%',
-                    // LA MAGIE : En portrait c'est ancré en bas. En paysage/carré c'est centré verticalement.
-                    bottom: isPortrait ? '45%' : 'auto',
-                    top: isPortrait ? 'auto' : '50%',
-                    transform: isPortrait ? 'none' : 'translateY(-50%)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '16px',
-                    width: isPortrait ? '90%' : '45%',
-                    maxWidth: '500px'
-                }}>
+                <DraggableLayer
+                    layoutConfigKey="features"
+                    initialX={props.layout_config?.features?.x ?? 5}
+                    initialY={props.layout_config?.features?.y ?? (isPortrait ? 55 : 50)}
+                    style={{
+                        transform: isPortrait ? 'none' : 'translateY(-50%)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '16px',
+                        width: isPortrait ? '90%' : '45%',
+                        maxWidth: '500px'
+                    }}
+                >
                     <h1 style={{
                         fontFamily: props.fontFamily || 'Poppins',
                         fontSize: isPortrait ? '72px' : '64px',
@@ -121,25 +122,27 @@ export const TemplateLuxeLoly: React.FC<any> = ({
                             />
                         ))}
                     </GlassCard>
-                </div>
+                </DraggableLayer>
 
                 {/* 2. BLOC DE DROITE : Nom de la marque */}
-                <div style={{
-                    position: 'absolute',
-                    right: isPortrait ? '30%' : '10%',
-                    // LA MAGIE : Plus haut en paysage pour survoler le carré rouge
-                    bottom: isPortrait ? '80%' : '75%',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    zIndex: 22
-                }}>
+                <DraggableLayer
+                    layoutConfigKey="logo"
+                    initialX={props.layout_config?.logo?.x ?? (isPortrait ? 70 : 90)}
+                    initialY={props.layout_config?.logo?.y ?? (isPortrait ? 20 : 25)}
+                    style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        zIndex: 22,
+                        transform: 'translateX(-100%)', // Maintain right alignment visually
+                    }}
+                >
                     {props.logoUrl && (
                         <img
                             src={props.logoUrl}
                             style={{ width: isPortrait ? '120px' : '180px', objectFit: 'contain' }}
                         />
                     )}
-                </div>
+                </DraggableLayer>
 
             </div>
         </AbsoluteFill>

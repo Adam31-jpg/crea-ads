@@ -33,6 +33,8 @@ export const UIElementSchema = z.object({
     text_treatment: z.enum(['none', 'shadow', 'glass', 'outline', 'hero_block']).default('shadow'),
     /** Per-element font weight override from the Director's Brain. */
     font_weight: z.enum(['thin', 'regular', 'bold', 'black']).optional(),
+    /** Studio interactive Z-Index */
+    z_index: z.number().default(20),
 });
 
 // ─── Layout Config — Spatial Design System ───────────────────────────────────
@@ -228,6 +230,7 @@ export const LayoutConfigSchema = z.object({
         fontSize: z.number().min(20).max(120),
         textAlign: z.enum(['left', 'center', 'right']),
         color: z.string(),                   // hex color
+        z_index: z.number().optional(),
     }),
 
     /** ★★★★★ social proof badges. Optional. */
@@ -238,6 +241,20 @@ export const LayoutConfigSchema = z.object({
 
     /** Horizontal trust logo/text bar. Optional. */
     trust_bar: TrustBarSchema.optional(),
+
+    /** Logo coordinate overrides for Studio Interactive DND */
+    logo: z.object({
+        x: z.number().min(0).max(100),
+        y: z.number().min(0).max(100),
+        z_index: z.number().optional(),
+    }).optional(),
+
+    /** Template Features blocks coordinate overrides */
+    features: z.object({
+        x: z.number().min(0).max(100),
+        y: z.number().min(0).max(100),
+        z_index: z.number().optional(),
+    }).optional(),
 });
 
 export type LayoutConfig = z.infer<typeof LayoutConfigSchema>;

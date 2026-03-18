@@ -35,13 +35,14 @@ export default async function AdminBatchDetail({
         return field;
     };
 
-    const productsObj = parseMeta(meta.products) || parseMeta(meta.product) || [];
-    const strategyObj = parseMeta(meta.strategy) || [];
-    const colorsObj = parseMeta(meta.colors);
+    const inputData = parseMeta(meta.inputData) || meta;
+    const productsObj = parseMeta(inputData.products) || parseMeta(inputData.product) || parseMeta(meta.products) || [];
+    const strategyObj = parseMeta(inputData.strategy) || parseMeta(meta.strategy) || [];
+    const colorsObj = parseMeta(inputData.colors) || parseMeta(meta.colors);
 
     const projectName = meta.project_name || meta.title || batch.id.split("-")[0];
-    const format = meta.format || meta.render_format || "1080x1080";
-    const theme = meta.theme || meta.aesthetic || "Standard Lumina";
+    const format = inputData.format || meta.format || meta.render_format || "1080x1080";
+    const theme = inputData.theme || meta.theme || meta.aesthetic || "Standard Lumina";
 
     let colors: string[] = [];
     if (Array.isArray(colorsObj)) {

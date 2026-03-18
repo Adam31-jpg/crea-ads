@@ -213,8 +213,8 @@ export default function StudioPage() {
 
             // Removed duplicateBatch clean
 
-            // Navigate to dashboard — realtime will handle progress updates
-            router.push("/dashboard");
+            // Navigate to the War Room — realtime will handle progress updates
+            router.push(`/batches/${batch.id}`);
             router.refresh();
         } catch (err: unknown) {
             const message =

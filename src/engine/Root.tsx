@@ -29,11 +29,11 @@ const verticalOverrides = {
     layout: { layoutType: 'converter' as const, aspectRatio: '9:16' as const, safePadding: 140, contentScale: 0.85 },
     component_layout: [
         {
-            component: "PointerBenefit",
+            component: "PointerBenefit" as const,
             props: { label: "Hydration Lock", x: 75, y: 40 }
         },
         {
-            component: "SocialBadge",
+            component: "SocialBadge" as const,
             props: { label: "DERMATOLOGIST APPROVED", x: 10, y: 15 }
         }
     ]

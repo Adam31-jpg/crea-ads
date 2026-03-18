@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import {
     Card,
@@ -581,7 +582,8 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                             : "hover:border-brand/30"
                     }`}
             >
-                <CardHeader className="pb-4">
+                <Link href={`/batches/${batch.id}`} className="absolute inset-0 z-10" />
+                <CardHeader className="pb-4 relative z-20">
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                             <CardTitle className="text-xl font-bold truncate flex items-center gap-2">
@@ -718,7 +720,7 @@ export function BatchCard({ batch, showUnarchive }: BatchCardProps) {
                     </div>
                 </CardHeader>
 
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 relative z-20">
                     {hasMultipleJobs ? (
                         <>
                             {/* 2×5 Grid */}

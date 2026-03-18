@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Redis } from "@upstash/redis";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { broadcast } from "@/lib/sse";
@@ -90,6 +91,41 @@ export async function GET(req: NextRequest) {
     // 4. Already terminal — short-circuit
     if (job.status === "done" || job.status === "failed") {
         return NextResponse.json({ status: job.status, resultUrl: job.result_url, done: true });
+    }
+
+    // 4.5. Handle Queue progression
+    if (job.status === "queued") {
+        const redis = Redis.fromEnv();
+        const pos = await redis.lpos("render_queue", jobId);
+
+        if (pos === 0) {
+            const active = (await redis.get<number>("active_renders")) || 0;
+            if (active < 10) {
+                const poppedJobId = await redis.lpop("render_queue");
+                if (poppedJobId === jobId) {
+                    await redis.incr("active_renders");
+
+                    // Fire worker in background
+                    fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/render/worker`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ jobId })
+                    }).catch(err => console.error("[Status] Failed to trigger worker:", err));
+
+                    await prisma.job.update({ where: { id: jobId }, data: { status: "rendering" } });
+                    return NextResponse.json({ status: "rendering", progress: 0, done: false });
+                } else if (poppedJobId) {
+                    // Mismatched pop - restore
+                    await redis.lpush("render_queue", poppedJobId);
+                }
+            }
+        }
+
+        return NextResponse.json({
+            status: "queued",
+            queuePosition: pos !== null ? pos : 0,
+            done: false
+        });
     }
 
     // 5. Check Lambda progress

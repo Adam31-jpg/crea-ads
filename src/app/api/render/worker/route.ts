@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Redis } from "@upstash/redis";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
@@ -1004,164 +1003,478 @@ async function fetchVertexProductRecontext(
     }
 }
 
+import { Redis } from "@upstash/redis";
+
 export async function POST(req: NextRequest) {
-    // 1. Auth
-    const session = await auth();
-    if (!session?.user?.id) {
-        return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
-    const userId = session.user.id;
-
-    // 2. Parse body
-    const { batchId, inputData } = await req.json();
-    if (!batchId || !inputData) {
-        return NextResponse.json(
-            { error: "missingBatchData" },
-            { status: 400 }
-        );
-    }
-
-    // 3. Validate env
-    if (!SERVE_URL || !FUNCTION_NAME) {
-        return NextResponse.json(
-            {
-                error: "lambdaNotConfigured",
-            },
-            { status: 500 }
-        );
-    }
-
-    const rawConcepts: AdConcept[] = inputData.strategy || [];
-    const product = inputData.products?.[0] || {};
-
-    // ── Re-stamp concept types from GENERATION_CONFIG (authoritative source) ──
-    // Gemini may return incorrect type fields — we enforce the configured split:
-    // first IMAGE_COUNT concepts → "image", remaining → "video".
-    const totalConcepts = Math.max(rawConcepts.length, GENERATION_CONFIG.IMAGE_COUNT + GENERATION_CONFIG.VIDEO_COUNT);
-    const concepts: AdConcept[] = rawConcepts.slice(0, totalConcepts).map((c, idx) => ({
-        ...c,
-        type: idx < GENERATION_CONFIG.IMAGE_COUNT ? "image" : "video",
-    }));
-    console.log(`[Render] Type split — ${GENERATION_CONFIG.IMAGE_COUNT} image(s), ${GENERATION_CONFIG.VIDEO_COUNT} video(s) — ${concepts.length} total concepts`);
-
-
-    // ── PRE-FLIGHT: Product image validation ─────────────────────────────────
-    // Resolve the hero URL here — before any credit is consumed — so we can
-    // reject the batch immediately when no valid product image is present.
-    // A missing or broken URL causes BRIA/Flux to receive either an empty string
-    // or the Unsplash placeholder, which produces generic bottles with fake labels.
-    const preflightHeroUrl = sanitiseProductUrl(
-        product.images?.[product.heroImageIndex ?? 0]
-    );
-    if (preflightHeroUrl === PRODUCT_IMAGE_FALLBACK) {
-        console.error(
-            "[Render] PRE-FLIGHT FAILED — product image is missing or invalid. " +
-            `Resolved URL: "${preflightHeroUrl}". Aborting batch before any credit debit.`
-        );
-        return NextResponse.json(
-            {
-                error: "missing_product_image",
-                message:
-                    "A valid product image is required to generate ads. " +
-                    "Please upload your product photo and try again.",
-            },
-            { status: 400 }
-        );
-    }
-    console.log(`[Render] PRE-FLIGHT PASSED — heroUrl: "${preflightHeroUrl.slice(0, 80)}..."`);
-
-    // DEBIT-BEFORE-RENDER LOGIC: Consume Sparks
-    const cost = (GENERATION_CONFIG.IMAGE_COUNT * GENERATION_CONFIG.IMAGE_SPARK_COST) + (GENERATION_CONFIG.VIDEO_COUNT * GENERATION_CONFIG.VIDEO_SPARK_COST);
-    if (cost > 0) {
-        const updatedUser = await prisma.user.updateMany({
-            where: { id: userId, credits: { gte: cost } },
-            data: { credits: { decrement: cost } },
-        });
-        if (updatedUser.count === 0) {
-            console.error("[Render API] Debit failed — insufficient credits");
-            return NextResponse.json(
-                { error: "insufficient_funds" },
-                { status: 402 }
-            );
-        }
-
-        // SSE Emit new balance to UI
-        const refreshedUser = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { credits: true }
-        });
-        if (refreshedUser) {
-            broadcast(userId, { type: "credits_update", credits: refreshedUser.credits });
-        }
-    }
-
-    // === CHECKPOINT 1: Payload Intake ===
-    console.log(`[Render] Payload received — batchId: ${batchId}, concepts: ${concepts.length}, userId: ${userId}`);
-
-    // Fallback: if no strategy, create single video concept (backward compat)
-    if (concepts.length === 0) {
-        concepts.push({
-            index: 0,
-            type: "video",
-            framework: "AIDA",
-            headline: product.productName || "Product",
-            subheadline: product.tagline || "",
-            cta: "Shop Now",
-            visualDirection: "Hero product showcase",
-            colorMood: "midnight",
-            emphasis: "product_detail",
-            background_prompt: GENERATION_CONFIG.FALLBACK_THEME,
-        });
-    }
-
-    // 4. Create all job records via Prisma
-    const jobDataArray = concepts.map((concept) => ({
-        batchId,
-        userId,
-        status: "queued",
-        type: concept.type,
-        templateId: formatToCompositionId(inputData.format),
-        metadata: JSON.parse(JSON.stringify({
-            concept,
-            inputData: { ...inputData, strategy: undefined },
-        })) as Prisma.InputJsonValue,
-    }));
-
-    // === CHECKPOINT 2: DB Jobs Creation ===
-    console.log(`[DB] Attempting to insert ${jobDataArray.length} jobs for batch ${batchId}...`);
-
-    let jobs: { id: string }[];
-    try {
-        await prisma.job.createMany({ data: jobDataArray });
-        jobs = await prisma.job.findMany({
-            where: { batchId },
-            select: { id: true },
-            orderBy: { createdAt: "asc" },
-            take: jobDataArray.length,
-        });
-    } catch (insertErr) {
-        console.error("[DB][CRITICAL] Exception during job insert:", insertErr);
-        return NextResponse.json(
-            { error: `DB insert exception: ${insertErr instanceof Error ? insertErr.message : String(insertErr)}` },
-            { status: 500 }
-        );
-    }
-
-    console.log(`[DB] Jobs created successfully: [${jobs.map((j) => j.id).join(", ")}]`);
-
     const redis = Redis.fromEnv();
-    const queueKeys = jobs.map((j) => j.id);
-    if (queueKeys.length > 0) {
-        await redis.rpush("render_queue", ...queueKeys);
-        console.log(`[Queue] Enqueued ${queueKeys.length} jobs to render_queue for batch ${batchId}`);
-    }
-    
-    await prisma.batch.update({ where: { id: batchId }, data: { status: "queued" } });
+    try {
+        const { jobId } = await req.json();
+        if (!jobId) return NextResponse.json({ error: "missingJobId" }, { status: 400 });
 
-    return NextResponse.json({
-        success: true,
-        batchId,
-        jobIds: queueKeys,
-        jobCount: queueKeys.length,
-    });
+        const SERVE_URL = process.env.REMOTION_SERVE_URL;
+        const FUNCTION_NAME = process.env.REMOTION_FUNCTION_NAME;
+        if (!SERVE_URL || !FUNCTION_NAME) return NextResponse.json({ error: "lambdaNotConfigured" }, { status: 500 });
+
+        const job = await prisma.job.findUnique({
+            where: { id: jobId },
+            include: { batch: { select: { userId: true, id: true } } }
+        });
+
+        if (!job) return NextResponse.json({ error: "jobNotFound" }, { status: 404 });
+
+        const userId = job.batch.userId;
+        const batchId = job.batch.id;
+        const meta = job.metadata as Record<string, any>;
+        const concept = meta.concept as AdConcept;
+        const inputData = meta.inputData as any;
+        const product = inputData.products?.[0] || {};
+
+        const layoutType = concept.layoutType || 'converter';
+        const elements = buildElements(concept);
+
+        const rawImageArray = Array.isArray(product.images)
+            ? product.images.slice(0, 3)
+            : [];
+        const heroUrl = sanitiseProductUrl(
+            product.images?.[product.heroImageIndex || 0]
+        );
+        const productImageUrls = rawImageArray.length > 0
+            ? rawImageArray.map((u: string) => sanitiseProductUrl(u))
+            : [heroUrl];
+
+        let backgroundImageUrl = null;
+        let hideHeroObject = false;
+        let hasRefunded = false;
+        const isBundle = productImageUrls.length > 1;
+
+        console.log(`[Worker] Started processing JobID ${jobId} (Type: ${concept.type})`);
+
+        if (concept.background_prompt) {
+            // Gemini owns all aesthetic direction — background_prompt already
+            // encodes the correct surface, lighting, and materiality for this
+            // concept.  buildFalPrompt appends scene_interaction AND the negative
+            // space zone phrase so the image model leaves room for typography.
+            const fusedPrompt = buildFalPrompt(
+                concept.background_prompt,
+                concept.scene_interaction,
+                concept.layout_config?.negative_space_zone,
+            );
+            console.log(
+                `[Fal.ai] Prompt for JobID ${jobId}` +
+                ` (narrative: ${concept.narrative_concept ?? "none"}` +
+                `, theme: ${inputData.theme ?? "none"}` +
+                `, interaction: ${concept.scene_interaction ? "yes" : "no"}` +
+                `, space_zone: ${concept.layout_config?.negative_space_zone ?? "none"}` +
+                `, type: ${concept.type}, bundle: ${isBundle}):` +
+                ` "${fusedPrompt}"`
+            );
+
+            if (concept.type === "image" && !isBundle) {
+                // ── STILL IMAGE path ────────────────────────────────────────
+                // hideHeroObject is set TRUE here, unconditionally, BEFORE any
+                // API call.  The 3D layer is NEVER allowed on still images —
+                // the product must be baked into the AI output.
+                hideHeroObject = true;
+
+                // ── 3-Tier fallback chain for still images ────────────────────
+                //
+                // Tier 1 — BRIA product-shot (preferred)
+                //   Best product fidelity. Dedicated placement model. Generates
+                //   contact shadows from scene lighting. Fails ~20% of requests.
+                //
+                // Tier 2 — Narrative Fusion img2img (Mode B)
+                //   Uses fal-ai/flux-general/image-to-image at strength 0.55.
+                //   Receives the narrative background_prompt so the model renders
+                //   the product as an actor inside the scene (not an overlay).
+                //   Trade-off: fine-detail logo text degrades ~35–50%. Scene
+                //   integration is significantly better than Canny (no sticker effect).
+                //   Strength 0.55 is the empirical sweet spot: lower = sticker
+                //   effect persists; higher = label hallucination increases.
+                //
+                // Tier 3 — Canny ControlNet (structural fallback)
+                //   Last resort. Preserves silhouette only. Sticker effect likely.
+                //   Use when Tiers 1 & 2 both fail (network errors, API downtime).
+                //
+                // Override: set NEXT_PUBLIC_STILL_MODE=narrative in .env to skip
+                // BRIA entirely and go straight to Tier 2 for faster testing.
+                // ─────────────────────────────────────────────────────────────
+
+                const stillMode = process.env.NEXT_PUBLIC_STILL_MODE ?? "bria";
+                const perspectiveMode = concept.perspective_mode ?? "structural";
+                const productName = inputData.products?.[0]?.productName ?? "";
+
+                // Apparel bypass: soft goods need Mode B's high creative freedom.
+                // BRIA (placement-only) and Canny (edge cage) both prevent the model
+                // from rendering natural fabric drape, wrinkles, and texture catch-light.
+                const isApparel = isApparelConcept(concept, productName);
+                if (isApparel) {
+                    console.log(
+                        `[Still][APPAREL] Detected soft goods — bypassing BRIA+Canny — ` +
+                        `Mode B (strength: 0.65, guidance: 8.5) — JobID ${jobId}`
+                    );
+                    backgroundImageUrl = await fetchFluxNarrativeImg2Img(
+                        heroUrl,
+                        fusedPrompt,
+                        inputData.format as string,
+                        0.65,
+                        8.5,
+                    );
+                } else {
+                    // ── 3-tier chain for hard goods (bottles, boxes, cans, etc.) ────
+                    //
+                    // Tier 0 — Nano Banana Pro /edit (GOLD STANDARD)
+                    //   Sends productImageUrls[] + scene prompt to /edit endpoint.
+                    //   Fal.ai sees the actual product and recontextualizes it in
+                    //   the AI-generated scene. Best quality for still-product ads.
+                    //
+                    // Tier 1 — BRIA product-shot (fallback)
+                    //   Classic placement model. Preserves label + shape. Less
+                    //   creative freedom than NBPro /edit.
+                    //
+                    // Tier 2 — Narrative Fusion img2img (Mode B)
+                    //   Uses the product image as img2img seed. Scene integration
+                    //   quality > BRIA but label fidelity degrades ~35%.
+                    //
+                    // Tier 3 — Canny ControlNet (last resort)
+                    //   Silhouette-only structural anchor. Sticker effect probable.
+                    // ─────────────────────────────────────────────────────────────────
+
+                    // ⚠️  Product URL accessibility pre-flight ——————————————————————
+                    // NBPro /edit fetches productImageUrls[] server-side.
+                    // A 403 response means the S3 object is private — the model
+                    // cannot see the product and will output a black/wrong scene.
+                    let productUrlAccessible = true;
+                    try {
+                        const urlCheck = await fetch(heroUrl, { method: 'HEAD' });
+                        if (!urlCheck.ok) {
+                            console.error(
+                                `[Still][PRE-FLIGHT] Product image returned ${urlCheck.status} — ` +
+                                `NBPro /edit cannot access it. URL: ${heroUrl.slice(0, 100)}\n` +
+                                `FIX: run 'node scripts/apply-s3-config.mjs' then re-upload the product image.`
+                            );
+                            productUrlAccessible = false;
+                        } else {
+                            console.log(`[Still][PRE-FLIGHT] Product URL OK (${urlCheck.status}) — proceeding.`);
+                        }
+                    } catch (e) {
+                        console.warn('[Still][PRE-FLIGHT] HEAD-check network error:', e);
+                    }
+
+                    // PHASE 1: Dev Mock API Bypass
+                    if (inputData.is_dev_mock) {
+                        console.log(`[Still][MOCK] Bypassing Fal.ai. Serving mock background for ${concept.template_id} — JobID ${jobId}`);
+                        if (concept.template_id === 'AD_LUXE_LOLY') {
+                            backgroundImageUrl = "https://d1zfhdugugdhgw.cloudfront.net/backgrounds/nbedit_1772401096558_gvumud.jpg";
+                        } else if (concept.template_id === 'AD_OVERHEAD_MINIMAL') {
+                            backgroundImageUrl = "https://d1zfhdugugdhgw.cloudfront.net/backgrounds/nbedit_1772401132822_9rxdg.jpg";
+                        } else if (concept.template_id === 'AD_CIRCLE_CENTER') {
+                            backgroundImageUrl = "https://d1zfhdugugdhgw.cloudfront.net/backgrounds/nbedit_1772401159547_gwcb7d.jpg";
+                        } else {
+                            backgroundImageUrl = "https://d1zfhdugugdhgw.cloudfront.net/backgrounds/nbedit_1772401096558_gvumud.jpg"; // fallback
+                        }
+                    } else if (productUrlAccessible && stillMode !== 'narrative') {
+                        // Tier 0 — Nano Banana Pro /edit (gold standard)
+                        console.log(`[Still][0/3] NBPro /edit (product recontextualization) — JobID ${jobId}`);
+                        backgroundImageUrl = await fetchNanoBananaProEdit(
+                            productImageUrls,
+                            fusedPrompt,
+                            inputData.format as string,
+                        );
+                    } else if (!productUrlAccessible) {
+                        console.error(`[Still][0/3] SKIPPED — product URL inaccessible (403). Fix S3 policy first.`);
+                    } else {
+                        console.log(`[Still][OVERRIDE] NEXT_PUBLIC_STILL_MODE=narrative — skipping NBPro /edit — JobID ${jobId}`);
+                    }
+
+                    if (!backgroundImageUrl && stillMode !== 'narrative') {
+                        // Tier 1 — BRIA (fallback)
+                        console.warn(`[Still][1/3] NBPro /edit failed — BRIA product-shot fallback — JobID ${jobId}`);
+                        backgroundImageUrl = await fetchProductShot(
+                            heroUrl,
+                            fusedPrompt,
+                            inputData.format as string,
+                        );
+                    }
+
+                    if (!backgroundImageUrl) {
+                        // Tier 2 — Narrative Fusion img2img (Mode B)
+                        const narrativeStrength = perspectiveMode === 'immersive' ? 0.62 : 0.55;
+                        const tierLabel = stillMode === 'narrative' ? '0/3 (Mode B override)' : '2/3';
+                        console.warn(`[Still][${tierLabel}] Narrative Fusion img2img (strength: ${narrativeStrength}) — JobID ${jobId}`);
+                        backgroundImageUrl = await fetchFluxNarrativeImg2Img(
+                            heroUrl,
+                            fusedPrompt,
+                            inputData.format as string,
+                            narrativeStrength,
+                            3.5,
+                        );
+                    }
+
+                    if (!backgroundImageUrl) {
+                        // Tier 3 — Canny ControlNet (last resort)
+                        console.warn(`[Still][3/3] All paths failed — Canny ControlNet (${perspectiveMode}) — JobID ${jobId}`);
+                        backgroundImageUrl = await fetchFluxCannyControlNet(
+                            heroUrl,
+                            fusedPrompt,
+                            inputData.format as string,
+                            perspectiveMode,
+                            concept.colorMood ?? '',
+                        );
+                    }
+                }
+
+                if (backgroundImageUrl) {
+                    console.log(`[Still] AI composite success — HeroObject suppressed — JobID ${jobId}`);
+                } else {
+                    // All paths failed. hideHeroObject stays true.
+                    // Render proceeds with gradient-only background.
+                    console.error(`[Still] ALL paths failed — gradient background only — JobID ${jobId}`);
+                }
+            } else {
+                // ── VIDEO / BUNDLE path — Nano Banana Pro (primary) → Flux (fallback) + HeroObject ──
+                const reason = concept.type !== "image" ? "video" : "bundle shot";
+                console.log(`[NanaBananaPro] ${reason} — NBPro background + HeroObject — JobID ${jobId}`);
+                backgroundImageUrl = await fetchNanoBananaProBackground(fusedPrompt, inputData.format as string);
+                if (!backgroundImageUrl) {
+                    console.warn(`[NanaBanana2] Failed — falling back to Flux for ${reason} — JobID ${jobId}`);
+                    backgroundImageUrl = await fetchFalAiBackground(fusedPrompt, inputData.format as string);
+                }
+            }
+
+            if (!backgroundImageUrl) {
+                console.log(`[Queue] Triggering atomic 1-Spark refund for failed background generation on JobID ${jobId}`);
+                await prisma.user.update({ where: { id: userId }, data: { credits: { increment: 1 } } });
+                hasRefunded = true;
+
+                // Epic 9: Abort the Lambda render so we don't waste time on a broken background
+                await prisma.job.update({
+                    where: { id: jobId },
+                    data: {
+                        status: "failed",
+                        error_message: "Background Asset Generation Failed (API Exhaustion).",
+                    },
+                });
+                console.error(`[Queue] Aborting Lambda render for JobID ${jobId} due to missing background.`);
+                return NextResponse.json({ error: "missingBackground" }, { status: 500 });
+            }
+        } else {
+            console.warn(`[Queue] No background_prompt generated for JobID ${jobId}, executing 1-Spark refund safety fallback`);
+            await prisma.user.update({ where: { id: userId }, data: { credits: { increment: 1 } } });
+            hasRefunded = true;
+        }
+
+        const VALID_FONTS = ["Inter", "Bodoni", "Roboto", "Outfit"] as const;
+        type ValidFont = typeof VALID_FONTS[number];
+        const rawFont = concept.font_family_override;
+        const fontFamily: ValidFont =
+            rawFont && VALID_FONTS.includes(rawFont as ValidFont)
+                ? (rawFont as ValidFont)
+                : "Bodoni";
+
+        const inputProps = {
+            headlineText: concept.headline ?? "",
+            subheadlineText: concept.subheadline ?? undefined,
+            ctaText: concept.cta ?? undefined,
+            productImageUrl: heroUrl,
+            productImageUrls,
+            backgroundImageUrl: backgroundImageUrl || undefined,
+            websiteUrl: inputData.websiteUrl || undefined,
+            phoneNumber: inputData.phoneNumber || undefined,
+            hideHeroObject,
+            colors: {
+                primary: inputData.accentColor || "#D4AF37",
+                secondary: "#1E1E2E",
+                accent: inputData.accentColor || "#D4AF37",
+                background: concept.colorMood?.toLowerCase().includes("sunset")
+                    ? "#1a0b00"
+                    : concept.colorMood?.toLowerCase().includes("midnight")
+                        ? "#050510"
+                        : concept.colorMood?.toLowerCase().includes("electric")
+                            ? "#0f0518"
+                            : concept.colorMood?.toLowerCase().includes("white")
+                                ? "#fcfcfc"
+                                : "#0A0A0F",
+                textPrimary: concept.adaptive_text_color ?? "#FFFFFF",
+            },
+            fontFamily,
+            sceneLightDirection: concept.scene_light_direction,
+            contactSurface: concept.contact_surface,
+            compositionIntent: concept.composition_intent ?? "direct_response",
+            lightingIntent: concept.lighting_intent,
+            glassmorphism: { enabled: true, intensity: 0.6, blur: 12 },
+
+            camera: {
+                zoomStart: concept.cameraMotion === 'zoom_impact' ? 1.5 : concept.cameraMotion === 'static_hero' ? 1.1 : 1,
+                zoomEnd: concept.cameraMotion === 'zoom_impact' ? 1 : 1.15,
+                orbitSpeed: concept.cameraMotion === 'orbit_center' ? 0.6 : 0.1,
+                panX: concept.cameraMotion === 'pan_horizontal' ? 0.5 : 0,
+            },
+            enableMotionBlur: false,
+            logoUrl: product.logoUrl || null,
+            logoPosition: concept.logo_position || null,
+            layout: {
+                layoutType,
+                aspectRatio: formatToAspect(inputData.format),
+                safePadding: 40,
+                contentScale: 1,
+            },
+            elements,
+            component_layout: concept.component_layout ?? [],
+            layout_config: concept.layout_config ?? undefined,
+            template_id: concept.template_id,
+        };
+
+        const webhookConfig = {
+            url: `${process.env.NEXT_PUBLIC_APP_URL}/api/lambda/webhook`,
+            secret: process.env.WEBHOOK_SECRET || "fallback_secret",
+        };
+
+        try {
+            if (concept.type === "image") {
+                console.log(`[AWS] Triggering Lambda securely for JobID: ${jobId} (Type: image/still)`);
+
+                const { renderId, bucketName, url } =
+                    await renderStillOnLambda({
+                        region: REGION,
+                        functionName: FUNCTION_NAME,
+                        serveUrl: SERVE_URL,
+                        composition: formatToCompositionId(inputData.format),
+                        inputProps,
+                        imageFormat: "png",
+                        logLevel: "verbose", // Epic 9: Dump exact Chrome Network logs
+                        privacy: "public",
+                    });
+
+                console.log(`[AWS] Lambda returned for JobID: ${jobId} — renderId: ${renderId}, bucket: ${bucketName}, url: ${url}`);
+
+                await prisma.job.update({
+                    where: { id: jobId },
+                    data: {
+                        status: "done",
+                        result_url: url,
+                        metadata: JSON.parse(JSON.stringify({
+                            concept,
+                            layout_config: concept.layout_config ?? null,
+                            renderId,
+                            bucketName,
+                            region: REGION,
+                            renderType: "still",
+                            functionName: FUNCTION_NAME,
+                        })) as Prisma.InputJsonValue,
+                        cost_usd: new Prisma.Decimal("0.16"),
+                    },
+                });
+
+                // Update Batch explicitly
+                await prisma.batch.update({
+                    where: { id: batchId },
+                    data: {
+                        cost_usd: { increment: new Prisma.Decimal("0.16") }
+                    }
+                });
+
+                // SSE: Push job completion so UI instantly marks as 'done'
+                broadcast(userId, { type: "job_update", jobId, status: "done", result_url: url });
+            } else {
+                console.log(`[AWS] Triggering Lambda securely for JobID: ${jobId} (Type: video/media)`);
+
+                const totalFrames = inputData.durationInFrames || 150;
+                const computedFramesPerLambda = Math.max(1, Math.ceil(totalFrames / 3));
+                console.log(`[AWS] Lambda config: concurrency 3, chunk size ${computedFramesPerLambda} for JobID ${jobId}`);
+
+                const { renderId, bucketName } =
+                    await renderMediaOnLambda({
+                        region: REGION,
+                        functionName: FUNCTION_NAME,
+                        serveUrl: SERVE_URL,
+                        composition: formatToCompositionId(inputData.format),
+                        inputProps,
+                        codec: "h264",
+                        framesPerLambda: computedFramesPerLambda,
+                        concurrencyPerLambda: 3,
+                        logLevel: "verbose",
+                        webhook: webhookConfig,
+                        timeoutInMilliseconds: 600000,
+                    });
+
+                console.log(`[AWS] Lambda returned for JobID: ${jobId} — renderId: ${renderId}, bucket: ${bucketName}`);
+
+                await prisma.job.update({
+                    where: { id: jobId },
+                    data: {
+                        metadata: JSON.parse(JSON.stringify({
+                            concept,
+                            layout_config: concept.layout_config ?? null,
+                            renderId,
+                            bucketName,
+                            region: REGION,
+                            renderType: "media",
+                            functionName: FUNCTION_NAME,
+                        })) as Prisma.InputJsonValue,
+                    },
+                });
+            }
+        } catch (err: unknown) {
+            console.error(`[CRITICAL ERROR] JobID: ${jobId} (Type: ${concept.type})`, err);
+
+            // --- CRITICAL SAFETY: Refund user if render fails (and wasn't already refunded by Fal.ai logic) ---
+            if (!hasRefunded) {
+                console.warn(`[Queue] Remotion render failed for JobID ${jobId}, executing 1-Spark refund safety fallback`);
+                try {
+                    const refundedUser = await prisma.user.update({ where: { id: userId }, data: { credits: { increment: 1 } }, select: { credits: true } });
+                    broadcast(userId, { type: "credits_update", credits: refundedUser.credits });
+                } catch (refundErr) {
+                    console.error(`[CRITICAL] Failed to process refund for JobID ${jobId}:`, refundErr);
+                }
+            }
+
+            const message = err instanceof Error ? err.message : "Unknown Lambda error";
+            await prisma.job.update({
+                where: { id: jobId },
+                data: {
+                    status: "failed",
+                    error_message: friendlyError(message),
+                },
+            });
+
+            // SSE: Push failure to UI immediately
+            broadcast(userId, { type: "job_update", jobId, status: "failed" });
+        }
+        return NextResponse.json({ success: true });
+    } catch (e) {
+        console.error(`[Worker] Uncaught error:`, e);
+        return NextResponse.json({ error: "Internal Render Error" }, { status: 500 });
+    } finally {
+        const remaining = await redis.decr("active_renders");
+        console.log(`[Worker] Finished. Active renders remaining: ${remaining}`);
+    }
+}
+
+/** Map format string to Remotion aspect ratio */
+function formatToAspect(format: string): "1:1" | "9:16" | "16:9" | "4:5" {
+    switch (format) {
+        case "1080x1920":
+            return "9:16";
+        case "1080x1080":
+            return "1:1";
+        case "1920x1080":
+            return "16:9";
+        default:
+            return "9:16";
+    }
+}
+
+/** Convert raw Lambda errors into user-friendly messages */
+function friendlyError(raw: string): string {
+    if (raw.includes("timeout") || raw.includes("Timeout"))
+        return "Render timed out. Try a shorter duration or simpler composition.";
+    if (raw.includes("ENOMEM") || raw.includes("memory"))
+        return "Ran out of memory during render. Try reducing resolution.";
+    if (raw.includes("NetworkError") || raw.includes("ECONNREFUSED"))
+        return "Network error connecting to AWS. Please try again.";
+    if (raw.includes("AccessDenied"))
+        return "AWS permission denied. Check your Lambda configuration.";
+    if (raw.includes("Too many clients") || raw.includes("connection"))
+        return "Database connection overloaded. Retrying automatically.";
+    return `Render failed: ${raw.slice(0, 200)}`;
 }
