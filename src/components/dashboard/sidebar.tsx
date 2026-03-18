@@ -5,17 +5,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutGrid, Archive, Settings, HelpCircle, Bug, Eye } from "lucide-react";
+import { Home, FolderOpen, Settings, HelpCircle, Bug } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 export function DashboardSidebar() {
     const pathname = usePathname();
     const t = useTranslations("Dashboard.nav");
 
-    const navItems: { label: string; href: string; icon: React.ComponentType<{ className?: string }>; highlight?: boolean }[] = [
-        { label: t("batches"), href: "/dashboard", icon: LayoutGrid },
-        { label: "Spy Mode", href: "/dashboard/spy", icon: Eye, highlight: true },
-        { label: t("archives"), href: "/dashboard/archives", icon: Archive },
+    const navItems = [
+        { label: t("home"), href: "/dashboard", icon: Home },
+        { label: t("projects"), href: "/dashboard/projects", icon: FolderOpen },
         { label: t("settings"), href: "/dashboard/settings", icon: Settings },
     ];
 
@@ -24,7 +23,7 @@ export function DashboardSidebar() {
             {/* Logo */}
             <div className="flex items-center h-16 px-6 border-b border-border">
                 <Link
-                    href="/"
+                    href="/dashboard"
                     className="font-[var(--font-bodoni)] text-xl font-bold tracking-wide text-foreground flex items-center gap-2 group"
                 >
                     <Image
@@ -53,32 +52,25 @@ export function DashboardSidebar() {
                             className={cn(
                                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                                 isActive
-                                    ? "bg-brand/10 text-brand"
-                                    : item.highlight
-                                      ? "text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
-                                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                    ? "bg-amber-500/10 text-amber-400"
+                                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                             )}
                         >
                             <item.icon className="h-4 w-4" />
                             {item.label}
-                            {item.highlight && !isActive && (
-                                <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold tracking-wide">
-                                    NEW
-                                </span>
-                            )}
                         </Link>
                     );
                 })}
             </nav>
 
             {/* Bottom section */}
-            <div className="p-4 border-t border-border flex flex-col gap-3">
+            <div className="p-4 border-t border-border flex flex-col gap-1">
                 <Link
                     href="/help"
                     className={cn(
                         "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                         pathname === "/help"
-                            ? "bg-brand/10 text-brand"
+                            ? "bg-muted text-foreground"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     )}
                 >
@@ -88,17 +80,17 @@ export function DashboardSidebar() {
                 <Link
                     href="/bug"
                     className={cn(
-                        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:text-amber-500",
+                        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                         pathname === "/bug"
-                            ? "bg-amber-500/10 text-amber-500"
-                            : "text-muted-foreground hover:bg-muted"
+                            ? "bg-muted text-foreground"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     )}
                 >
                     <Bug className="h-4 w-4" />
                     Support
                 </Link>
-                <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground pt-2 border-t border-border/50">
-                    <span className="inline-block w-2 h-2 rounded-full bg-success opacity-80" />
+                <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground mt-1 border-t border-border/50 pt-3">
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-500 opacity-80" />
                     Beta v0.2
                 </div>
             </div>

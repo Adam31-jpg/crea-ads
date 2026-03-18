@@ -1,170 +1,121 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { BatchList } from "@/components/dashboard/batch-list";
-import { RenderingProgressBar } from "@/components/dashboard/rendering-progress-bar";
-import type { Batch } from "@/components/dashboard/batch-card";
-import { Sparkles, Archive, Layers, Eye } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { InsightsBar } from "@/components/dashboard/insights-bar";
-import { getTranslations } from "next-intl/server";
+import { Clock, CheckCircle, AlertCircle, ArrowRight, FolderOpen } from "lucide-react";
+import { AnalyzeUrlForm } from "@/components/dashboard/AnalyzeUrlForm";
 
-export default async function DashboardPage() {
+const STATUS_ICONS = {
+    done: CheckCircle,
+    manual_fallback: CheckCircle,
+    analyzing: Clock,
+    pending: Clock,
+    failed: AlertCircle,
+} as const;
+
+export default async function DashboardHomePage() {
     const session = await auth();
-    const t = await getTranslations("Dashboard");
     const userId = session?.user?.id!;
+    const firstName = session?.user?.name?.split(" ")[0] ?? null;
 
-    // Fetch batches with their jobs in a single query
-    const rawBatches = await prisma.batch.findMany({
+    const recentProjects = await prisma.storeAnalysis.findMany({
         where: { userId },
-        include: { jobs: { select: { id: true, status: true, result_url: true, metadata: true, type: true, error_message: true } } },
+        include: { _count: { select: { competitors: true } } },
         orderBy: { createdAt: "desc" },
-        take: 50,
+        take: 6,
     });
-
-    // Transform to typed Batch[]
-    const allBatches: Batch[] = rawBatches.map((b) => {
-        const meta = (b.metadata as Record<string, unknown>) ?? {};
-        return {
-            id: b.id,
-            project_name: (meta.project_name as string) || "Untitled",
-            status: b.status,
-            created_at: b.createdAt.toISOString(),
-            is_archived: !!(meta.is_archived as boolean),
-            input_data: meta,
-            jobs: b.jobs.map((j) => {
-                return {
-                    id: j.id,
-                    status: j.status,
-                    // Read from the Prisma `type` column set at job creation time.
-                    // Fallback to metadata.concept.type for legacy rows created before
-                    // the column was populated.
-                    type: j.type || ((j.metadata as Record<string, unknown>)?.concept as Record<string, unknown>)?.type as string || "image",
-                    result_url: j.result_url ?? null,
-                    error_message: j.error_message ?? null,
-                    template_id: "",
-                    created_at: "",
-                };
-            }),
-        };
-    });
-
-    const activeBatches = allBatches.filter((b) => !b.is_archived);
-    const archivedBatches = allBatches.filter((b) => b.is_archived);
-
-    let totalSuccess = 0;
-    let totalFailed = 0;
-    allBatches.forEach((batch) => {
-        batch.jobs.forEach((job) => {
-            if (job.status === "done") totalSuccess++;
-            else if (job.status === "failed") totalFailed++;
-        });
-    });
-    const totalAttempted = totalSuccess + totalFailed;
-    const hoursSaved = (totalSuccess * 300) / 3600;
-    let successRate = 0;
-    if (totalAttempted > 0) {
-        const rawRate = (totalSuccess / totalAttempted) * 100;
-        successRate = totalFailed > 0 ? Math.floor(rawRate) : 100;
-    }
-    let producerTier: "beginner" | "expert" | "factory" = "beginner";
-    if (totalSuccess >= 201) producerTier = "factory";
-    else if (totalSuccess >= 51) producerTier = "expert";
-
-    const firstName = session?.user?.name?.split(" ")[0] || null;
 
     return (
-        <div className="max-w-7xl mx-auto">
-            <div className="flex items-center justify-between mb-8">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">{t("title", { name: firstName || t("titleFallback") })}</h1>
-                    <p className="text-muted-foreground text-sm mt-1">{t("subtitle")}</p>
-                </div>
-                <Link href="/dashboard/spy">
-                    <Button className="bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-black border-none shadow-[0_0_15px_rgba(245,158,11,0.3)] gap-2">
-                        <Eye className="h-4 w-4" />
-                        Spy Mode
-                    </Button>
-                </Link>
+        <div className="max-w-3xl mx-auto py-8 px-2 space-y-10">
+
+            {/* ── Hero section ──────────────────────────────────── */}
+            <div className="space-y-2">
+                <p className="text-xs text-amber-500 font-semibold tracking-widest uppercase">
+                    {firstName ? `Bonjour, ${firstName}` : "Lumina Spy"}
+                </p>
+                <h1 className="text-3xl font-bold tracking-tight">
+                    Analysez vos concurrents.
+                    <br />
+                    <span className="text-amber-400">Clonez leurs meilleures publicités.</span>
+                </h1>
+                <p className="text-sm text-muted-foreground max-w-lg">
+                    Entrez l&apos;URL d&apos;une boutique — Lumina analyse les concurrents,
+                    extrait leurs créatives et génère des variantes pour votre marque.
+                </p>
             </div>
 
-            <InsightsBar hoursSaved={hoursSaved} totalSuccess={totalSuccess} successRate={successRate} producerTier={producerTier} />
+            {/* ── URL Input card ────────────────────────────────── */}
+            <div className="rounded-2xl border border-border bg-card/60 p-6 space-y-3 shadow-[0_0_40px_rgba(245,158,11,0.04)] backdrop-blur-sm">
+                <label className="text-xs text-muted-foreground font-medium">
+                    URL de votre boutique
+                </label>
+                <AnalyzeUrlForm />
+                <p className="text-xs text-muted-foreground/60">
+                    Ex: monsite.com, ma-boutique.myshopify.com, etc.
+                </p>
+            </div>
 
-            {/* Spy Mode CTA */}
-            <Link href="/dashboard/spy" className="block mb-6">
-                <Card className="border-amber-500/20 bg-gradient-to-r from-amber-500/5 to-orange-500/5 hover:from-amber-500/10 hover:to-orange-500/10 transition-colors cursor-pointer">
-                    <CardContent className="flex items-center gap-4 py-4">
-                        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 shrink-0">
-                            <Eye className="h-5 w-5 text-amber-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-sm text-foreground">Try Spy Mode →</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                                Analyze your competitors and clone their best ads
-                            </p>
-                        </div>
-                        <span className="text-xs px-2 py-1 rounded-full bg-amber-500/15 text-amber-400 font-semibold shrink-0">
-                            NEW
-                        </span>
-                    </CardContent>
-                </Card>
-            </Link>
-
-            {/* Live render progress — only visible while Lambda jobs are in-flight */}
-            <RenderingProgressBar />
-
-            {allBatches.length > 0 && (
-                <Tabs defaultValue="active" className="space-y-6">
-                    <div className="flex justify-between items-center border-b border-border pb-2">
-                        <TabsList className="bg-transparent border-none p-0 h-auto">
-                            <TabsTrigger value="active" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-amber-500 data-[state=active]:border-b-2 data-[state=active]:border-amber-500 rounded-none px-4 pb-2 pt-2">
-                                <Layers className="h-4 w-4 mr-2" />
-                                {t("tabs.active", { count: activeBatches.length })}
-                            </TabsTrigger>
-                            <TabsTrigger value="archived" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-amber-500 data-[state=active]:border-b-2 data-[state=active]:border-amber-500 rounded-none px-4 pb-2 pt-2">
-                                <Archive className="h-4 w-4 mr-2" />
-                                {t("tabs.archived", { count: archivedBatches.length })}
-                            </TabsTrigger>
-                        </TabsList>
+            {/* ── Recent projects ───────────────────────────────── */}
+            {recentProjects.length > 0 && (
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                            Projets récents
+                        </h2>
+                        <Link
+                            href="/dashboard/projects"
+                            className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
+                        >
+                            Voir tout <ArrowRight className="h-3 w-3" />
+                        </Link>
                     </div>
-                    <TabsContent value="active" className="mt-0 outline-none">
-                        {activeBatches.length > 0 ? <BatchList initialBatches={activeBatches} /> : (
-                            <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-lg bg-muted/10">
-                                <Layers className="h-8 w-8 text-muted-foreground mb-4 opacity-50" />
-                                <h3 className="font-semibold text-lg">{t("empty.activeTitle")}</h3>
-                                <p className="text-muted-foreground text-sm max-w-sm mt-2">{t("empty.activeDesc")}</p>
-                            </div>
-                        )}
-                    </TabsContent>
-                    <TabsContent value="archived" className="mt-0 outline-none">
-                        {archivedBatches.length > 0 ? <BatchList initialBatches={archivedBatches} showUnarchive /> : (
-                            <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-border rounded-lg bg-muted/10">
-                                <Archive className="h-8 w-8 text-muted-foreground mb-4 opacity-50" />
-                                <h3 className="font-semibold text-lg">{t("empty.archivedTitle")}</h3>
-                                <p className="text-muted-foreground text-sm max-w-sm mt-2">{t("empty.archivedDesc")}</p>
-                            </div>
-                        )}
-                    </TabsContent>
-                </Tabs>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {recentProjects.map((project) => {
+                            const status = project.status as keyof typeof STATUS_ICONS;
+                            const StatusIcon = STATUS_ICONS[status] ?? Clock;
+                            const isDone = status === "done" || status === "manual_fallback";
+
+                            return (
+                                <Link
+                                    key={project.id}
+                                    href={`/dashboard/projects/${project.id}`}
+                                    className="group block rounded-xl border border-border bg-card p-4 hover:border-amber-500/40 hover:bg-amber-500/5 transition-all duration-200"
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                                            <StatusIcon
+                                                className={`h-4 w-4 ${isDone ? "text-amber-500" : "text-muted-foreground"}`}
+                                            />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-semibold text-sm truncate group-hover:text-amber-400 transition-colors">
+                                                {project.storeName ?? project.storeUrl}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                                {project.niche ?? project.productCategory ?? project.storeUrl}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground/60 mt-1.5">
+                                                {project._count.competitors} concurrent{project._count.competitors !== 1 ? "s" : ""}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </Link>
+                            );
+                        })}
+                    </div>
+                </div>
             )}
-            {allBatches.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-24 text-center">
-                    <div className="relative mb-8">
-                        <div className="absolute inset-0 w-24 h-24 rounded-full bg-amber-500/10 blur-[40px]" />
-                        <div className="relative flex items-center justify-center w-20 h-20 rounded-2xl border border-amber-500/20 bg-card shadow-[0_0_20px_rgba(245,158,11,0.05)]">
-                            <Sparkles className="h-8 w-8 text-amber-500" />
-                        </div>
+
+            {/* ── Empty state ───────────────────────────────────── */}
+            {recentProjects.length === 0 && (
+                <div className="rounded-xl border border-dashed border-border/60 bg-muted/5 p-10 flex flex-col items-center text-center gap-4">
+                    <FolderOpen className="h-10 w-10 text-muted-foreground/20" />
+                    <div>
+                        <p className="font-medium text-sm">Aucun projet pour l&apos;instant</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Entrez l&apos;URL de votre boutique ci-dessus pour commencer.
+                        </p>
                     </div>
-                    <h2 className="font-[var(--font-bodoni)] text-3xl md:text-4xl font-bold tracking-tight mb-3 text-foreground">{t("empty.noBatchesTitle")}</h2>
-                    <p className="text-muted-foreground text-sm max-w-md mb-8 leading-relaxed">{t("empty.noBatchesDesc")}</p>
-                    <Link href="/dashboard/spy">
-                        <Button size="lg" className="bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-black border-none shadow-[0_0_15px_rgba(245,158,11,0.4)] gap-2">
-                            <Eye className="h-4 w-4" />
-                            {t("empty.generateFirst")}
-                        </Button>
-                    </Link>
                 </div>
             )}
         </div>

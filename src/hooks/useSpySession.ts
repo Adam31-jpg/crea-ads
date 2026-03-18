@@ -53,6 +53,7 @@ export interface CreativeBlueprint {
     sourceUrl?: string | null;
     sourceImageUrl?: string | null;
     sourcePlatform?: string | null;
+    customProductImageUrl?: string | null; // Per-creative image override (persisted in DB)
 }
 
 export interface GeneratedJob {

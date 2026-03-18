@@ -284,6 +284,8 @@
             }
         },
         "nav": {
+            "home": "Accueil",
+            "projects": "Mes Projets",
             "batches": "Batches",
             "studio": "Studio",
             "archives": "Archives",
