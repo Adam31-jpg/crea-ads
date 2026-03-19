@@ -35,12 +35,38 @@ function buildDatabaseUrl(): string {
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-export const prisma: PrismaClient =
-    globalForPrisma.prisma ??
-    new PrismaClient({
+function createPrismaClient(): PrismaClient {
+    // During Vercel build, DATABASE_URL may not be available.
+    // Return a Proxy that warns at module init but throws only when actually queried.
+    if (!process.env.DATABASE_URL) {
+        console.warn('[prisma] DATABASE_URL not set — returning dummy client (build time only)');
+        return new Proxy({} as PrismaClient, {
+            get(_target, prop) {
+                // Allow lifecycle methods so Prisma internals don't blow up on import
+                if (prop === '$connect' || prop === '$disconnect' || prop === '$on' || prop === 'then') {
+                    return () => Promise.resolve();
+                }
+                // Any model access (user, job, storeAnalysis, etc.) returns a proxy that throws
+                return new Proxy({}, {
+                    get() {
+                        throw new Error(
+                            `[prisma] Cannot query database — DATABASE_URL is not configured. ` +
+                            `This is expected during Vercel build. Set DATABASE_URL in environment variables.`
+                        );
+                    },
+                });
+            },
+        });
+    }
+
+    return new PrismaClient({
         log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
         datasources: { db: { url: buildDatabaseUrl() } },
     });
+}
+
+export const prisma: PrismaClient =
+    globalForPrisma.prisma ?? createPrismaClient();
 
 if (process.env.NODE_ENV !== 'production') {
     globalForPrisma.prisma = prisma;

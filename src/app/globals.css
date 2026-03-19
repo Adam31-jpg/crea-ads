@@ -134,6 +134,17 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Dashboard shell — prevent body scroll when inside app shell */
+body:has(.dashboard-shell) {
+  overflow: hidden;
+}
+
+.dashboard-shell {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
 /* ============================================================
    SKELETON SHIMMER ANIMATION
    ============================================================ */

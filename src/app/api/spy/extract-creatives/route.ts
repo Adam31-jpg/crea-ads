@@ -145,6 +145,27 @@ export async function POST(req: NextRequest) {
 
             if (!Array.isArray(blueprintsRaw)) continue;
 
+            // FIX 3: Override sourceUrl with reliable Ad Library search URLs based on sourcePlatform
+            // Gemini cannot reliably return working ad-specific URLs — use searchable library URLs instead
+            const competitorName = competitor.competitorName ?? "";
+            const productCategory = storeAnalysis.productCategory ?? "";
+            for (const b of blueprintsRaw) {
+                const platform = b.sourcePlatform ?? "";
+                let adLibraryUrl: string | null = null;
+                if (platform === "meta_ads" || platform === "facebook_organic" || platform === "instagram_organic") {
+                    adLibraryUrl = `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&q=${encodeURIComponent(competitorName)}&search_type=keyword_unordered`;
+                } else if (platform === "tiktok_ads" || platform === "tiktok_organic") {
+                    adLibraryUrl = `https://library.tiktok.com/ads?region=ALL&adv_name=${encodeURIComponent(competitorName)}`;
+                } else if (platform === "google_ads") {
+                    adLibraryUrl = `https://adstransparency.google.com/?region=anywhere&hl=fr&q=${encodeURIComponent(competitorName)}`;
+                } else if (platform === "youtube") {
+                    adLibraryUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${competitorName} ${productCategory} ad`)}`;
+                }
+                if (adLibraryUrl) {
+                    b.sourceUrl = adLibraryUrl;
+                }
+            }
+
             // og:image fallback — for any blueprint where sourceImageUrl is null but sourceUrl is not null
             for (const b of blueprintsRaw) {
                 if (!b.sourceImageUrl && b.sourceUrl) {

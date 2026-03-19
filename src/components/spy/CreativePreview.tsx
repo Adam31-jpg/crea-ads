@@ -20,9 +20,22 @@ const PLATFORM_LABELS: Record<string, string> = {
     youtube: "YouTube",
 };
 
+const AD_LIBRARY_HOSTS = [
+    "facebook.com/ads/library",
+    "library.tiktok.com/ads",
+    "adstransparency.google.com",
+    "youtube.com/results",
+];
+
+function isAdLibraryUrl(url: string): boolean {
+    return AD_LIBRARY_HOSTS.some((h) => url.includes(h));
+}
+
 export function CreativePreview({ sourceUrl, sourceImageUrl, sourcePlatform, creativeName }: CreativePreviewProps) {
     const [imageError, setImageError] = useState(false);
     const platformLabel = sourcePlatform ? (PLATFORM_LABELS[sourcePlatform] ?? sourcePlatform) : "Source";
+    const isLibraryLink = !!sourceUrl && isAdLibraryUrl(sourceUrl);
+    const linkLabel = isLibraryLink ? `Voir les pubs ${platformLabel}` : "Voir la créative originale";
 
     if (sourceImageUrl && !imageError) {
         return (
@@ -45,7 +58,7 @@ export function CreativePreview({ sourceUrl, sourceImageUrl, sourcePlatform, cre
                     >
                         <span className="flex items-center gap-2 text-white text-xs font-medium bg-black/70 px-3 py-1.5 rounded-full">
                             <ExternalLink className="h-3 w-3" />
-                            Voir sur {platformLabel}
+                            {linkLabel}
                         </span>
                     </a>
                 )}
@@ -66,7 +79,7 @@ export function CreativePreview({ sourceUrl, sourceImageUrl, sourcePlatform, cre
             >
                 <Eye className="h-7 w-7 text-muted-foreground/40 group-hover:text-amber-500/60 transition-colors mb-2" />
                 <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
-                    Voir la créative originale
+                    {linkLabel}
                 </span>
                 <span className="text-[10px] text-muted-foreground/60 mt-1 flex items-center gap-1">
                     <ExternalLink className="h-3 w-3" />

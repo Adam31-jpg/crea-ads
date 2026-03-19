@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, FolderOpen, Settings, HelpCircle, Bug } from "lucide-react";
+import { Home, FolderOpen, FolderClosed, Settings, HelpCircle, Bug } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 export function DashboardSidebar() {
@@ -13,9 +13,9 @@ export function DashboardSidebar() {
     const t = useTranslations("Dashboard.nav");
 
     const navItems = [
-        { label: t("home"), href: "/dashboard", icon: Home },
-        { label: t("projects"), href: "/dashboard/projects", icon: FolderOpen },
-        { label: t("settings"), href: "/dashboard/settings", icon: Settings },
+        { label: t("home"), href: "/dashboard", icon: Home, iconActive: Home },
+        { label: t("projects"), href: "/dashboard/projects", icon: FolderClosed, iconActive: FolderOpen },
+        { label: t("settings"), href: "/dashboard/settings", icon: Settings, iconActive: Settings },
     ];
 
     return (
@@ -50,13 +50,16 @@ export function DashboardSidebar() {
                             key={item.href}
                             href={item.href}
                             className={cn(
-                                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
                                 isActive
                                     ? "bg-amber-500/10 text-amber-400"
                                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                             )}
                         >
-                            <item.icon className="h-4 w-4" />
+                            {isActive
+                                ? <item.iconActive className="h-4 w-4 scale-110 transition-transform duration-200" />
+                                : <item.icon className="h-4 w-4 transition-transform duration-200" />
+                            }
                             {item.label}
                         </Link>
                     );

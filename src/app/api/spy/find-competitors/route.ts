@@ -136,10 +136,14 @@ DO NOT invent fictional companies. Every competitor must be a real, verifiable b
                     const siteHtml = await siteRes.text();
                     const siteText = siteHtml.slice(0, 10000);
                     const verifyPrompt =
-                        `You are a verification agent. Determine if this website is a real, active business selling products in the same category.\n\n` +
+                        `You are a verification agent. Determine if this website sells products broadly related to the user's store category.\n\n` +
                         `USER'S STORE: Name: ${storeAnalysis.storeName}, Category: ${storeAnalysis.productCategory}, Niche: ${storeAnalysis.niche}\n` +
                         `COMPETITOR: Name: ${competitor.competitorName}, URL: ${competitor.competitorUrl}\n` +
                         `COMPETITOR HTML (first 10000 chars):\n${siteText}\n\n` +
+                        `Rules:\n` +
+                        `- isVerified: true if the site is a real, active e-commerce or product brand (not a 404, parked domain, or pure service company)\n` +
+                        `- confidence: integer 0-100 (be GENEROUS — if the site sells any products at all and the niche is plausible, score 60+)\n` +
+                        `- isDirectCompetitor: true if they sell similar products\n` +
                         `Return ONLY: { "isVerified": boolean, "confidence": number, "isDirectCompetitor": boolean }`;
                     const vRes = await ai.models.generateContent({
                         model: "gemini-2.5-flash",
@@ -147,9 +151,12 @@ DO NOT invent fictional companies. Every competitor must be a real, verifiable b
                     });
                     const vText = (vRes.text ?? "{}").replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
                     const verification = JSON.parse(vText);
-                    passed = verification.isVerified === true && (verification.confidence ?? 0) > 60;
+                    // Normalize confidence: Gemini may return 0-1 float or 0-100 integer
+                    const rawConfidence = verification.confidence ?? 0;
+                    const normalizedConfidence = rawConfidence <= 1 ? rawConfidence * 100 : rawConfidence;
+                    passed = verification.isVerified === true && normalizedConfidence >= 50;
                     if (!passed) {
-                        console.log(`[spy/find-competitors] REJECTED: ${competitor.competitorName} (confidence:${verification.confidence})`);
+                        console.log(`[spy/find-competitors] REJECTED: ${competitor.competitorName} (raw:${rawConfidence} normalized:${normalizedConfidence})`);
                     }
                 }
             } catch {

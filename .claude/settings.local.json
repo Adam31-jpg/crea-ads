@@ -10,7 +10,8 @@
       "Bash(mv src/app/api/render/route.ts src/app/api/render/route.legacy.ts)",
       "Bash(mv src/app/api/render/single/route.ts src/app/api/render/single/route.legacy.ts)",
       "Bash(mv src/app/api/render/status/route.ts src/app/api/render/status/route.legacy.ts)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(xargs grep:*)"
     ]
   }
 }
