@@ -4,7 +4,6 @@ import { Bodoni_Moda } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { NextIntlClientProvider } from "next-intl";
-import { getLocale, getMessages } from "next-intl/server";
 import Script from "next/script";
 import { RechargeModal } from "@/components/modals/recharge-modal";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -39,8 +38,22 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const locale = await getLocale();
-  const messages = await getMessages();
+  // Wrap in try-catch: during static pre-rendering of /_not-found,
+  // next-intl server APIs are not available and will throw.
+  let locale = "fr";
+  let messages: Record<string, unknown> = {};
+  try {
+    const { getLocale, getMessages } = await import("next-intl/server");
+    locale = await getLocale();
+    messages = await getMessages() as Record<string, unknown>;
+  } catch {
+    // Static pre-rendering fallback — use defaults
+    try {
+      messages = (await import("@/messages/fr.json")).default;
+    } catch {
+      messages = {};
+    }
+  }
 
   return (
     <html lang={locale} suppressHydrationWarning>
@@ -64,7 +77,6 @@ export default async function RootLayout({
         </ThemeProvider>
         <Script src="https://app.lemonsqueezy.com/js/lemon.js" strategy="afterInteractive" />
       </body>
-    </html >
+    </html>
   );
 }
-
