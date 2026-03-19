@@ -15,7 +15,24 @@
       "Bash(for f:*)",
       "Bash(do echo:*)",
       "Read(//c/Users/adamh/Documents/Projects/crea-ads/**)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(powershell -Command \"Move-Item -Path ''dashboard'' -Destination ''\\(app\\)\\\\dashboard'' -Force; Write-Host ''done dashboard''\")",
+      "Bash(powershell -Command \"Move-Item -Path ''login'' -Destination ''\\(app\\)\\\\login'' -Force; Write-Host ''done login''\")",
+      "Bash(powershell -Command \"Move-Item -Path ''signup'' -Destination ''\\(app\\)\\\\signup'' -Force; Write-Host ''done signup''\")",
+      "Bash(powershell -Command \"Move-Item -Path ''batches'' -Destination ''\\(app\\)\\\\batches'' -Force; Write-Host ''done batches''\")",
+      "Bash(powershell -Command \"Move-Item -Path ''help'' -Destination ''\\(app\\)\\\\help'' -Force; Write-Host ''done help''\")",
+      "Bash(powershell -Command \"Move-Item -Path ''bug'' -Destination ''\\(app\\)\\\\bug'' -Force; Write-Host ''done bug''\")",
+      "Bash(powershell -Command \"Move-Item -Path ''studio'' -Destination ''\\(app\\)\\\\studio'' -Force; Write-Host ''done studio''\")",
+      "Bash(powershell -Command \"Move-Item -Path ''[admin_route]'' -Destination ''\\(app\\)\\\\[admin_route]'' -Force; Write-Host ''done admin_route''\")",
+      "Bash(robocopy dashboard:*)",
+      "Bash(robocopy batches:*)",
+      "Bash(robocopy studio:*)",
+      "Bash(cmd /c \"xcopy dashboard \"\"\\(app\\)\\\\dashboard\"\" /E /I /Y /H /Q 2>&1\")",
+      "Bash(cmd /c \"rd /S /Q dashboard\")",
+      "Bash(cmd /c \"xcopy batches \"\"\\(app\\)\\\\batches\"\" /E /I /Y /H /Q 2>&1\")",
+      "Bash(cmd /c \"rd /S /Q batches\")",
+      "Bash(cmd /c \"xcopy studio \"\"\\(app\\)\\\\studio\"\" /E /I /Y /H /Q 2>&1\")",
+      "Bash(cmd /c \"rd /S /Q studio\")"
     ]
   }
 }

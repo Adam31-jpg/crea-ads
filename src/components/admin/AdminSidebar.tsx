@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutTemplate, ShieldAlert, LogOut, BarChart3, LifeBuoy } from "lucide-react";
-import { logoutAdmin } from "@/app/[admin_route]/actions";
+import { logoutAdmin } from "@/app/(app)/[admin_route]/actions";
 
 export function AdminSidebar({ secretRoute }: { secretRoute: string }) {
     const pathname = usePathname();

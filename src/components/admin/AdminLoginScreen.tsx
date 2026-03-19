@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { loginAdmin } from "@/app/[admin_route]/actions";
+import { loginAdmin } from "@/app/(app)/[admin_route]/actions";
 import { Lock, Loader2 } from "lucide-react";
 
 export function AdminLoginScreen() {

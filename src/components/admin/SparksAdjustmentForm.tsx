@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { adjustSparksAction } from "@/app/[admin_route]/analytics/users/[id]/actions";
+import { adjustSparksAction } from "@/app/(app)/[admin_route]/analytics/users/[id]/actions";
 import { toast } from "sonner";
 import { Zap } from "lucide-react";
 

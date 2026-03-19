@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { ExternalLink, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
-import { updateBugStatus } from "@/app/[admin_route]/analytics/support/actions";
+import { updateBugStatus } from "@/app/(app)/[admin_route]/analytics/support/actions";
 
 export type BugDetail = {
     id: string;

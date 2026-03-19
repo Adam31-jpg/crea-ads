@@ -1,13 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Bodoni_Moda } from "next/font/google";
-import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
-import { NextIntlClientProvider } from "next-intl";
-import Script from "next/script";
-import { RechargeModal } from "@/components/modals/recharge-modal";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { SessionProvider } from "next-auth/react";
+import Script from "next/script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -33,30 +29,12 @@ export const metadata: Metadata = {
     "Generate stunning product videos and creatives at scale with AI. Batch render, customize themes, and export to every social format.",
 };
 
-export default async function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  // Wrap in try-catch: during static pre-rendering of /_not-found,
-  // next-intl server APIs are not available and will throw.
-  let locale = "fr";
-  let messages: Record<string, unknown> = {};
-  try {
-    const { getLocale, getMessages } = await import("next-intl/server");
-    locale = await getLocale();
-    messages = await getMessages() as Record<string, unknown>;
-  } catch {
-    // Static pre-rendering fallback — use defaults
-    try {
-      messages = (await import("@/messages/fr.json")).default;
-    } catch {
-      messages = {};
-    }
-  }
-
+// Root layout is intentionally minimal — no next-intl, no server APIs.
+// next-intl is provided by src/app/(app)/layout.tsx which wraps all real pages.
+// This allows /_not-found to pre-render statically without crashing.
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang={locale} suppressHydrationWarning>
+    <html lang="fr" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${bodoni.variable} antialiased`}
       >
@@ -66,13 +44,7 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <SessionProvider>
-            <NextIntlClientProvider messages={messages}>
-              <TooltipProvider>
-                {children}
-              </TooltipProvider>
-              <Toaster />
-              <RechargeModal />
-            </NextIntlClientProvider>
+            {children}
           </SessionProvider>
         </ThemeProvider>
         <Script src="https://app.lemonsqueezy.com/js/lemon.js" strategy="afterInteractive" />
