@@ -11,6 +11,11 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
 
+  // CRITICAL: gives next-intl's plugin configuration space for Turbopack module aliases.
+  // Without this, the plugin only configures webpack aliases and Vercel's Turbopack
+  // runtime cannot resolve the i18n config file.
+  turbopack: {},
+
   images: {
     remotePatterns: [
       {
