@@ -166,27 +166,33 @@ export async function POST(req: NextRequest) {
                 }
             }
 
-            // og:image fallback — for any blueprint where sourceImageUrl is null but sourceUrl is not null
-            for (const b of blueprintsRaw) {
-                if (!b.sourceImageUrl && b.sourceUrl) {
-                    try {
-                        const pageRes = await fetch(b.sourceUrl, {
-                            headers: { "User-Agent": "Mozilla/5.0 (compatible; Lumina/1.0)" },
-                            signal: AbortSignal.timeout(5000),
-                        });
-                        if (pageRes.ok) {
-                            const html = await pageRes.text();
-                            const ogMatch =
-                                html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i) ||
-                                html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:image"/i);
-                            if (ogMatch?.[1]) {
-                                b.sourceImageUrl = ogMatch[1];
-                                console.log(`  [og:image fallback] Found for "${b.creativeName}": ${b.sourceImageUrl}`);
-                            }
+            // FIX 3b: Fetch og:image ONCE from competitor's actual website (not ad library URLs)
+            let competitorOgImage: string | null = null;
+            if (competitor.competitorUrl) {
+                try {
+                    const pageRes = await fetch(competitor.competitorUrl, {
+                        headers: { "User-Agent": "Mozilla/5.0 (compatible; Lumina/1.0)" },
+                        signal: AbortSignal.timeout(5000),
+                    });
+                    if (pageRes.ok) {
+                        const html = await pageRes.text();
+                        const ogMatch =
+                            html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i) ||
+                            html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:image"/i);
+                        if (ogMatch?.[1]) {
+                            competitorOgImage = ogMatch[1];
+                            console.log(`  [og:image] Found for ${competitor.competitorName}: ${competitorOgImage}`);
                         }
-                    } catch {
-                        // Silently fail — sourceImageUrl stays null
                     }
+                } catch {
+                    // Silent — no og:image available
+                }
+            }
+
+            // Apply competitor og:image to all blueprints missing a sourceImageUrl
+            for (const b of blueprintsRaw) {
+                if (!b.sourceImageUrl && competitorOgImage) {
+                    b.sourceImageUrl = competitorOgImage;
                 }
             }
 
@@ -216,11 +222,13 @@ export async function POST(req: NextRequest) {
             );
 
             allBlueprints.push(...created);
+            // FIX 1: Stream full blueprints via SSE so the UI updates incrementally
             broadcast(userId, {
                 type: "creatives_extracted",
                 competitorId: competitor.id,
                 competitorName: competitor.competitorName,
                 count: created.length,
+                blueprints: created,
             });
         }
 

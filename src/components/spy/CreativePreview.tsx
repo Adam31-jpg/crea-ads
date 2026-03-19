@@ -47,7 +47,6 @@ export function CreativePreview({ sourceUrl, sourceImageUrl, sourcePlatform, cre
                     className="w-full h-full object-cover"
                     onError={() => setImageError(true)}
                     loading="lazy"
-                    crossOrigin="anonymous"
                 />
                 {sourceUrl && (
                     <a

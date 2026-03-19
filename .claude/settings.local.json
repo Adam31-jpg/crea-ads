@@ -33,7 +33,8 @@
       "Bash(cmd /c \"rd /S /Q batches\")",
       "Bash(cmd /c \"xcopy studio \"\"\\(app\\)\\\\studio\"\" /E /I /Y /H /Q 2>&1\")",
       "Bash(cmd /c \"rd /S /Q studio\")",
-      "Bash(del \"C:\\\\Users\\\\adamh\\\\Documents\\\\Projects\\\\crea-ads\\\\src\\\\middleware.ts\")"
+      "Bash(del \"C:\\\\Users\\\\adamh\\\\Documents\\\\Projects\\\\crea-ads\\\\src\\\\middleware.ts\")",
+      "Bash(wc -l \"C:\\\\Users\\\\adamh\\\\Documents\\\\Projects\\\\crea-ads\\\\src\\\\app\\\\\\(app\\)\\\\dashboard\\\\projects\\\\[projectId]\\\\page.tsx\")"
     ]
   }
 }

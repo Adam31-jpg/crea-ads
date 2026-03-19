@@ -85,6 +85,7 @@ export default function ProjectDetailPage() {
     const [isExtracting, setIsExtracting] = useState(false);
     const [isExpanding, setIsExpanding] = useState(false);
     const [expandExhausted, setExpandExhausted] = useState(false);
+    const [visibleCount, setVisibleCount] = useState(10);
 
     const {
         currentStep,
@@ -145,6 +146,10 @@ export default function ProjectDetailPage() {
     const generatedJobsRef = useRef(generatedJobs);
     generatedJobsRef.current = generatedJobs;
 
+    // Keep a stable ref so SSE closure can read latest blueprints without stale capture
+    const blueprintsRef = useRef(blueprints);
+    blueprintsRef.current = blueprints;
+
     useEffect(() => {
         if (!hasRenderingJobs || !projectId) return;
         const interval = setInterval(async () => {
@@ -185,6 +190,15 @@ export default function ProjectDetailPage() {
                         updateJob(data.jobId, { status: data.status, result_url: data.result_url, warning: data.warning });
                         if (data.status === "done") toast.success("Créative générée !");
                         else if (data.status === "failed") toast.error(t("errors.generationFailed"));
+                    }
+                    // FIX 1: Incrementally stream blueprints as each competitor finishes
+                    if (data.type === "creatives_extracted" && Array.isArray(data.blueprints) && data.blueprints.length > 0) {
+                        const existingIds = new Set(blueprintsRef.current.map((b: CreativeBlueprint) => b.id));
+                        const incoming = (data.blueprints as CreativeBlueprint[]).filter((b) => !existingIds.has(b.id));
+                        if (incoming.length > 0) {
+                            setBlueprints([...blueprintsRef.current, ...incoming]);
+                            toast.success(`${incoming.length} blueprints extraits pour ${data.competitorName}`);
+                        }
                     }
                 } catch {}
             };
@@ -255,6 +269,7 @@ export default function ProjectDetailPage() {
                     competitorName: b.competitorAnalysisId ? cMap[b.competitorAnalysisId] : undefined,
                 })));
                 setExpandExhausted(false);
+                setVisibleCount(10);
             } else {
                 toast.error("Extraction échouée.");
             }
@@ -530,8 +545,9 @@ export default function ProjectDetailPage() {
                     )}
 
                     {/* Unified rows: blueprint aligned with its result */}
-                    {blueprints.map((blueprint) => {
+                    {blueprints.slice(0, visibleCount).map((blueprint) => {
                         const job = generatedJobs.find(j => j.blueprintId === blueprint.id);
+                        const hasResult = !!job && (job.status === "done" || job.status === "rendering");
                         return (
                             <div key={blueprint.id} className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
                                 <BlueprintCard
@@ -542,6 +558,7 @@ export default function ProjectDetailPage() {
                                     storeAnalysis={storeAnalysis}
                                     t={t}
                                     competitors={competitors}
+                                    hasResult={hasResult}
                                     onToggle={() => toggleBlueprint(blueprint.id)}
                                     onPromptChange={(p) => updateBlueprintPrompt(blueprint.id, p)}
                                     onAspectRatioChange={(ar) => updateBlueprintAspectRatio(blueprint.id, ar)}
@@ -576,6 +593,18 @@ export default function ProjectDetailPage() {
                         );
                     })}
 
+                    {/* FIX 2: Load more pagination */}
+                    {blueprints.length > visibleCount && (
+                        <Button
+                            variant="outline"
+                            onClick={() => setVisibleCount((v) => v + 10)}
+                            className="w-full gap-2"
+                        >
+                            <Plus className="h-4 w-4" />
+                            Voir plus ({blueprints.length - visibleCount} restants)
+                        </Button>
+                    )}
+
                     {/* Expand button */}
                     {blueprints.length > 0 && (
                         <Button
@@ -609,6 +638,7 @@ function BlueprintCard({
     storeAnalysis,
     t,
     competitors,
+    hasResult,
     onToggle,
     onPromptChange,
     onAspectRatioChange,
@@ -625,6 +655,7 @@ function BlueprintCard({
     t: any;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     competitors: any[];
+    hasResult: boolean;
     onToggle: () => void;
     onPromptChange: (p: string) => void;
     onAspectRatioChange: (ar: string) => void;
@@ -855,8 +886,8 @@ function BlueprintCard({
                     </label>
                 )}
 
-                {/* 5. Action */}
-                {!isUgc && (
+                {/* 5. Action — FIX 4: show Générer only before a result exists */}
+                {!isUgc && !hasResult && (
                     <div className="space-y-1.5">
                         {competitorName && (
                             <a
