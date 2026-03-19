@@ -11,7 +11,11 @@
       "Bash(mv src/app/api/render/single/route.ts src/app/api/render/single/route.legacy.ts)",
       "Bash(mv src/app/api/render/status/route.ts src/app/api/render/status/route.legacy.ts)",
       "Bash(node -e \":*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//c/Users/adamh/Documents/Projects/crea-ads/**)",
+      "Bash(done)"
     ]
   }
 }

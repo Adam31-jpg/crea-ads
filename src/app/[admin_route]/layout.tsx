@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { cookies } from "next/headers";
 import { AdminLoginScreen } from "@/components/admin/AdminLoginScreen";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
