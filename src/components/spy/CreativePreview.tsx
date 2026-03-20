@@ -45,8 +45,12 @@ export function CreativePreview({ sourceUrl, sourceImageUrl, sourcePlatform, cre
                     src={sourceImageUrl}
                     alt={creativeName}
                     className="w-full h-full object-cover"
-                    onError={() => setImageError(true)}
+                    onError={() => {
+                        console.warn(`[CreativePreview] Image failed: ${sourceImageUrl}`);
+                        setImageError(true);
+                    }}
                     loading="lazy"
+                    referrerPolicy="no-referrer"
                 />
                 {sourceUrl && (
                     <a

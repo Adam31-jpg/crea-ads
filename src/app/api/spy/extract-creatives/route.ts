@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { GoogleGenAI } from "@google/genai";
 import { broadcast } from "@/lib/sse";
+import { getCompetitorAds } from "@/lib/scrapecreators";
 
 export async function POST(req: NextRequest) {
     try {
@@ -51,48 +52,53 @@ export async function POST(req: NextRequest) {
         const allBlueprints: object[] = [];
 
         for (const competitor of competitors) {
+            // ── STEP A: Get real ads from Meta Ad Library via ScrapeCreators ──
+            const realAds = await getCompetitorAds(competitor.competitorName ?? "", 5);
+            console.log(
+                `[spy/extract-creatives] ScrapeCreators returned ${realAds.length} real ads for ${competitor.competitorName}`,
+            );
+
+            // Build context for Gemini from real ad data
+            const realAdsContext =
+                realAds.length > 0
+                    ? realAds
+                          .map(
+                              (ad, i) =>
+                                  `Real Ad #${i + 1}:\n` +
+                                  `  Title: ${ad.adTitle ?? "N/A"}\n` +
+                                  `  Text: ${ad.adText ?? "N/A"}\n` +
+                                  `  CTA: ${ad.ctaText ?? "N/A"}\n` +
+                                  `  Platform: ${ad.platform ?? "N/A"}\n` +
+                                  `  Landing: ${ad.linkUrl ?? "N/A"}\n` +
+                                  `  Has image: ${ad.snapshotUrl ? "YES" : "NO"}`,
+                          )
+                          .join("\n\n")
+                    : "No real ads found. Generate creative concepts based on the competitor's website and niche trends.";
+
+            // ── STEP B: Build the Gemini prompt ──────────────────────────────
             const lines = [
-                `You are Lumina's Ad Creative Analyst. Research ALL advertising and marketing content of ${competitor.competitorName} (${competitor.competitorUrl ?? "search for their website"}).`,
+                `You are Lumina's Ad Creative Analyst. Based on REAL ADS from ${competitor.competitorName} (${competitor.competitorUrl ?? ""}), generate reproduction blueprints.`,
                 "",
-                "SEARCH SCOPE — analyze ALL channels:",
-                "1. Meta Ads: Search Meta Ad Library for active/recent ads",
-                "2. TikTok Ads: Search TikTok ad campaigns and promoted content",
-                "3. Google Ads: Display ads, Shopping ads, search ads",
-                "4. Instagram organic: Top-performing posts",
-                "5. TikTok organic: Viral videos",
-                "6. Facebook posts: Top page posts",
-                "7. YouTube: Video ads or product reviews",
+                "REAL ADS FROM THE COMPETITOR (from Meta Ad Library):",
+                realAdsContext,
                 "",
-                "For each creative pattern return ALL fields:",
-                "- creativeName: string",
+                `For EACH real ad above (or inspired by their style if no ads found), create a blueprint for ${storeAnalysis.storeName ?? "the brand"}:`,
+                "- creativeName: string (catchy name in target language)",
                 '- creativeType: "ugc_video" | "flat_lay" | "comparison" | "asmr" | "lifestyle" | "carousel" | "testimonial"',
-                "- description: string (what makes it effective, visual style, hook)",
+                "- description: string (what makes the original ad effective, visual style, hook strategy)",
                 '- estimatedPerformance: { hookRate: string, engagement: string, format: string }',
-                `- reproductionPrompt: string (Fal.ai prompt — describe SCENE/ENVIRONMENT only for ${storeAnalysis.storeName ?? "the brand"}, never mention "a product" directly)`,
+                `- reproductionPrompt: string (Fal.ai image prompt — describe the SCENE to reproduce this ad's style for ${storeAnalysis.storeName ?? "the brand"}, never mention "a product" directly, describe environment/mood/lighting/composition in English)`,
                 '- aspectRatio: "9:16" | "1:1" | "16:9" | "4:5"',
                 '- sourceLabel: "cloned_from_competitor"',
-                "",
-                "CRITICAL — SOURCE URLs: For each creative, you MUST try to provide real URLs:",
-                "1. sourceUrl — Try these in order:",
-                `   a) Search "${competitor.competitorName} facebook ads library" → if found, construct: https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&q=${encodeURIComponent(competitor.competitorName ?? "")}`,
-                `   b) Search "${competitor.competitorName} instagram" → if found, use: https://www.instagram.com/[username]/`,
-                `   c) Search "${competitor.competitorName} tiktok" → if found, use: https://www.tiktok.com/@[username]`,
-                `   d) Use their website URL as last resort: ${competitor.competitorUrl ?? ""}`,
-                "   NEVER return null for sourceUrl if the competitor has any web presence.",
-                "2. sourceImageUrl — Try these in order:",
-                "   a) If you found a specific Instagram post URL, include the image URL if accessible",
-                `   b) Search Google Images for "${competitor.competitorName} ad creative" or "${competitor.competitorName} product"`,
-                "   c) Check the competitor's website for product images — look for og:image meta tags",
-                "   d) If the competitor has a Shopify/WooCommerce store, product images are at predictable URLs",
-                "   If you truly cannot find any image URL, return null — but TRY.",
-                '- sourceImageUrl: string | null (direct URL to image/thumbnail. null if not found)',
-                '- sourcePlatform: "meta_ads" | "tiktok_ads" | "google_ads" | "instagram_organic" | "tiktok_organic" | "facebook_organic" | "youtube" — ALWAYS set based on where your creative inspiration came from.',
+                "- realAdIndex: number (0-based index matching the real ad above, or -1 if inspired by trends rather than a specific ad)",
                 "",
                 "For ugc_video also include ugcScript: string (HOOK 0-3s, BODY 3-18s, CTA 18-22s with camera directions)",
                 "",
-                "Generate 2-4 creatives. Return ONLY a JSON array. If no specific ads found, generate from niche trends, set sourceLabel to \"market_trend\" and sourceUrl to the competitor's main website.",
+                `Generate ${Math.max(realAds.length, 2)} blueprints. Match real ads 1-to-1 when possible (use realAdIndex).`,
+                "If no real ads were found, generate 2-3 blueprints based on niche trends and set realAdIndex to -1.",
+                "Return ONLY a JSON array, no markdown fences.",
                 "",
-                `LANGUAGE: Marketing copy (headlines, CTAs, overlay text), ugcScript, creativeName in ${langLabel}. Scene descriptions in English.`,
+                `LANGUAGE: creativeName, description, ugcScript, estimatedPerformance values in ${langLabel}. reproductionPrompt ALWAYS in English.`,
             ];
             const prompt = lines.join("\n");
 
@@ -108,13 +114,14 @@ export async function POST(req: NextRequest) {
                 sourceUrl?: string | null;
                 sourceImageUrl?: string | null;
                 sourcePlatform?: string | null;
+                realAdIndex?: number;
             }> = [];
 
             try {
                 const response = await ai.models.generateContent({
                     model: "gemini-2.5-flash",
                     contents: [{ role: "user", parts: [{ text: prompt }] }],
-                    config: { tools: [{ googleSearch: {} }] },
+                    // No googleSearch needed — we already have the real ad data
                 });
                 const text = response.text ?? "[]";
                 const cleaned = text
@@ -123,17 +130,12 @@ export async function POST(req: NextRequest) {
                     .trim();
                 blueprintsRaw = JSON.parse(cleaned);
 
-                // Debug: log what Gemini returned for each creative
-                console.log(`[spy/extract-creatives] ── Competitor: ${competitor.competitorName} ──`);
-                blueprintsRaw.forEach((b, i) => {
-                    console.log(`  [${i}] "${b.creativeName}" type=${b.creativeType}`);
-                    console.log(`       sourceUrl=${b.sourceUrl ?? "NULL"}`);
-                    console.log(`       sourceImageUrl=${b.sourceImageUrl ?? "NULL"}`);
-                    console.log(`       sourcePlatform=${b.sourcePlatform ?? "NULL"}`);
-                });
+                console.log(
+                    `[spy/extract-creatives] ── Competitor: ${competitor.competitorName} ── ${blueprintsRaw.length} blueprints`,
+                );
             } catch {
                 console.error(
-                    `[spy/extract-creatives] Failed for competitor ${competitor.competitorName}`,
+                    `[spy/extract-creatives] Gemini failed for ${competitor.competitorName}`,
                 );
                 broadcast(userId, {
                     type: "creative_extraction_failed",
@@ -145,57 +147,29 @@ export async function POST(req: NextRequest) {
 
             if (!Array.isArray(blueprintsRaw)) continue;
 
-            // FIX 3: Override sourceUrl with reliable Ad Library search URLs based on sourcePlatform
-            // Gemini cannot reliably return working ad-specific URLs — use searchable library URLs instead
-            const competitorName = competitor.competitorName ?? "";
-            const productCategory = storeAnalysis.productCategory ?? "";
+            // ── STEP C: Map real ad snapshots to blueprints ───────────────────
             for (const b of blueprintsRaw) {
-                const platform = b.sourcePlatform ?? "";
-                let adLibraryUrl: string | null = null;
-                if (platform === "meta_ads" || platform === "facebook_organic" || platform === "instagram_organic") {
-                    adLibraryUrl = `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&q=${encodeURIComponent(competitorName)}&search_type=keyword_unordered`;
-                } else if (platform === "tiktok_ads" || platform === "tiktok_organic") {
-                    adLibraryUrl = `https://library.tiktok.com/ads?region=ALL&adv_name=${encodeURIComponent(competitorName)}`;
-                } else if (platform === "google_ads") {
-                    adLibraryUrl = `https://adstransparency.google.com/?region=anywhere&hl=fr&q=${encodeURIComponent(competitorName)}`;
-                } else if (platform === "youtube") {
-                    adLibraryUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(`${competitorName} ${productCategory} ad`)}`;
-                }
-                if (adLibraryUrl) {
-                    b.sourceUrl = adLibraryUrl;
+                const adIndex = (b.realAdIndex ?? -1);
+
+                if (adIndex >= 0 && adIndex < realAds.length) {
+                    // 1:1 match to a real ad
+                    const realAd = realAds[adIndex];
+                    b.sourceImageUrl = realAd.snapshotUrl;
+                    b.sourceUrl = `https://www.facebook.com/ads/library/?id=${realAd.adArchiveId}`;
+                    b.sourcePlatform =
+                        realAd.platform === "instagram" ? "instagram_organic" : "meta_ads";
+                    console.log(
+                        `  [${adIndex}] "${b.creativeName}" → snapshot=${realAd.snapshotUrl ? "✓" : "✗"}`,
+                    );
+                } else {
+                    // Trend-inspired — Ad Library search URL as fallback
+                    b.sourceUrl = `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&q=${encodeURIComponent(competitor.competitorName ?? "")}&search_type=keyword_unordered`;
+                    b.sourceImageUrl = null;
+                    b.sourcePlatform = "meta_ads";
                 }
             }
 
-            // FIX 3b: Fetch og:image ONCE from competitor's actual website (not ad library URLs)
-            let competitorOgImage: string | null = null;
-            if (competitor.competitorUrl) {
-                try {
-                    const pageRes = await fetch(competitor.competitorUrl, {
-                        headers: { "User-Agent": "Mozilla/5.0 (compatible; Lumina/1.0)" },
-                        signal: AbortSignal.timeout(5000),
-                    });
-                    if (pageRes.ok) {
-                        const html = await pageRes.text();
-                        const ogMatch =
-                            html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i) ||
-                            html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:image"/i);
-                        if (ogMatch?.[1]) {
-                            competitorOgImage = ogMatch[1];
-                            console.log(`  [og:image] Found for ${competitor.competitorName}: ${competitorOgImage}`);
-                        }
-                    }
-                } catch {
-                    // Silent — no og:image available
-                }
-            }
-
-            // Apply competitor og:image to all blueprints missing a sourceImageUrl
-            for (const b of blueprintsRaw) {
-                if (!b.sourceImageUrl && competitorOgImage) {
-                    b.sourceImageUrl = competitorOgImage;
-                }
-            }
-
+            // ── STEP D: Persist to DB ────────────────────────────────────────
             const created = await Promise.all(
                 blueprintsRaw.map((b) =>
                     prisma.creativeBlueprint.create({
@@ -222,7 +196,8 @@ export async function POST(req: NextRequest) {
             );
 
             allBlueprints.push(...created);
-            // FIX 1: Stream full blueprints via SSE so the UI updates incrementally
+
+            // ── STEP E: Stream blueprints to frontend via SSE ─────────────────
             broadcast(userId, {
                 type: "creatives_extracted",
                 competitorId: competitor.id,
