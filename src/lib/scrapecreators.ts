@@ -23,6 +23,7 @@ export interface ScrapedAd {
 export async function getCompetitorAds(
     competitorName: string,
     limit: number = 5,
+    productCategory?: string,
 ): Promise<ScrapedAd[]> {
     const normalizedName = competitorName.toLowerCase().trim();
 
@@ -52,8 +53,13 @@ export async function getCompetitorAds(
 
     try {
         // Step A: Find the company's Facebook page
+        // Include productCategory in search query to improve disambiguation
+        const searchQuery = productCategory
+            ? `${competitorName} ${productCategory}`
+            : competitorName;
+
         const searchRes = await fetch(
-            `${API_BASE}/search/companies?query=${encodeURIComponent(competitorName)}`,
+            `${API_BASE}/search/companies?query=${encodeURIComponent(searchQuery)}`,
             { headers: { "x-api-key": apiKey }, signal: AbortSignal.timeout(15000) },
         );
 
@@ -70,7 +76,24 @@ export async function getCompetitorAds(
             return [];
         }
 
-        const pageName = companies[0].name ?? competitorName;
+        // Relevance guard: verify at least one word from the competitor name (3+ chars)
+        // appears in the returned company name — prevents matching unrelated pages
+        const nameLower = competitorName.toLowerCase();
+        const nameWords = nameLower.split(/\s+/).filter((w) => w.length >= 3);
+
+        const match = companies.find((c) => {
+            const cName = (c.name ?? "").toLowerCase();
+            return cName.includes(nameLower) || nameWords.some((w) => cName.includes(w));
+        });
+
+        if (!match) {
+            console.log(
+                `[scrapecreators] No relevant company for "${competitorName}" — best result was "${companies[0]?.name}"`,
+            );
+            return [];
+        }
+
+        const pageName = match.name ?? competitorName;
         console.log(`[scrapecreators] Found company: "${pageName}" — fetching ads...`);
 
         // Step B: Fetch their ads

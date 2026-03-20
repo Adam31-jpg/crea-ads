@@ -53,7 +53,11 @@ export async function POST(req: NextRequest) {
 
         for (const competitor of competitors) {
             // ── STEP A: Get real ads from Meta Ad Library via ScrapeCreators ──
-            const realAds = await getCompetitorAds(competitor.competitorName ?? "", 5);
+            const realAds = await getCompetitorAds(
+                competitor.competitorName ?? "",
+                5,
+                storeAnalysis.productCategory ?? undefined,
+            );
             console.log(
                 `[spy/extract-creatives] ScrapeCreators returned ${realAds.length} real ads for ${competitor.competitorName}`,
             );
@@ -183,7 +187,12 @@ export async function POST(req: NextRequest) {
                                 ? (b.estimatedPerformance as unknown as Prisma.InputJsonValue)
                                 : undefined,
                             reproductionPrompt: b.reproductionPrompt ?? "",
-                            ugcScript: b.ugcScript ?? null,
+                            ugcScript:
+                                typeof b.ugcScript === "string"
+                                    ? b.ugcScript
+                                    : b.ugcScript
+                                      ? JSON.stringify(b.ugcScript, null, 2)
+                                      : null,
                             aspectRatio: b.aspectRatio ?? "9:16",
                             sourceLabel: b.sourceLabel ?? "cloned_from_competitor",
                             sourceUrl: b.sourceUrl ?? null,
