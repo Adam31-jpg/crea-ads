@@ -56,7 +56,6 @@ export async function POST(req: NextRequest) {
             const realAds = await getCompetitorAds(
                 competitor.competitorName ?? "",
                 5,
-                storeAnalysis.productCategory ?? undefined,
             );
             console.log(
                 `[spy/extract-creatives] ScrapeCreators returned ${realAds.length} real ads for ${competitor.competitorName}`,

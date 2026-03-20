@@ -18,12 +18,13 @@ export interface ScrapedAd {
 /**
  * Get real Meta ads for a competitor.
  * Checks the DB cache first (7-day TTL) — only calls the API on a cache miss.
- * Returns up to `limit` ads sorted by start date descending.
+ *
+ * Uses search/ads directly with the competitor name — simpler and more reliable
+ * than the search/companies → company/ads pipeline.
  */
 export async function getCompetitorAds(
     competitorName: string,
     limit: number = 5,
-    productCategory?: string,
 ): Promise<ScrapedAd[]> {
     const normalizedName = competitorName.toLowerCase().trim();
 
@@ -49,169 +50,167 @@ export async function getCompetitorAds(
         return [];
     }
 
-    console.log(`[scrapecreators] Fetching ads for "${competitorName}" from API...`);
+    console.log(`[scrapecreators] Fetching ads for "${competitorName}" via search/ads...`);
 
     try {
-        // Step A: Find the company's Facebook page
-        // Include productCategory in search query to improve disambiguation
-        const searchQuery = productCategory
-            ? `${competitorName} ${productCategory}`
-            : competitorName;
-
+        // ── Step A: Search ads directly by competitor name ───────────────────
         const searchRes = await fetch(
-            `${API_BASE}/search/companies?query=${encodeURIComponent(searchQuery)}`,
-            { headers: { "x-api-key": apiKey }, signal: AbortSignal.timeout(15000) },
+            `${API_BASE}/search/ads?query=${encodeURIComponent(competitorName)}&limit=${limit}&country=ALL`,
+            { headers: { "x-api-key": apiKey }, signal: AbortSignal.timeout(20000) },
         );
 
         if (!searchRes.ok) {
-            console.error(`[scrapecreators] Company search failed: ${searchRes.status} for "${competitorName}"`);
+            console.error(`[scrapecreators] search/ads failed: ${searchRes.status} for "${competitorName}"`);
             return [];
         }
 
         const searchData = await searchRes.json();
-        const companies: Array<{ page_id: string; name?: string }> = searchData.searchResults ?? searchData.results ?? [];
-
-        if (companies.length === 0) {
-            console.log(`[scrapecreators] No company found for "${competitorName}"`);
-            return [];
-        }
-
-        // Relevance guard: verify at least one word from the competitor name (3+ chars)
-        // appears in the returned company name — prevents matching unrelated pages
-        const nameLower = competitorName.toLowerCase();
-        const nameWords = nameLower.split(/\s+/).filter((w) => w.length >= 3);
-
-        const match = companies.find((c) => {
-            const cName = (c.name ?? "").toLowerCase();
-            return cName.includes(nameLower) || nameWords.some((w) => cName.includes(w));
-        });
-
-        if (!match) {
-            console.log(
-                `[scrapecreators] No relevant company for "${competitorName}" — best result was "${companies[0]?.name}"`,
-            );
-            return [];
-        }
-
-        const pageName = match.name ?? competitorName;
-        console.log(`[scrapecreators] Found company: "${pageName}" — fetching ads...`);
-
-        // Step B: Fetch their ads
-        const adsRes = await fetch(
-            `${API_BASE}/company/ads?companyName=${encodeURIComponent(pageName)}&country=ALL&limit=${limit}&trim=true`,
-            { headers: { "x-api-key": apiKey }, signal: AbortSignal.timeout(20000) },
-        );
-
-        if (!adsRes.ok) {
-            console.error(`[scrapecreators] Ads fetch failed: ${adsRes.status} for "${pageName}"`);
-            return [];
-        }
-
-        const adsData = await adsRes.json();
-        const rawAds: object[] = adsData.ads ?? adsData.searchResults ?? adsData.results ?? [];
+        const rawAds: object[] = searchData.searchResults ?? searchData.ads ?? searchData.results ?? [];
 
         if (rawAds.length === 0) {
-            console.log(`[scrapecreators] No ads found for "${pageName}"`);
+            console.log(`[scrapecreators] No ads found for "${competitorName}"`);
             return [];
         }
 
-        console.log(`[scrapecreators] Got ${rawAds.length} ads for "${pageName}"`);
+        console.log(`[scrapecreators] Got ${rawAds.length} ads for "${competitorName}"`);
 
-        // ── 3. Parse + cache ─────────────────────────────────────────────────
-        const parsed: ScrapedAd[] = [];
+        // ── Step B: Optionally enrich each ad with detail endpoint ───────────
+        const enrichedAds = await Promise.all(
+            rawAds.map(async (rawAd) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const ad = rawAd as any;
+                const adArchiveId = String(ad.ad_archive_id ?? ad.id ?? "");
+                if (!adArchiveId) return ad;
 
-        for (const rawAd of rawAds.slice(0, limit)) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const ad = rawAd as any;
-            const adArchiveId = String(
-                ad.ad_archive_id ?? ad.id ?? `${Date.now()}-${Math.random()}`,
-            );
+                // Only fetch detail if snapshot URL is missing
+                const hasSnapshot =
+                    ad.snapshot?.body?.images?.[0]?.url ||
+                    ad.snapshot?.cards?.[0]?.body?.images?.[0]?.url ||
+                    ad.snapshot_url ||
+                    ad.ad_snapshot_url;
 
-            // Extract snapshot URL — ScrapeCreators nests it in various shapes
-            let snapshotUrl: string | null = null;
-            if (ad.snapshot?.body?.images?.[0]?.url) {
-                snapshotUrl = ad.snapshot.body.images[0].url;
-            } else if (ad.snapshot?.cards?.[0]?.body?.images?.[0]?.url) {
-                snapshotUrl = ad.snapshot.cards[0].body.images[0].url;
-            } else if (ad.snapshot_url) {
-                snapshotUrl = ad.snapshot_url;
-            } else if (ad.ad_snapshot_url) {
-                snapshotUrl = ad.ad_snapshot_url;
-            }
+                if (hasSnapshot) return ad;
 
-            const adText: string | null =
-                ad.snapshot?.body?.text ?? ad.ad_creative_bodies?.[0] ?? null;
-            const adTitle: string | null =
-                ad.snapshot?.title ?? ad.snapshot?.cards?.[0]?.title ?? null;
-            const ctaText: string | null =
-                ad.snapshot?.cta_text ?? ad.cta_text ?? null;
-            const linkUrl: string | null =
-                ad.snapshot?.link_url ?? ad.ad_creative_link_captions?.[0] ?? null;
-            const platform: string | null = (ad.publisher_platforms ?? [])[0] ?? "facebook";
+                try {
+                    const detailRes = await fetch(
+                        `${API_BASE}/ad?id=${adArchiveId}`,
+                        { headers: { "x-api-key": apiKey }, signal: AbortSignal.timeout(10000) },
+                    );
+                    if (detailRes.ok) {
+                        const detail = await detailRes.json();
+                        // Merge detail into the original ad object (detail takes precedence for snapshot)
+                        return { ...ad, ...detail };
+                    }
+                } catch {
+                    // Detail fetch is best-effort — silently ignore
+                }
+                return ad;
+            }),
+        );
 
-            let startDate: Date | null = null;
-            if (ad.start_date) {
-                startDate =
-                    typeof ad.start_date === "number"
-                        ? new Date(ad.start_date * 1000)
-                        : new Date(ad.start_date);
-            }
-
-            const scraped: ScrapedAd = {
-                adArchiveId,
-                snapshotUrl,
-                adText,
-                adTitle,
-                ctaText,
-                linkUrl,
-                platform,
-                startDate,
-                isActive: ad.is_active ?? true,
-            };
-            parsed.push(scraped);
-
-            // Upsert into cache (fire-and-forget failures are fine)
-            try {
-                await prisma.cachedAd.upsert({
-                    where: { adArchiveId },
-                    update: {
-                        competitorName: normalizedName,
-                        snapshotUrl,
-                        adText,
-                        adTitle,
-                        ctaText,
-                        linkUrl,
-                        platform,
-                        startDate,
-                        isActive: scraped.isActive,
-                        rawData: ad,
-                        fetchedAt: new Date(),
-                    },
-                    create: {
-                        competitorName: normalizedName,
-                        adArchiveId,
-                        snapshotUrl,
-                        adText,
-                        adTitle,
-                        ctaText,
-                        linkUrl,
-                        platform,
-                        startDate,
-                        isActive: scraped.isActive,
-                        rawData: ad,
-                        fetchedAt: new Date(),
-                    },
-                });
-            } catch (e) {
-                console.warn(`[scrapecreators] Cache upsert failed for ${adArchiveId}:`, e);
-            }
-        }
-
-        return parsed;
+        return await parseAndCacheAds(enrichedAds, limit, normalizedName);
     } catch (err) {
         console.error(`[scrapecreators] API error for "${competitorName}":`, err);
         return [];
     }
+}
+
+/**
+ * Parse raw ad objects from ScrapeCreators into ScrapedAd, upsert into DB cache,
+ * and return the parsed results.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function parseAndCacheAds(rawAds: object[], limit: number, normalizedName: string): Promise<ScrapedAd[]> {
+    const parsed: ScrapedAd[] = [];
+
+    for (const rawAd of rawAds.slice(0, limit)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ad = rawAd as any;
+        const adArchiveId = String(
+            ad.ad_archive_id ?? ad.id ?? `${Date.now()}-${Math.random()}`,
+        );
+
+        // Extract snapshot URL — ScrapeCreators nests it in various shapes
+        let snapshotUrl: string | null = null;
+        if (ad.snapshot?.body?.images?.[0]?.url) {
+            snapshotUrl = ad.snapshot.body.images[0].url;
+        } else if (ad.snapshot?.cards?.[0]?.body?.images?.[0]?.url) {
+            snapshotUrl = ad.snapshot.cards[0].body.images[0].url;
+        } else if (ad.snapshot_url) {
+            snapshotUrl = ad.snapshot_url;
+        } else if (ad.ad_snapshot_url) {
+            snapshotUrl = ad.ad_snapshot_url;
+        }
+
+        const adText: string | null =
+            ad.snapshot?.body?.text ?? ad.ad_creative_bodies?.[0] ?? null;
+        const adTitle: string | null =
+            ad.snapshot?.title ?? ad.snapshot?.cards?.[0]?.title ?? null;
+        const ctaText: string | null =
+            ad.snapshot?.cta_text ?? ad.cta_text ?? null;
+        const linkUrl: string | null =
+            ad.snapshot?.link_url ?? ad.ad_creative_link_captions?.[0] ?? null;
+        const platform: string | null = (ad.publisher_platforms ?? [])[0] ?? "facebook";
+
+        let startDate: Date | null = null;
+        if (ad.start_date) {
+            startDate =
+                typeof ad.start_date === "number"
+                    ? new Date(ad.start_date * 1000)
+                    : new Date(ad.start_date);
+        }
+
+        const scraped: ScrapedAd = {
+            adArchiveId,
+            snapshotUrl,
+            adText,
+            adTitle,
+            ctaText,
+            linkUrl,
+            platform,
+            startDate,
+            isActive: ad.is_active ?? true,
+        };
+        parsed.push(scraped);
+
+        // Upsert into cache
+        try {
+            await prisma.cachedAd.upsert({
+                where: { adArchiveId },
+                update: {
+                    competitorName: normalizedName,
+                    snapshotUrl,
+                    adText,
+                    adTitle,
+                    ctaText,
+                    linkUrl,
+                    platform,
+                    startDate,
+                    isActive: scraped.isActive,
+                    rawData: ad,
+                    fetchedAt: new Date(),
+                },
+                create: {
+                    competitorName: normalizedName,
+                    adArchiveId,
+                    snapshotUrl,
+                    adText,
+                    adTitle,
+                    ctaText,
+                    linkUrl,
+                    platform,
+                    startDate,
+                    isActive: scraped.isActive,
+                    rawData: ad,
+                    fetchedAt: new Date(),
+                },
+            });
+        } catch (e) {
+            console.warn(`[scrapecreators] Cache upsert failed for ${adArchiveId}:`, e);
+        }
+    }
+
+    return parsed;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
