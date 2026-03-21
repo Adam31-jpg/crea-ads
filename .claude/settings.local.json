@@ -36,7 +36,8 @@
       "Bash(del \"C:\\\\Users\\\\adamh\\\\Documents\\\\Projects\\\\crea-ads\\\\src\\\\middleware.ts\")",
       "Bash(wc -l \"C:\\\\Users\\\\adamh\\\\Documents\\\\Projects\\\\crea-ads\\\\src\\\\app\\\\\\(app\\)\\\\dashboard\\\\projects\\\\[projectId]\\\\page.tsx\")",
       "Bash(del \"C:\\\\Users\\\\adamh\\\\Documents\\\\Projects\\\\crea-ads\\\\src\\\\app\\\\api\\\\proxy-image\\\\route.ts\")",
-      "Bash(\"C:\\\\Users\\\\adamh\\\\Documents\\\\Projects\\\\crea-ads\\\\.env\")"
+      "Bash(\"C:\\\\Users\\\\adamh\\\\Documents\\\\Projects\\\\crea-ads\\\\.env\")",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

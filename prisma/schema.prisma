@@ -252,6 +252,7 @@ model CachedAd {
   adTitle        String?            // Ad headline
   ctaText        String?            // CTA button text (Shop Now, Learn More…)
   linkUrl        String?            // Landing page URL
+  sourceUrl      String?   @db.Text // Direct link to ad in Meta Ad Library (ad.url)
   platform       String?            // facebook, instagram, messenger, etc.
   startDate      DateTime?
   isActive       Boolean   @default(true)

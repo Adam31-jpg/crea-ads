@@ -53,57 +53,104 @@ export async function POST(req: NextRequest) {
 
         for (const competitor of competitors) {
             // ── STEP A: Get real ads from Meta Ad Library via ScrapeCreators ──
-            const realAds = await getCompetitorAds(
-                competitor.competitorName ?? "",
-                5,
-            );
+            const realAds = await getCompetitorAds(competitor.competitorName ?? "", 5);
             console.log(
                 `[spy/extract-creatives] ScrapeCreators returned ${realAds.length} real ads for ${competitor.competitorName}`,
             );
 
-            // Build context for Gemini from real ad data
-            const realAdsContext =
-                realAds.length > 0
-                    ? realAds
-                          .map(
-                              (ad, i) =>
-                                  `Real Ad #${i + 1}:\n` +
-                                  `  Title: ${ad.adTitle ?? "N/A"}\n` +
-                                  `  Text: ${ad.adText ?? "N/A"}\n` +
-                                  `  CTA: ${ad.ctaText ?? "N/A"}\n` +
-                                  `  Platform: ${ad.platform ?? "N/A"}\n` +
-                                  `  Landing: ${ad.linkUrl ?? "N/A"}\n` +
-                                  `  Has image: ${ad.snapshotUrl ? "YES" : "NO"}`,
-                          )
-                          .join("\n\n")
-                    : "No real ads found. Generate creative concepts based on the competitor's website and niche trends.";
+            // ── QUALITY GATE: Only process ads that have preview images ─────
+            const adsWithImages = realAds.filter((ad) => ad.snapshotUrl);
+            const skipped = realAds.length - adsWithImages.length;
+            if (skipped > 0) {
+                console.log(
+                    `[spy/extract-creatives] Skipped ${skipped} ads without images for ${competitor.competitorName}`,
+                );
+            }
 
-            // ── STEP B: Build the Gemini prompt ──────────────────────────────
+            if (adsWithImages.length === 0) {
+                console.log(
+                    `[spy/extract-creatives] No ads with images for ${competitor.competitorName} — skipping Gemini`,
+                );
+                broadcast(userId, {
+                    type: "creative_extraction_failed",
+                    competitorId: competitor.id,
+                    competitorName: competitor.competitorName,
+                    reason: "no_ads_with_images",
+                });
+                continue;
+            }
+
+            // ── Build context text for Gemini ─────────────────────────────
+            const realAdsContext = adsWithImages
+                .map(
+                    (ad, i) =>
+                        `Real Ad #${i + 1} (ad_archive_id: ${ad.adArchiveId}):\n` +
+                        `  Title: ${ad.adTitle ?? "N/A"}\n` +
+                        `  Text: ${ad.adText ?? "N/A"}\n` +
+                        `  CTA: ${ad.ctaText ?? "N/A"}\n` +
+                        `  Platform: ${ad.platform ?? "N/A"}\n` +
+                        `  Landing: ${ad.linkUrl ?? "N/A"}\n` +
+                        `  Image URL: ${ad.snapshotUrl}\n` +
+                        `  Ad Library URL: ${ad.sourceUrl ?? "N/A"}`,
+                )
+                .join("\n\n");
+
+            // ── STEP B: Build the Gemini multimodal prompt ────────────────
             const lines = [
                 `You are Lumina's Ad Creative Analyst. Based on REAL ADS from ${competitor.competitorName} (${competitor.competitorUrl ?? ""}), generate reproduction blueprints.`,
                 "",
                 "REAL ADS FROM THE COMPETITOR (from Meta Ad Library):",
                 realAdsContext,
                 "",
-                `For EACH real ad above (or inspired by their style if no ads found), create a blueprint for ${storeAnalysis.storeName ?? "the brand"}:`,
+                `For EACH real ad above, create a blueprint for ${storeAnalysis.storeName ?? "the brand"}:`,
                 "- creativeName: string (catchy name in target language)",
                 '- creativeType: "ugc_video" | "flat_lay" | "comparison" | "asmr" | "lifestyle" | "carousel" | "testimonial"',
                 "- description: string (what makes the original ad effective, visual style, hook strategy)",
                 '- estimatedPerformance: { hookRate: string, engagement: string, format: string }',
-                `- reproductionPrompt: string (Fal.ai image prompt — describe the SCENE to reproduce this ad's style for ${storeAnalysis.storeName ?? "the brand"}, never mention "a product" directly, describe environment/mood/lighting/composition in English)`,
+                `- reproductionPrompt: string (CRITICAL: Look at the actual ad image provided above. Describe EXACTLY what you see — the product placement, background color/texture, lighting, camera angle, text overlay style, model pose if any. This prompt will be used to recreate a SIMILAR image with Fal.ai for ${storeAnalysis.storeName ?? "the brand"}. Write in English. Be specific about colors, composition, and mood. Do NOT invent a generic scene — describe what the original ad ACTUALLY looks like.)`,
                 '- aspectRatio: "9:16" | "1:1" | "16:9" | "4:5"',
                 '- sourceLabel: "cloned_from_competitor"',
-                "- realAdIndex: number (0-based index matching the real ad above, or -1 if inspired by trends rather than a specific ad)",
+                "- realAdIndex: number (0-based index matching the real ad above)",
                 "",
                 "For ugc_video also include ugcScript: string (HOOK 0-3s, BODY 3-18s, CTA 18-22s with camera directions)",
                 "",
-                `Generate ${Math.max(realAds.length, 2)} blueprints. Match real ads 1-to-1 when possible (use realAdIndex).`,
-                "If no real ads were found, generate 2-3 blueprints based on niche trends and set realAdIndex to -1.",
+                `Generate exactly ${adsWithImages.length} blueprints. One per real ad above (match using realAdIndex 0-based).`,
                 "Return ONLY a JSON array, no markdown fences.",
                 "",
                 `LANGUAGE: creativeName, description, ugcScript, estimatedPerformance values in ${langLabel}. reproductionPrompt ALWAYS in English.`,
             ];
-            const prompt = lines.join("\n");
+            const promptText = lines.join("\n");
+
+            // ── Fetch ad images as base64 for multimodal context ──────────
+            type GeminiPart =
+                | { text: string }
+                | { inlineData: { mimeType: string; data: string } };
+
+            const parts: GeminiPart[] = [{ text: promptText }];
+
+            await Promise.all(
+                adsWithImages.map(async (ad, i) => {
+                    if (!ad.snapshotUrl) return;
+                    try {
+                        const imgRes = await fetch(ad.snapshotUrl, {
+                            signal: AbortSignal.timeout(5000),
+                        });
+                        if (imgRes.ok) {
+                            const buffer = await imgRes.arrayBuffer();
+                            const base64 = Buffer.from(buffer).toString("base64");
+                            const mimeType =
+                                (imgRes.headers.get("content-type") ?? "image/jpeg").split(";")[0];
+                            parts.push({ text: `\n[Image for Real Ad #${i + 1}]:` });
+                            parts.push({ inlineData: { mimeType, data: base64 } });
+                        }
+                    } catch {
+                        // Image fetch failed — Gemini will rely on text description only
+                        console.warn(
+                            `[spy/extract-creatives] Could not fetch image for ad ${ad.adArchiveId}`,
+                        );
+                    }
+                }),
+            );
 
             let blueprintsRaw: Array<{
                 creativeName: string;
@@ -123,8 +170,7 @@ export async function POST(req: NextRequest) {
             try {
                 const response = await ai.models.generateContent({
                     model: "gemini-2.5-flash",
-                    contents: [{ role: "user", parts: [{ text: prompt }] }],
-                    // No googleSearch needed — we already have the real ad data
+                    contents: [{ role: "user", parts }],
                 });
                 const text = response.text ?? "[]";
                 const cleaned = text
@@ -150,31 +196,42 @@ export async function POST(req: NextRequest) {
 
             if (!Array.isArray(blueprintsRaw)) continue;
 
-            // ── STEP C: Map real ad snapshots to blueprints ───────────────────
-            for (const b of blueprintsRaw) {
-                const adIndex = (b.realAdIndex ?? -1);
+            // ── STEP C: Map real ad snapshots — QUALITY GATE ──────────────
+            // Only blueprints with a real image make it through.
+            const qualifiedBlueprints: typeof blueprintsRaw = [];
 
-                if (adIndex >= 0 && adIndex < realAds.length) {
-                    // 1:1 match to a real ad
-                    const realAd = realAds[adIndex];
+            for (const b of blueprintsRaw) {
+                const adIndex = b.realAdIndex ?? -1;
+
+                if (adIndex >= 0 && adIndex < adsWithImages.length) {
+                    const realAd = adsWithImages[adIndex];
                     b.sourceImageUrl = realAd.snapshotUrl;
-                    b.sourceUrl = `https://www.facebook.com/ads/library/?id=${realAd.adArchiveId}`;
+                    b.sourceUrl =
+                        realAd.sourceUrl ??
+                        `https://www.facebook.com/ads/library/?id=${realAd.adArchiveId}`;
                     b.sourcePlatform =
                         realAd.platform === "instagram" ? "instagram_organic" : "meta_ads";
-                    console.log(
-                        `  [${adIndex}] "${b.creativeName}" → snapshot=${realAd.snapshotUrl ? "✓" : "✗"}`,
-                    );
-                } else {
-                    // Trend-inspired — Ad Library search URL as fallback
-                    b.sourceUrl = `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ALL&q=${encodeURIComponent(competitor.competitorName ?? "")}&search_type=keyword_unordered`;
-                    b.sourceImageUrl = null;
-                    b.sourcePlatform = "meta_ads";
+
+                    if (b.sourceImageUrl) {
+                        qualifiedBlueprints.push(b);
+                        console.log(`  [${adIndex}] "${b.creativeName}" → snapshot=✓`);
+                    } else {
+                        console.log(`  [${adIndex}] "${b.creativeName}" → SKIPPED (no image)`);
+                    }
                 }
+                // Do NOT add blueprints without sourceImageUrl — quality gate is non-negotiable
             }
 
-            // ── STEP D: Persist to DB ────────────────────────────────────────
+            if (qualifiedBlueprints.length === 0) {
+                console.log(
+                    `[spy/extract-creatives] All blueprints filtered out for ${competitor.competitorName}`,
+                );
+                continue;
+            }
+
+            // ── STEP D: Persist to DB ────────────────────────────────────
             const created = await Promise.all(
-                blueprintsRaw.map((b) =>
+                qualifiedBlueprints.map((b) =>
                     prisma.creativeBlueprint.create({
                         data: {
                             competitorAnalysisId: competitor.id,
@@ -205,7 +262,7 @@ export async function POST(req: NextRequest) {
 
             allBlueprints.push(...created);
 
-            // ── STEP E: Stream blueprints to frontend via SSE ─────────────────
+            // ── STEP E: Stream blueprints to frontend via SSE ─────────────
             broadcast(userId, {
                 type: "creatives_extracted",
                 competitorId: competitor.id,

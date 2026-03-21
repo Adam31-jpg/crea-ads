@@ -34,6 +34,7 @@ import { CompetitorList } from "@/components/spy/CompetitorList";
 import { CreativePreview } from "@/components/spy/CreativePreview";
 import { CardSkeleton, ProgressMessage } from "@/components/spy/SpySkeleton";
 import { InfoTooltip } from "@/components/shared/InfoTooltip";
+import { SPARK_PRICING } from "@/config/spark-pricing";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -63,7 +64,11 @@ const LANG_MAP: Record<string, string> = {
     es: "Spanish (Español)",
     it: "Italian (Italiano)",
 };
-const RESOLUTION_COSTS: Record<string, number> = { "1K": 1, "2K": 2, "4K": 3 };
+const RESOLUTION_COSTS: Record<string, number> = {
+    "1K": SPARK_PRICING.GENERATE_1K,
+    "2K": SPARK_PRICING.GENERATE_2K,
+    "4K": SPARK_PRICING.GENERATE_4K,
+};
 
 const ASPECT_RATIOS = [
     { value: "9:16", emoji: "📱", label: "Story" },
@@ -85,7 +90,7 @@ export default function ProjectDetailPage() {
     const [isExtracting, setIsExtracting] = useState(false);
     const [isExpanding, setIsExpanding] = useState(false);
     const [expandExhausted, setExpandExhausted] = useState(false);
-    const [visibleCount, setVisibleCount] = useState(10);
+    const [visibleCount, setVisibleCount] = useState<number>(SPARK_PRICING.INITIAL_VISIBLE_BLUEPRINTS);
 
     const {
         currentStep,
@@ -211,6 +216,34 @@ export default function ProjectDetailPage() {
         return () => { es?.close(); clearTimeout(reconnectTimer); };
     }, [session, updateJob, t]);
 
+    // ── Polling: pick up new blueprints during extraction (works on Vercel) ───
+    useEffect(() => {
+        if (!isExtracting || !storeAnalysis?.id) return;
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/spy/project/${storeAnalysis.id}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.blueprints && Array.isArray(data.blueprints)) {
+                    const existingIds = new Set(blueprintsRef.current.map((b: CreativeBlueprint) => b.id));
+                    const newOnes = data.blueprints.filter((b: CreativeBlueprint) => !existingIds.has(b.id));
+                    if (newOnes.length > 0) {
+                        const cMap = Object.fromEntries(competitors.map((c) => [c.id, c.competitorName]));
+                        const withNames = newOnes.map((b: CreativeBlueprint) => ({
+                            ...b,
+                            competitorName: b.competitorAnalysisId
+                                ? cMap[b.competitorAnalysisId]
+                                : undefined,
+                        }));
+                        setBlueprints([...blueprintsRef.current, ...withNames]);
+                    }
+                }
+            } catch { /* silent */ }
+        }, 3000);
+        return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isExtracting, storeAnalysis?.id]);
+
     // ── Upload helper ─────────────────────────────────────────────────────────
     async function uploadImage(file: File): Promise<string | null> {
         try {
@@ -249,35 +282,48 @@ export default function ProjectDetailPage() {
         }
     }
 
-    // ── Extract creatives ─────────────────────────────────────────────────────
-    async function handleExtract() {
+    // ── Extract creatives — fire-and-forget (polling picks up results) ─────────
+    function handleExtract() {
         if (!storeAnalysis?.id) return;
-        const selectedIds = competitors.filter((c) => c.isSelected && !c.id.startsWith("manual_")).map((c) => c.id);
+        const selectedIds = competitors
+            .filter((c) => c.isSelected && !c.id.startsWith("manual_"))
+            .map((c) => c.id);
         if (selectedIds.length === 0) { toast.error("Aucun concurrent valide sélectionné."); return; }
+
         setIsExtracting(true);
-        try {
-            const res = await fetch("/api/spy/extract-creatives", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ storeAnalysisId: storeAnalysis.id, competitorIds: selectedIds, targetLanguage: globalLang }),
-            });
-            const data = await res.json();
-            if (data.status === "done" && Array.isArray(data.blueprints)) {
-                const cMap = Object.fromEntries(competitors.map((c) => [c.id, c.competitorName]));
-                setBlueprints(data.blueprints.map((b: CreativeBlueprint) => ({
-                    ...b,
-                    competitorName: b.competitorAnalysisId ? cMap[b.competitorAnalysisId] : undefined,
-                })));
-                setExpandExhausted(false);
-                setVisibleCount(10);
-            } else {
-                toast.error("Extraction échouée.");
-            }
-        } catch {
-            toast.error("Extraction échouée. Réessayez.");
-        } finally {
-            setIsExtracting(false);
-        }
+        setBlueprints([]);
+        setVisibleCount(SPARK_PRICING.INITIAL_VISIBLE_BLUEPRINTS);
+        setExpandExhausted(false);
+
+        // Fire-and-forget — polling useEffect picks up results every 3s
+        fetch("/api/spy/extract-creatives", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                storeAnalysisId: storeAnalysis.id,
+                competitorIds: selectedIds,
+                targetLanguage: globalLang,
+            }),
+        })
+            .then(async (res) => {
+                const data = await res.json();
+                if (data.status === "done" && Array.isArray(data.blueprints)) {
+                    // Final reconciliation — ensure all blueprints are in state
+                    const cMap = Object.fromEntries(competitors.map((c) => [c.id, c.competitorName]));
+                    setBlueprints(
+                        data.blueprints.map((b: CreativeBlueprint) => ({
+                            ...b,
+                            competitorName: b.competitorAnalysisId
+                                ? cMap[b.competitorAnalysisId]
+                                : undefined,
+                        })),
+                    );
+                } else {
+                    toast.error("Extraction échouée.");
+                }
+            })
+            .catch(() => { toast.error("Extraction échouée. Réessayez."); })
+            .finally(() => { setIsExtracting(false); });
     }
 
     // ── Expand analysis ───────────────────────────────────────────────────────
@@ -356,6 +402,31 @@ export default function ProjectDetailPage() {
     async function handleGenerateAll() {
         const selected = blueprints.filter((b) => b.isSelected && b.creativeType !== "ugc_video");
         for (const b of selected) await handleGenerateSingle(b);
+    }
+
+    // ── Show more blueprints (costs Sparks) ───────────────────────────────────
+    async function handleShowMore() {
+        try {
+            const res = await fetch("/api/spy/deduct-sparks", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action: "SHOW_MORE_RESULTS",
+                    cost: SPARK_PRICING.SHOW_MORE_RESULTS,
+                }),
+            });
+            if (!res.ok) {
+                if (res.status === 402) {
+                    toast.error("Pas assez de Sparks — rechargez votre compte.");
+                    return;
+                }
+                throw new Error("deduct failed");
+            }
+            setVisibleCount((v) => v + SPARK_PRICING.SHOW_MORE_BATCH_SIZE);
+            toast.success(`+${SPARK_PRICING.SHOW_MORE_BATCH_SIZE} créatives débloquées`);
+        } catch {
+            toast.error("Erreur lors du déverrouillage.");
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -526,11 +597,26 @@ export default function ProjectDetailPage() {
                         )}
                     </div>
 
-                    {/* Empty / loading state */}
+                    {/* Extraction progress banner — shows while extracting even after first blueprints arrive */}
+                    {isExtracting && (
+                        <div className="flex items-center gap-3 p-4 rounded-lg border border-amber-500/20 bg-amber-500/5">
+                            <Loader2 className="h-5 w-5 animate-spin text-amber-500 shrink-0" />
+                            <div>
+                                <p className="text-sm font-medium">Analyse des publicités concurrentes...</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    {blueprints.length > 0
+                                        ? `${blueprints.length} créative${blueprints.length > 1 ? "s" : ""} trouvée${blueprints.length > 1 ? "s" : ""} · Les résultats apparaissent au fur et à mesure`
+                                        : "Les résultats apparaissent au fur et à mesure"}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Empty / loading state (only when no blueprints yet) */}
                     {blueprints.length === 0 && (
                         isExtracting ? (
-                            <div className="space-y-3 pt-4">
-                                <ProgressMessage messages={["Extraction des créatives...", "Analyse des publicités...", "Identification des formats gagnants...", "Construction des prompts..."]} />
+                            <div className="space-y-3 pt-2">
+                                <ProgressMessage messages={["Récupération des vraies publicités Meta...", "Analyse des créatives avec Gemini...", "Identification des formats gagnants...", "Construction des prompts de reproduction..."]} />
                                 <CardSkeleton count={4} />
                             </div>
                         ) : (
@@ -593,16 +679,20 @@ export default function ProjectDetailPage() {
                         );
                     })}
 
-                    {/* FIX 2: Load more pagination */}
+                    {/* "Voir plus" — costs Sparks to unlock more blueprints */}
                     {blueprints.length > visibleCount && (
-                        <Button
-                            variant="outline"
-                            onClick={() => setVisibleCount((v) => v + 10)}
-                            className="w-full gap-2"
-                        >
-                            <Plus className="h-4 w-4" />
-                            Voir plus ({blueprints.length - visibleCount} restants)
-                        </Button>
+                        <div className="flex flex-col items-center gap-2 py-4">
+                            <p className="text-xs text-muted-foreground">
+                                {blueprints.length - visibleCount} créative{blueprints.length - visibleCount > 1 ? "s" : ""} supplémentaire{blueprints.length - visibleCount > 1 ? "s" : ""} disponible{blueprints.length - visibleCount > 1 ? "s" : ""}
+                            </p>
+                            <button
+                                onClick={handleShowMore}
+                                className="px-6 py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-black font-semibold text-sm hover:opacity-90 transition-opacity flex items-center gap-2"
+                            >
+                                <Plus className="h-4 w-4" />
+                                Voir plus ({SPARK_PRICING.SHOW_MORE_RESULTS} ⚡)
+                            </button>
+                        </div>
                     )}
 
                     {/* Expand button */}

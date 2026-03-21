@@ -4,15 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { fal } from "@fal-ai/client";
 import { uploadUrlToS3 } from "@/lib/s3";
 import { broadcast } from "@/lib/sse";
-import { GENERATION_CONFIG } from "@/config/generation.config";
+import { getGenerationCost } from "@/config/spark-pricing";
 
 fal.config({ credentials: process.env.FAL_KEY });
-
-const SPARK_COSTS: Record<string, number> = {
-    "1K": GENERATION_CONFIG.IMAGE_SPARK_COST,
-    "2K": GENERATION_CONFIG.IMAGE_2K_SPARK_COST,
-    "4K": GENERATION_CONFIG.IMAGE_4K_SPARK_COST,
-};
 
 async function generateWithRetry(
     prompt: string,
@@ -82,7 +76,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "not_found" }, { status: 404 });
         }
 
-        const sparkCost = SPARK_COSTS[resolution] ?? 1;
+        const sparkCost = getGenerationCost(resolution);
 
         // Check user Sparks
         const user = await prisma.user.findUnique({ where: { id: userId } });
