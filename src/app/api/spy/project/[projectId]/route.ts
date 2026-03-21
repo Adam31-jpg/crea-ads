@@ -34,18 +34,26 @@ export async function GET(
         where: { storeAnalysisId: projectId },
         orderBy: { relevanceScore: 'desc' },
     });
-    const blueprints = await prisma.creativeBlueprint.findMany({
+    const blueprintsRaw = await prisma.creativeBlueprint.findMany({
         where: { storeAnalysisId: projectId },
         include: { competitorAnalysis: { select: { competitorName: true } } },
+        orderBy: { createdAt: 'asc' }, // stable: first-extracted stays first
     });
-    const blueprintsWithNames = blueprints.map((b) => ({
+    const jobs = await prisma.job.findMany({
+        where: { source: 'spy', blueprintId: { in: blueprintsRaw.map((b) => b.id) } },
+        select: { id: true, blueprintId: true, status: true, result_url: true, error_message: true },
+    });
+    // Generated blueprints first, then createdAt asc — stable and predictable
+    const doneIds = new Set(jobs.filter((j) => j.status === 'done').map((j) => j.blueprintId));
+    const blueprintsSorted = [...blueprintsRaw].sort((a, b) => {
+        const aDone = doneIds.has(a.id) ? 1 : 0;
+        const bDone = doneIds.has(b.id) ? 1 : 0;
+        return bDone - aDone; // within each group, createdAt asc preserved
+    });
+    const blueprintsWithNames = blueprintsSorted.map((b) => ({
         ...b,
         competitorName: b.competitorAnalysis?.competitorName ?? null,
     }));
-    const jobs = await prisma.job.findMany({
-        where: { source: 'spy', blueprintId: { in: blueprints.map((b) => b.id) } },
-        select: { id: true, blueprintId: true, status: true, result_url: true, error_message: true },
-    });
     const jobsMapped = jobs.map((j) => ({
         jobId: j.id,
         blueprintId: j.blueprintId ?? '',

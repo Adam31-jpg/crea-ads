@@ -82,7 +82,7 @@ const ASPECT_RATIOS = [
 export default function ProjectDetailPage() {
     const { projectId } = useParams<{ projectId: string }>();
     const t = useTranslations("SpyMode");
-    const { data: session } = useSession();
+    const { data: session, update: updateSession } = useSession();
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(true);
     const [globalResolution, setGlobalResolution] = useState<"1K" | "2K" | "4K">("1K");
@@ -90,7 +90,11 @@ export default function ProjectDetailPage() {
     const [isExtracting, setIsExtracting] = useState(false);
     const [isExpanding, setIsExpanding] = useState(false);
     const [expandExhausted, setExpandExhausted] = useState(false);
-    const [visibleCount, setVisibleCount] = useState<number>(SPARK_PRICING.INITIAL_VISIBLE_BLUEPRINTS);
+    const [visibleCount, setVisibleCount] = useState<number>(() => {
+        if (typeof window === "undefined") return SPARK_PRICING.INITIAL_VISIBLE_BLUEPRINTS;
+        const saved = localStorage.getItem(`lumina-visible-${projectId}`);
+        return saved ? parseInt(saved, 10) : SPARK_PRICING.INITIAL_VISIBLE_BLUEPRINTS;
+    });
 
     const {
         currentStep,
@@ -154,6 +158,11 @@ export default function ProjectDetailPage() {
     // Keep a stable ref so SSE closure can read latest blueprints without stale capture
     const blueprintsRef = useRef(blueprints);
     blueprintsRef.current = blueprints;
+
+    // Persist visibleCount in localStorage so it survives refresh
+    useEffect(() => {
+        localStorage.setItem(`lumina-visible-${projectId}`, String(visibleCount));
+    }, [visibleCount, projectId]);
 
     useEffect(() => {
         if (!hasRenderingJobs || !projectId) return;
@@ -308,16 +317,18 @@ export default function ProjectDetailPage() {
             .then(async (res) => {
                 const data = await res.json();
                 if (data.status === "done" && Array.isArray(data.blueprints)) {
-                    // Final reconciliation — ensure all blueprints are in state
+                    // Final reconciliation — APPEND only missing (polling may have added some already)
+                    const existingIds = new Set(blueprintsRef.current.map((b) => b.id));
                     const cMap = Object.fromEntries(competitors.map((c) => [c.id, c.competitorName]));
-                    setBlueprints(
-                        data.blueprints.map((b: CreativeBlueprint) => ({
+                    const missing = (data.blueprints as CreativeBlueprint[])
+                        .filter((b) => !existingIds.has(b.id))
+                        .map((b) => ({
                             ...b,
                             competitorName: b.competitorAnalysisId
                                 ? cMap[b.competitorAnalysisId]
                                 : undefined,
-                        })),
-                    );
+                        }));
+                    setBlueprints([...blueprintsRef.current, ...missing]);
                 } else {
                     toast.error("Extraction échouée.");
                 }
@@ -338,22 +349,50 @@ export default function ProjectDetailPage() {
                 body: JSON.stringify({
                     storeAnalysisId: storeAnalysis.id,
                     competitorIds: selectedIds,
-                    existingBlueprintIds: blueprints.map((b) => b.id),
                     targetLanguage: globalLang,
                 }),
             });
+
+            if (res.status === 402) {
+                toast.error(`Pas assez de Sparks pour élargir l'analyse (${SPARK_PRICING.EXPAND_ANALYSIS} ⚡ requis).`);
+                return;
+            }
+
             const data = await res.json();
             if (data.status === "done" && Array.isArray(data.blueprints)) {
                 if (data.blueprints.length === 0) {
                     setExpandExhausted(true);
                     toast.info(t("expandEmpty"));
                 } else {
+                    // APPEND only — never replace, never reorder existing blueprints
+                    const current = blueprintsRef.current;
+                    const existingIds = new Set(current.map((b) => b.id));
+                    const existingImages = new Set(
+                        current.map((b) => b.sourceImageUrl).filter(Boolean),
+                    );
                     const cMap = Object.fromEntries(competitors.map((c) => [c.id, c.competitorName]));
-                    setBlueprints([...blueprints, ...data.blueprints.map((b: CreativeBlueprint) => ({
-                        ...b,
-                        competitorName: b.competitorAnalysisId ? cMap[b.competitorAnalysisId] : undefined,
-                    }))]);
-                    toast.success(`${data.blueprints.length} ${t("expandDone")}`);
+                    const newOnes = (data.blueprints as CreativeBlueprint[])
+                        .filter(
+                            (b) =>
+                                !existingIds.has(b.id) &&
+                                (!b.sourceImageUrl || !existingImages.has(b.sourceImageUrl)),
+                        )
+                        .map((b) => ({
+                            ...b,
+                            competitorName: b.competitorAnalysisId
+                                ? cMap[b.competitorAnalysisId]
+                                : undefined,
+                        }));
+
+                    if (newOnes.length === 0) {
+                        setExpandExhausted(true);
+                        toast.info("Aucune nouvelle créative unique trouvée.");
+                    } else {
+                        setBlueprints([...current, ...newOnes]);
+                        toast.success(
+                            `${newOnes.length} nouvelle${newOnes.length > 1 ? "s" : ""} créative${newOnes.length > 1 ? "s" : ""} ajoutée${newOnes.length > 1 ? "s" : ""}`,
+                        );
+                    }
                 }
             }
         } catch {
@@ -368,7 +407,6 @@ export default function ProjectDetailPage() {
         async (blueprint: CreativeBlueprint, customImgUrl?: string | null, perCreativeLang?: string | null) => {
             const imgUrl = customImgUrl ?? productImageUrl ?? null;
             const langToUse = perCreativeLang ?? globalLang;
-            const promptWithLang = `${blueprint.reproductionPrompt}\n\nCRITICAL: All text, headlines, CTAs, and copy in this creative MUST be written in ${LANG_MAP[langToUse]}. Generate native-level marketing copy in this language.`;
 
             addJob({ jobId: `pending_${blueprint.id}`, blueprintId: blueprint.id, result_url: "", status: "rendering" });
 
@@ -376,7 +414,13 @@ export default function ProjectDetailPage() {
                 const res = await fetch("/api/spy/generate", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ blueprintId: blueprint.id, productImageUrl: imgUrl, resolution: globalResolution, prompt: promptWithLang }),
+                    body: JSON.stringify({
+                            blueprintId: blueprint.id,
+                            productImageUrl: imgUrl ?? undefined,
+                            resolution: globalResolution,
+                            language: langToUse,
+                            aspectRatio: blueprint.aspectRatio,
+                        }),
                 });
                 const data = await res.json();
 
@@ -391,12 +435,14 @@ export default function ProjectDetailPage() {
                     return;
                 }
                 updateJob(`pending_${blueprint.id}`, { jobId: data.jobId, status: "done", result_url: data.result_url });
+                await updateSession(); // Refresh credits counter instantly after spark deduction
             } catch {
                 updateJob(`pending_${blueprint.id}`, { status: "failed" });
                 toast.error(t("errors.generationFailed"));
             }
         },
-        [productImageUrl, globalLang, globalResolution, addJob, updateJob, t],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [productImageUrl, globalLang, globalResolution, addJob, updateJob, t, updateSession],
     );
 
     async function handleGenerateAll() {
@@ -423,6 +469,7 @@ export default function ProjectDetailPage() {
                 throw new Error("deduct failed");
             }
             setVisibleCount((v) => v + SPARK_PRICING.SHOW_MORE_BATCH_SIZE);
+            await updateSession(); // Refresh credits counter instantly
             toast.success(`+${SPARK_PRICING.SHOW_MORE_BATCH_SIZE} créatives débloquées`);
         } catch {
             toast.error("Erreur lors du déverrouillage.");
@@ -679,6 +726,19 @@ export default function ProjectDetailPage() {
                         );
                     })}
 
+                    {/* Expansion loading banner */}
+                    {isExpanding && (
+                        <div className="flex items-center gap-3 p-4 rounded-lg border border-purple-500/20 bg-purple-500/5">
+                            <Loader2 className="h-5 w-5 animate-spin text-purple-400 shrink-0" />
+                            <div>
+                                <p className="text-sm font-medium">Recherche de nouvelles créatives...</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    Les publicités Meta sont analysées pour trouver des formats encore inexploités.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* "Voir plus" — costs Sparks to unlock more blueprints */}
                     {blueprints.length > visibleCount && (
                         <div className="flex flex-col items-center gap-2 py-4">
@@ -695,7 +755,7 @@ export default function ProjectDetailPage() {
                         </div>
                     )}
 
-                    {/* Expand button */}
+                    {/* Expand button — shows Spark cost */}
                     {blueprints.length > 0 && (
                         <Button
                             variant="outline"
@@ -708,7 +768,7 @@ export default function ProjectDetailPage() {
                             ) : expandExhausted ? (
                                 <>{t("expandEmpty")}</>
                             ) : (
-                                <><Plus className="h-4 w-4" /> {t("expandAnalysis")}</>
+                                <><Plus className="h-4 w-4" /> {t("expandAnalysis")} ({SPARK_PRICING.EXPAND_ANALYSIS} ⚡)</>
                             )}
                         </Button>
                     )}

@@ -67,8 +67,13 @@ INSTRUCTIONS:
 4. hasActiveAds: Set to true ONLY if you found CONCRETE EVIDENCE of paid ads (e.g., found them in Meta Ad Library results, saw "Sponsored" posts, or found TikTok ad campaigns). If unsure, set false. It is better to say false than give a false positive.
 5. adPlatforms: ONLY list platforms where you have CONFIRMED ad presence, not assumed.
 
+IMPORTANT FOR competitorName: Use the exact name as it appears on their Facebook page.
+Do NOT include parenthetical product names, legal suffixes (Inc., Ltd., LLC), or trademark symbols (®, ™).
+Examples: Use "Solaray" not "Solaray (Magnesium Glycinate)". Use "Wellbeing Nutrition" not "Wellbeing Nutrition (Melts®)".
+The name must match their Facebook business page name exactly.
+
 For each competitor return:
-- competitorName: string
+- competitorName: string (Facebook-page-friendly, no parentheses, no ® or ™)
 - competitorUrl: string (their REAL website — verify it exists)
 - positioning: string (1-2 sentences describing how they position vs the user's brand)
 - priceRange: string
